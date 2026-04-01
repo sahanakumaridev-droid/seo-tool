@@ -17,7 +17,7 @@ async def generate_bulk(req: GenerateRequest):
 
     pages: List[SEOBlock] = []
     for city_info in cities:
-        block = await generate_seo_block(req.business_type, city_info.name, city_info.state, req.target_keywords)
+        block = await generate_seo_block(req.business_type, city_info.name, city_info.state, req.target_keywords, req.industry)
         pages.append(block)
 
     return BulkGenerateResponse(

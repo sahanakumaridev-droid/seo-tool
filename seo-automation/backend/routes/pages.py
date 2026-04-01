@@ -1,52 +1,91 @@
-from fastapi import APIRouter, HTTPException
-from db import get_db
-from models.schemas import SEOPage, SEOBlock
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, delete
+from db import get_session, PageRecord
 from services.content_service import generate_seo_block
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 import re
 
 router = APIRouter()
 
 def slugify(text: str) -> str:
-    return re.sub(r'[^a-z0-9-]', '', text.lower().replace(' ', '-'))
+    return re.sub(r'[^a-z0-9-]+', '-', text.lower()).strip('-')
 
 @router.post("/save", response_model=dict)
-async def save_page(business_type: str, city: str, state: str = "CA"):
-    db = get_db()
+async def save_page(
+    business_type: str,
+    city: str,
+    state: str = "CA",
+    session: AsyncSession = Depends(get_session),
+):
     block = await generate_seo_block(business_type, city, state)
     slug = slugify(f"{business_type}-{city}")
-    doc = {
-        "business_type": business_type,
-        "base_location": f"{city}, {state}",
-        "city": city,
-        "state": state,
-        "slug": slug,
-        "seo_block": block.model_dump(),
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
-    }
-    result = await db.pages.replace_one({"slug": slug}, doc, upsert=True)
+
+    # Upsert: update if slug exists, insert otherwise
+    result = await session.execute(select(PageRecord).where(PageRecord.slug == slug))
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        existing.seo_block = block.model_dump()
+        existing.updated_at = datetime.now(timezone.utc)
+    else:
+        session.add(PageRecord(
+            business_type=business_type,
+            base_location=f"{city}, {state}",
+            city=city,
+            state=state,
+            slug=slug,
+            seo_block=block.model_dump(),
+        ))
+
+    await session.commit()
     return {"slug": slug, "saved": True}
 
 @router.get("/", response_model=List[dict])
-async def list_pages(skip: int = 0, limit: int = 20):
-    db = get_db()
-    cursor = db.pages.find({}, {"_id": 0}).skip(skip).limit(limit)
-    return await cursor.to_list(length=limit)
+async def list_pages(
+    skip: int = 0,
+    limit: int = 20,
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(
+        select(PageRecord).offset(skip).limit(limit).order_by(PageRecord.created_at.desc())
+    )
+    rows = result.scalars().all()
+    return [
+        {
+            "id": r.id,
+            "business_type": r.business_type,
+            "base_location": r.base_location,
+            "city": r.city,
+            "state": r.state,
+            "slug": r.slug,
+            "seo_block": r.seo_block,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]
 
 @router.get("/{slug}", response_model=dict)
-async def get_page(slug: str):
-    db = get_db()
-    page = await db.pages.find_one({"slug": slug}, {"_id": 0})
-    if not page:
+async def get_page(slug: str, session: AsyncSession = Depends(get_session)):
+    result = await session.execute(select(PageRecord).where(PageRecord.slug == slug))
+    row = result.scalar_one_or_none()
+    if not row:
         raise HTTPException(status_code=404, detail="Page not found")
-    return page
+    return {
+        "id": row.id,
+        "business_type": row.business_type,
+        "city": row.city,
+        "state": row.state,
+        "slug": row.slug,
+        "seo_block": row.seo_block,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
 
 @router.delete("/{slug}")
-async def delete_page(slug: str):
-    db = get_db()
-    result = await db.pages.delete_one({"slug": slug})
-    if result.deleted_count == 0:
+async def delete_page(slug: str, session: AsyncSession = Depends(get_session)):
+    result = await session.execute(delete(PageRecord).where(PageRecord.slug == slug))
+    await session.commit()
+    if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Page not found")
     return {"deleted": True}
