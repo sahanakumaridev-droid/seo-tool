@@ -1,108 +1,123 @@
-import httpx
+"""
+location_service.py
+Nationwide (USA) nearby-city lookup.
+
+Geocodes a base location by matching a bundled free US cities dataset
+(data/us_cities.json, ~30k cities) — no API key required. Falls back to
+OpenCage geocoding (free tier) and finally a small San Diego seed list.
+"""
+import os
+import json
 import math
-from typing import List
+import httpx
+from typing import List, Optional, Tuple
 from models.schemas import CityInfo
 from config import settings
 
-# Hardcoded San Diego area cities as reliable fallback (Phase 1)
-SD_NEARBY_CITIES = [
-    {"name": "La Jolla", "state": "CA", "lat": 32.8328, "lon": -117.2713, "pop": 46781},
-    {"name": "Chula Vista", "state": "CA", "lat": 32.6401, "lon": -117.0842, "pop": 275487},
-    {"name": "El Cajon", "state": "CA", "lat": 32.7948, "lon": -116.9625, "pop": 103614},
-    {"name": "Escondido", "state": "CA", "lat": 33.1192, "lon": -117.0864, "pop": 151038},
-    {"name": "Oceanside", "state": "CA", "lat": 33.1959, "lon": -117.3795, "pop": 174068},
-    {"name": "Carlsbad", "state": "CA", "lat": 33.1581, "lon": -117.3506, "pop": 114746},
-    {"name": "Vista", "state": "CA", "lat": 33.2000, "lon": -117.2425, "pop": 101838},
-    {"name": "San Marcos", "state": "CA", "lat": 33.1434, "lon": -117.1661, "pop": 96664},
-    {"name": "Santee", "state": "CA", "lat": 32.8384, "lon": -116.9739, "pop": 58610},
-    {"name": "Poway", "state": "CA", "lat": 32.9628, "lon": -117.0359, "pop": 50008},
-    {"name": "La Mesa", "state": "CA", "lat": 32.7678, "lon": -117.0228, "pop": 60304},
-    {"name": "Spring Valley", "state": "CA", "lat": 32.7448, "lon": -116.9989, "pop": 31230},
-    {"name": "Lemon Grove", "state": "CA", "lat": 32.7248, "lon": -117.0314, "pop": 27984},
-    {"name": "National City", "state": "CA", "lat": 32.6781, "lon": -117.0992, "pop": 61776},
-    {"name": "Coronado", "state": "CA", "lat": 32.6859, "lon": -117.1831, "pop": 24697},
-    {"name": "Imperial Beach", "state": "CA", "lat": 32.5839, "lon": -117.1131, "pop": 27183},
-    {"name": "Encinitas", "state": "CA", "lat": 33.0369, "lon": -117.2920, "pop": 62444},
-    {"name": "Del Mar", "state": "CA", "lat": 32.9595, "lon": -117.2653, "pop": 4161},
-    {"name": "Solana Beach", "state": "CA", "lat": 32.9912, "lon": -117.2712, "pop": 13380},
-    {"name": "Rancho Santa Fe", "state": "CA", "lat": 33.0228, "lon": -117.2003, "pop": 3117},
-    {"name": "Lakeside", "state": "CA", "lat": 32.8576, "lon": -116.9225, "pop": 20648},
-    {"name": "Alpine", "state": "CA", "lat": 32.8351, "lon": -116.7664, "pop": 14236},
-    {"name": "Ramona", "state": "CA", "lat": 33.0417, "lon": -116.8731, "pop": 20292},
-    {"name": "Fallbrook", "state": "CA", "lat": 33.3764, "lon": -117.2511, "pop": 30534},
-    {"name": "Bonsall", "state": "CA", "lat": 33.2878, "lon": -117.2267, "pop": 4220},
-    {"name": "Valley Center", "state": "CA", "lat": 33.2192, "lon": -117.0317, "pop": 10834},
-    {"name": "Pauma Valley", "state": "CA", "lat": 33.3281, "lon": -116.9789, "pop": 1200},
-    {"name": "Borrego Springs", "state": "CA", "lat": 33.2556, "lon": -116.3750, "pop": 3429},
-    {"name": "Julian", "state": "CA", "lat": 33.0784, "lon": -116.6019, "pop": 1621},
-    {"name": "Pine Valley", "state": "CA", "lat": 32.8248, "lon": -116.5289, "pop": 1500},
-    {"name": "Jamul", "state": "CA", "lat": 32.7198, "lon": -116.8764, "pop": 6163},
-    {"name": "Bonita", "state": "CA", "lat": 32.6623, "lon": -117.0281, "pop": 12538},
-    {"name": "Otay Ranch", "state": "CA", "lat": 32.6200, "lon": -116.9800, "pop": 35000},
-    {"name": "Mira Mesa", "state": "CA", "lat": 32.9137, "lon": -117.1431, "pop": 72000},
-    {"name": "Scripps Ranch", "state": "CA", "lat": 32.9284, "lon": -117.0781, "pop": 30000},
-    {"name": "Rancho Bernardo", "state": "CA", "lat": 33.0131, "lon": -117.0742, "pop": 48000},
-    {"name": "Rancho Penasquitos", "state": "CA", "lat": 32.9631, "lon": -117.1214, "pop": 55000},
-    {"name": "Carmel Valley", "state": "CA", "lat": 32.9431, "lon": -117.2114, "pop": 45000},
-    {"name": "Tierrasanta", "state": "CA", "lat": 32.8431, "lon": -117.0814, "pop": 32000},
-    {"name": "Mission Valley", "state": "CA", "lat": 32.7731, "lon": -117.1514, "pop": 38000},
-    {"name": "North Park", "state": "CA", "lat": 32.7431, "lon": -117.1214, "pop": 42000},
-    {"name": "Hillcrest", "state": "CA", "lat": 32.7531, "lon": -117.1614, "pop": 28000},
-    {"name": "Ocean Beach", "state": "CA", "lat": 32.7431, "lon": -117.2514, "pop": 15000},
-    {"name": "Pacific Beach", "state": "CA", "lat": 32.7931, "lon": -117.2414, "pop": 42000},
-    {"name": "Mission Beach", "state": "CA", "lat": 32.7731, "lon": -117.2514, "pop": 5000},
-    {"name": "Point Loma", "state": "CA", "lat": 32.7231, "lon": -117.2414, "pop": 35000},
-    {"name": "Clairemont", "state": "CA", "lat": 32.8231, "lon": -117.1914, "pop": 65000},
-    {"name": "Kearny Mesa", "state": "CA", "lat": 32.8331, "lon": -117.1514, "pop": 22000},
-    {"name": "Serra Mesa", "state": "CA", "lat": 32.8031, "lon": -117.1314, "pop": 25000},
-    {"name": "College Area", "state": "CA", "lat": 32.7731, "lon": -117.0714, "pop": 30000},
-]
+# ── Bundled dataset ─────────────────────────────────────────────
+_DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "us_cities.json")
+_US_CITIES: List[dict] = []
+try:
+    with open(_DATA_PATH, encoding="utf-8") as _f:
+        _US_CITIES = json.load(_f)
+except Exception as _e:  # pragma: no cover
+    print(f"[Location] Could not load us_cities.json: {_e}")
+
+_STATE_NAME_TO_CODE = {
+    "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR", "california": "CA",
+    "colorado": "CO", "connecticut": "CT", "delaware": "DE", "florida": "FL", "georgia": "GA",
+    "hawaii": "HI", "idaho": "ID", "illinois": "IL", "indiana": "IN", "iowa": "IA",
+    "kansas": "KS", "kentucky": "KY", "louisiana": "LA", "maine": "ME", "maryland": "MD",
+    "massachusetts": "MA", "michigan": "MI", "minnesota": "MN", "mississippi": "MS",
+    "missouri": "MO", "montana": "MT", "nebraska": "NE", "nevada": "NV", "new hampshire": "NH",
+    "new jersey": "NJ", "new mexico": "NM", "new york": "NY", "north carolina": "NC",
+    "north dakota": "ND", "ohio": "OH", "oklahoma": "OK", "oregon": "OR", "pennsylvania": "PA",
+    "rhode island": "RI", "south carolina": "SC", "south dakota": "SD", "tennessee": "TN",
+    "texas": "TX", "utah": "UT", "vermont": "VT", "virginia": "VA", "washington": "WA",
+    "west virginia": "WV", "wisconsin": "WI", "wyoming": "WY", "district of columbia": "DC",
+}
+
+# Ultimate fallback if the dataset is missing and geocoding fails.
+_DEFAULT_LATLON = (32.7157, -117.1611)  # San Diego, CA
+
 
 def haversine(lat1, lon1, lat2, lon2) -> float:
     R = 3958.8  # miles
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
     return R * 2 * math.asin(math.sqrt(a))
 
-async def get_nearby_cities(base_location: str, num_cities: int = 50) -> List[CityInfo]:
-    """
-    Phase 1: Returns cities from hardcoded SD list sorted by distance.
-    Phase 2: Will use OpenCage + GeoDB APIs.
-    """
-    # Try OpenCage to geocode base location
-    base_lat, base_lon = 32.7157, -117.1611  # San Diego default
 
-    if settings.OPENCAGE_API_KEY:
-        try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.get(
-                    "https://api.opencagedata.com/geocode/v1/json",
-                    params={"q": base_location, "key": settings.OPENCAGE_API_KEY, "limit": 1}
-                )
-                data = resp.json()
-                if data.get("results"):
-                    geo = data["results"][0]["geometry"]
-                    base_lat, base_lon = geo["lat"], geo["lng"]
-        except Exception:
-            pass
+def _parse_location(base_location: str) -> Tuple[str, Optional[str]]:
+    """'Austin, TX' -> ('austin', 'TX'); 'Austin, Texas' -> ('austin','TX'); 'Austin' -> ('austin', None)."""
+    parts = [p.strip() for p in base_location.split(",") if p.strip()]
+    city = parts[0].lower() if parts else base_location.strip().lower()
+    state = None
+    if len(parts) >= 2:
+        raw = parts[1].strip()
+        state = raw.upper() if len(raw) == 2 else _STATE_NAME_TO_CODE.get(raw.lower())
+    return city, state
 
-    # Sort by distance from base
-    cities_with_dist = []
-    for c in SD_NEARBY_CITIES:
+
+def _geocode_from_dataset(base_location: str) -> Optional[dict]:
+    """Find the base city record in the bundled dataset."""
+    city, state = _parse_location(base_location)
+    matches = [c for c in _US_CITIES if c["city"].lower() == city and (not state or c["state"] == state)]
+    if not matches and not state:
+        # loose contains-match as a last resort
+        matches = [c for c in _US_CITIES if c["city"].lower() == city]
+    return matches[0] if matches else None
+
+
+async def _geocode_opencage(base_location: str) -> Optional[Tuple[float, float]]:
+    if not settings.OPENCAGE_API_KEY:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                "https://api.opencagedata.com/geocode/v1/json",
+                params={"q": base_location, "key": settings.OPENCAGE_API_KEY, "limit": 1, "countrycode": "us"},
+            )
+            data = resp.json()
+            if data.get("results"):
+                geo = data["results"][0]["geometry"]
+                return geo["lat"], geo["lng"]
+    except Exception:
+        pass
+    return None
+
+
+async def get_nearby_cities(base_location: str, num_cities: int = 10) -> List[CityInfo]:
+    """Return the N nearest US cities to the base location (nationwide)."""
+    base_city_rec = _geocode_from_dataset(base_location)
+    if base_city_rec:
+        base_lat, base_lon = base_city_rec["lat"], base_city_rec["lon"]
+    else:
+        latlon = await _geocode_opencage(base_location)
+        base_lat, base_lon = latlon if latlon else _DEFAULT_LATLON
+
+    if not _US_CITIES:
+        # Dataset unavailable — return just the base location so callers still work.
+        city, state = _parse_location(base_location)
+        return [CityInfo(name=city.title(), state=state or "", country="USA",
+                         latitude=base_lat, longitude=base_lon)]
+
+    scored = []
+    seen = set()
+    for c in _US_CITIES:
+        key = (c["city"].lower(), c["state"])
+        if key in seen:
+            continue
+        seen.add(key)
         dist = haversine(base_lat, base_lon, c["lat"], c["lon"])
-        cities_with_dist.append((dist, c))
-
-    cities_with_dist.sort(key=lambda x: x[0])
+        scored.append((dist, c))
+    scored.sort(key=lambda x: x[0])
 
     result = []
-    for _, c in cities_with_dist[:num_cities]:
+    for _, c in scored[:num_cities]:
         result.append(CityInfo(
-            name=c["name"],
-            state=c["state"],
-            country="USA",
-            latitude=c["lat"],
-            longitude=c["lon"],
-            population=c.get("pop")
+            name=c["city"], state=c["state"], country="USA",
+            latitude=c["lat"], longitude=c["lon"],
         ))
     return result

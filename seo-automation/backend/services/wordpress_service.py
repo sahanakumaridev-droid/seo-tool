@@ -2,30 +2,51 @@
 wordpress_service.py
 Auto-publishes SEO pages to WordPress via REST API.
 Supports RankMath, All in One SEO (AIOSEO), and Yoast SEO meta fields.
-Image spec: 1280x720 WebP (16:9)
+Features: featured image upload, categories, tags, scheduled publishing, duplicate detection.
 """
 import base64
 import json
 import httpx
 from typing import Optional
 from models.schemas import SEOBlock, WordPressConfig, PublishResult
+from services.image_service import (
+    get_image_for_content, upload_image_to_wordpress,
+    fetch_image_bytes,
+)
+
+
+def _figure_html(img) -> str:
+    """Render an in-content image as a semantic <figure> with caption."""
+    return (
+        f'<figure class="wp-block-image">'
+        f'<img src="{img.url}" alt="{img.alt_text}" title="{img.title}" loading="lazy" />'
+        f'<figcaption>{img.caption}</figcaption>'
+        f'</figure>'
+    )
 
 
 def _build_content_html(block: SEOBlock) -> str:
     """Build full WordPress-ready HTML content from SEOBlock."""
     parts = []
 
-    # Intro paragraph (AI-citation optimized — direct, clear, no fluff)
     if block.intro:
         parts.append(f'<p class="seo-intro">{block.intro}</p>')
 
-    # H2 sections with body content split across them
+    # In-content images (non-featured) are distributed across the H2 sections.
+    in_content_imgs = [img for img in (block.in_content_images or []) if not img.is_featured]
+    img_positions = {}
+    if in_content_imgs and block.h2s:
+        step = max(1, len(block.h2s) // (len(in_content_imgs) + 1))
+        for n, img in enumerate(in_content_imgs):
+            img_positions[min((n + 1) * step, len(block.h2s) - 1)] = img
+
     body_paragraphs = [p.strip() for p in block.content.split('\n\n') if p.strip()]
 
     for i, h2 in enumerate(block.h2s):
         parts.append(f'<h2>{h2}</h2>')
+        if i in img_positions:
+            parts.append(_figure_html(img_positions[i]))
         if i < len(body_paragraphs):
-            # Convert bullet lines to <ul>
             para = body_paragraphs[i]
             if '•' in para or para.strip().startswith('1.'):
                 lines = para.split('\n')
@@ -51,12 +72,10 @@ def _build_content_html(block: SEOBlock) -> str:
             else:
                 parts.append(f'<p>{para}</p>')
 
-    # H3 sub-sections
     if block.h3s:
         for h3 in block.h3s[:2]:
             parts.append(f'<h3>{h3}</h3>')
 
-    # FAQs section (structured for AI extraction)
     if block.faqs:
         parts.append('<h2>Frequently Asked Questions</h2>')
         parts.append('<div class="faq-section" itemscope itemtype="https://schema.org/FAQPage">')
@@ -70,10 +89,8 @@ def _build_content_html(block: SEOBlock) -> str:
             )
         parts.append('</div>')
 
-    # CTA
     parts.append(f'<div class="cta-section"><p><strong>{block.cta}</strong></p></div>')
 
-    # JSON-LD schema (both LocalBusiness + FAQPage)
     schema = block.schema_markup
     if schema:
         for key, val in schema.items():
@@ -118,6 +135,24 @@ def _build_seo_meta(block: SEOBlock, plugin: str) -> dict:
         }
 
 
+async def _check_duplicate(slug: str, wp_api_base: str, headers: dict) -> Optional[int]:
+    """Check if a post with this slug already exists. Returns post_id if found."""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"{wp_api_base}/posts",
+                params={"slug": slug, "status": "any"},
+                headers=headers,
+            )
+            if resp.status_code == 200:
+                posts = resp.json()
+                if posts:
+                    return posts[0].get("id")
+    except Exception:
+        pass
+    return None
+
+
 async def publish_to_wordpress(
     block: SEOBlock,
     config: WordPressConfig,
@@ -135,21 +170,90 @@ async def publish_to_wordpress(
     seo_meta = _build_seo_meta(block, config.seo_plugin)
 
     slug = block.slug or f"{block.business_type.lower().replace(' ', '-')}-{block.city.lower().replace(' ', '-')}"
+    wp_api_base = config.wp_url.rstrip('/') + "/wp-json/wp/v2"
+    wp_api = f"{wp_api_base}/posts"
 
-    post_data = {
+    # ── Featured image ──────────────────────────────────────────
+    featured_media_id = None
+    featured_image_url = None
+    if config.fetch_image:
+        try:
+            # Prefer the article's generated featured ImageAsset (WebP + full metadata).
+            featured_asset = next(
+                (img for img in (block.in_content_images or []) if img.is_featured), None
+            )
+            if featured_asset and featured_asset.url:
+                img_bytes = await fetch_image_bytes(featured_asset.url)
+                if img_bytes:
+                    media = await upload_image_to_wordpress(
+                        img_bytes, featured_asset.filename,
+                        config.wp_url, config.wp_username, config.wp_app_password,
+                        alt_text=featured_asset.alt_text,
+                        title=featured_asset.title,
+                        caption=featured_asset.caption,
+                        description=featured_asset.description,
+                    )
+                    if media:
+                        featured_media_id = media["id"]
+                        featured_image_url = media["url"]
+
+            # Fall back to the legacy business-type image fetch (city pages).
+            if not featured_media_id:
+                img_result = await get_image_for_content(block.business_type, block.city)
+                if img_result:
+                    img_bytes, img_filename = img_result
+                    alt_text = f"{block.business_type} services in {block.city}"
+                    media = await upload_image_to_wordpress(
+                        img_bytes, img_filename,
+                        config.wp_url, config.wp_username, config.wp_app_password,
+                        alt_text=alt_text,
+                    )
+                    if media:
+                        featured_media_id = media["id"]
+                        featured_image_url = media["url"]
+        except Exception as e:
+            print(f"[WP] Image upload failed for {block.city}: {e}")
+
+    # ── Check for duplicate ──────────────────────────────────────
+    existing_id = await _check_duplicate(slug, wp_api_base, headers)
+
+    # ── Build post data ──────────────────────────────────────────
+    post_data: dict = {
         "title": block.title,
         "content": content_html,
-        "status": config.status,
         "slug": slug,
         "meta": seo_meta,
         "excerpt": block.meta_description,
     }
 
-    wp_api = config.wp_url.rstrip('/') + "/wp-json/wp/v2/posts"
+    # Categories and tags
+    if config.category_ids:
+        post_data["categories"] = config.category_ids
+    if config.tag_ids:
+        post_data["tags"] = config.tag_ids
+
+    # Featured image
+    if featured_media_id:
+        post_data["featured_media"] = featured_media_id
+
+    # Scheduling vs immediate publish
+    if config.scheduled_at:
+        post_data["status"] = "future"
+        post_data["date"] = config.scheduled_at
+    else:
+        post_data["status"] = config.status
 
     try:
         async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(wp_api, json=post_data, headers=headers)
+            if existing_id:
+                # Update existing post
+                resp = await client.post(
+                    f"{wp_api}/{existing_id}",
+                    json=post_data,
+                    headers=headers,
+                )
+            else:
+                resp = await client.post(wp_api, json=post_data, headers=headers)
 
         if resp.status_code in (200, 201):
             data = resp.json()
@@ -158,6 +262,7 @@ async def publish_to_wordpress(
                 success=True,
                 post_id=data.get("id"),
                 post_url=data.get("link"),
+                featured_image_id=featured_media_id,
             )
         else:
             return PublishResult(

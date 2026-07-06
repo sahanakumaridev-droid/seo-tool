@@ -6,7 +6,12 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
+      // Local dev: proxy /api → FastAPI on port 8000
       '/api': 'http://localhost:8000'
     }
+  },
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
   }
 })

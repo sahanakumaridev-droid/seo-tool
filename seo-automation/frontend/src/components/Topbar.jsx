@@ -1,84 +1,94 @@
 import { useEffect, useState } from 'react'
-import { Bell, Search, ChevronDown } from 'lucide-react'
+import { Bell, Search, ChevronDown, LogOut } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 
 function useBackendStatus() {
   const [status, setStatus] = useState('checking')
   useEffect(() => {
     const check = async () => {
-      try {
-        await axios.get('/api/../', { timeout: 3000 })
-        setStatus('online')
-      } catch {
-        setStatus('offline')
-      }
+      try { await axios.get('/api/../', { timeout: 3000 }); setStatus('online') }
+      catch { setStatus('offline') }
     }
     check()
-    const interval = setInterval(check, 15000)
-    return () => clearInterval(interval)
+    const id = setInterval(check, 15000)
+    return () => clearInterval(id)
   }, [])
   return status
 }
 
-export default function Topbar() {
-  const backendStatus = useBackendStatus()
+export default function Topbar({ onLogout }) {
+  const status = useBackendStatus()
+  const navigate = useNavigate()
+  const [showMenu, setShowMenu] = useState(false)
 
-  const statusConfig = {
-    checking: { dot: 'bg-amber-400 animate-pulse', textColor: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.2)', label: 'Connecting...' },
-    online:   { dot: 'bg-emerald-400 animate-pulse', textColor: '#10B981', bg: 'rgba(16,185,129,0.08)', border: 'rgba(16,185,129,0.2)', label: 'Online' },
-    offline:  { dot: 'bg-red-400', textColor: '#EF4444', bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.2)', label: 'Offline' },
-  }
-
-  const s = statusConfig[backendStatus]
+  const S = {
+    checking: { color: '#FBBF24', bg: 'rgba(251,191,36,0.08)', border: 'rgba(251,191,36,0.2)', label: 'Connecting' },
+    online:   { color: '#34D399', bg: 'rgba(52,211,153,0.08)',  border: 'rgba(52,211,153,0.2)',  label: 'API Online' },
+    offline:  { color: '#F87171', bg: 'rgba(248,113,113,0.08)', border: 'rgba(248,113,113,0.2)', label: 'Offline' },
+  }[status]
 
   return (
-    <header className="h-14 flex items-center justify-between px-6 flex-shrink-0 sticky top-0 z-30"
-      style={{ background: 'var(--bg-primary)', borderBottom: '1px solid var(--border)' }}>
-
+    <header style={{
+      height: 54, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '0 24px', flexShrink: 0, position: 'sticky', top: 0, zIndex: 30,
+      background: 'var(--bg-base)', borderBottom: '1px solid var(--border)',
+    }}>
       {/* Search */}
-      <div className="relative w-72">
-        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
+      <div style={{ position: 'relative', width: 280 }}>
+        <Search size={13} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-4)', pointerEvents: 'none' }} />
         <input
           type="text"
           placeholder="Search keywords, pages, cities..."
-          className="w-full rounded-lg pl-9 pr-10 py-2 text-sm transition-all"
-          style={{
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid var(--border)',
-            color: 'var(--text-primary)',
-          }}
+          style={{ width: '100%', paddingLeft: 34, paddingRight: 40, paddingTop: 8, paddingBottom: 8, fontSize: 13 }}
         />
-        <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] px-1.5 py-0.5 rounded"
-          style={{ color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)' }}>⌘K</kbd>
+        <kbd style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 10, padding: '2px 5px', borderRadius: 4, color: 'var(--text-4)', background: 'var(--bg-raised)', border: '1px solid var(--border)', pointerEvents: 'none' }}>⌘K</kbd>
       </div>
 
-      <div className="flex items-center gap-3">
-        {/* Status badge */}
-        <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-all"
-          style={{ color: s.textColor, background: s.bg, border: `1px solid ${s.border}` }}>
-          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.dot}`} />
-          {s.label}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* API status */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, padding: '4px 10px', borderRadius: 6, color: S.color, background: S.bg, border: `1px solid ${S.border}` }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: S.color, flexShrink: 0, display: 'inline-block' }} />
+          {S.label}
         </div>
 
         {/* Bell */}
-        <button className="relative p-2 rounded-lg transition-colors"
-          style={{ color: 'var(--text-secondary)' }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'var(--text-primary)' }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)' }}>
-          <Bell size={15} />
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full" style={{ background: 'var(--brand)' }} />
+        <button style={{ position: 'relative', padding: 7, borderRadius: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', display: 'flex', transition: 'all 0.15s' }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-raised)'; e.currentTarget.style.color = 'var(--text-1)' }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-3)' }}>
+          <Bell size={16} />
+          <span style={{ position: 'absolute', top: 7, right: 7, width: 5, height: 5, borderRadius: '50%', background: 'var(--brand)' }} />
         </button>
 
         {/* User */}
-        <div className="flex items-center gap-2 pl-3 cursor-pointer hover:opacity-80 transition-opacity"
-          style={{ borderLeft: '1px solid var(--border)' }}>
-          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
-            style={{ background: 'var(--brand-grad)' }}>A</div>
-          <div className="hidden md:block">
-            <div className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Agency Pro</div>
-            <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>admin@agency.com</div>
-          </div>
-          <ChevronDown size={12} style={{ color: 'var(--text-muted)' }} />
+        <div style={{ position: 'relative' }}>
+          <button onClick={() => setShowMenu(m => !m)}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 12, background: 'none', border: 'none', cursor: 'pointer', borderLeft: '1px solid var(--border)' }}>
+            <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg,#38BDF8,#6366F1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'white', flexShrink: 0 }}>A</div>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-1)', lineHeight: 1 }}>Admin</div>
+              <div style={{ fontSize: 10, color: 'var(--text-4)', marginTop: 2 }}>admin@zeorbit.com</div>
+            </div>
+            <ChevronDown size={12} style={{ color: 'var(--text-4)' }} />
+          </button>
+
+          {showMenu && (
+            <>
+              <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setShowMenu(false)} />
+              <div style={{ position: 'absolute', right: 0, top: 44, zIndex: 50, width: 164, borderRadius: 10, padding: 4, background: 'var(--bg-overlay)', border: '1px solid var(--border-bright)', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
+                <div style={{ padding: '8px 10px 6px', borderBottom: '1px solid var(--border)', marginBottom: 2 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-1)' }}>Admin</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-4)', marginTop: 1 }}>admin@zeorbit.com</div>
+                </div>
+                <button onClick={() => { onLogout?.(); navigate('/login') }}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 7, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', fontSize: 13, transition: 'background 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(248,113,113,0.08)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                  <LogOut size={13} /> Sign Out
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </header>

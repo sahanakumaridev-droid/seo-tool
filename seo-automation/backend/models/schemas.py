@@ -8,6 +8,7 @@ class GenerateRequest(BaseModel):
     num_cities: int = Field(default=10, ge=1, le=100)
     target_keywords: List[str] = Field(default=[], example=["web design san diego"])
     industry: str = Field(default="", example="Contractors")
+    use_ai: bool = Field(default=False, description="Use GPT-4 for content generation")
 
 class KeywordSet(BaseModel):
     primary: str
@@ -19,6 +20,17 @@ class KeywordSet(BaseModel):
 class FAQItem(BaseModel):
     question: str
     answer: str
+
+class ImageAsset(BaseModel):
+    """A generated image with full SEO metadata (used for featured + in-content images)."""
+    url: str = ""                      # public/hosted URL if available
+    filename: str = ""                 # SEO-friendly filename, e.g. web-design-austin-1.webp
+    mime_type: str = "image/webp"
+    alt_text: str = ""
+    title: str = ""
+    caption: str = ""
+    description: str = ""
+    is_featured: bool = False
 
 class SEOBlock(BaseModel):
     city: str
@@ -41,6 +53,46 @@ class SEOBlock(BaseModel):
     keyword_density: Optional[float] = None
     wp_post_id: Optional[int] = None
     wp_post_url: Optional[str] = None
+    featured_image_url: Optional[str] = None
+    # ── Keyword-driven article extensions ────────────────────────
+    focus_keyword: str = ""
+    secondary_keywords: List[str] = Field(default=[])
+    in_content_images: List[ImageAsset] = Field(default=[])
+    source_url: str = ""               # the analyzed website this article was grounded on
+
+# ── Website Analysis Models ──────────────────────────────────────
+class SitePage(BaseModel):
+    """A single page discovered on the analyzed website (used for internal linking)."""
+    url: str
+    title: str = ""
+    page_type: str = "other"           # blog | service | location | contact | product | home | other
+
+class WebsiteProfile(BaseModel):
+    """Structured understanding of a business website used to ground content generation."""
+    url: str
+    business_name: str = ""
+    services: List[str] = Field(default=[])
+    products: List[str] = Field(default=[])
+    target_audience: str = ""
+    brand_tone: str = ""
+    existing_blog_topics: List[str] = Field(default=[])
+    summary: str = ""
+    phone: str = ""
+    page_inventory: List[SitePage] = Field(default=[])
+    analyzed: bool = False             # False when analysis failed / degraded gracefully
+
+class ArticleRequest(BaseModel):
+    primary_keyword: str = Field(..., example="commercial roofing")
+    location: str = Field(..., example="Austin, TX")
+    website_url: str = Field(..., example="https://example-roofing.com")
+    # Number of US locations (target + nearby) to cover — one article per city.
+    num_cities: int = Field(default=5, ge=1, le=25)
+    num_articles: int = Field(default=1, ge=1, le=10, description="Articles per city (angle variety)")
+    industry: str = Field(default="")
+    use_ai: bool = Field(default=True, description="Use an LLM when available; template fallback otherwise")
+
+class WebsiteAnalysisRequest(BaseModel):
+    website_url: str = Field(..., example="https://example.com")
 
 class SEOPage(BaseModel):
     id: Optional[str] = None
@@ -73,6 +125,10 @@ class WordPressConfig(BaseModel):
     wp_app_password: str
     seo_plugin: str = Field(default="rankmath", description="rankmath | aioseo | yoast")
     status: str = Field(default="draft", description="draft | publish")
+    category_ids: List[int] = Field(default=[], description="WordPress category IDs")
+    tag_ids: List[int] = Field(default=[], description="WordPress tag IDs")
+    scheduled_at: Optional[str] = Field(default=None, description="ISO datetime for scheduled publish")
+    fetch_image: bool = Field(default=True, description="Auto-fetch and upload featured image")
 
 class PublishRequest(BaseModel):
     seo_block: SEOBlock
@@ -88,3 +144,78 @@ class PublishResult(BaseModel):
     post_id: Optional[int] = None
     post_url: Optional[str] = None
     error: Optional[str] = None
+    featured_image_id: Optional[int] = None
+
+# ── Social Media Models ──────────────────────────────────────────
+class SocialAccount(BaseModel):
+    platform: str  # facebook | twitter | linkedin | instagram
+    account_id: str
+    account_name: str
+    access_token: str
+    extra: Dict[str, Any] = {}
+
+class SocialPostRequest(BaseModel):
+    post_url: str
+    title: str
+    meta_description: str
+    city: str
+    business_type: str
+    keywords: List[str] = []
+    platforms: List[str] = Field(default=["facebook", "twitter", "linkedin"])
+    image_url: Optional[str] = None
+
+class SocialPostResult(BaseModel):
+    platform: str
+    success: bool
+    post_id: Optional[str] = None
+    post_url: Optional[str] = None
+    error: Optional[str] = None
+
+# ── Lead Models ──────────────────────────────────────────────────
+class Lead(BaseModel):
+    id: Optional[int] = None
+    source: str  # bark | thumbtack | manual | prospecting
+    name: str = ""            # customer / contact person name
+    business_name: str = ""
+    contact_name: str = ""
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    website: str = ""
+    industry: str = ""
+    service: str = ""
+    location: str = ""
+    budget: Optional[str] = None
+    message: Optional[str] = None
+    status: str = "new"  # new | contacted | qualified | closed
+    created_at: Optional[datetime] = None
+
+class LeadCreate(BaseModel):
+    source: str = "manual"
+    name: str = ""
+    business_name: str = ""
+    contact_name: str = ""
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    website: str = ""
+    industry: str = ""
+    service: str = ""
+    location: str = ""
+    budget: Optional[str] = None
+    message: Optional[str] = None
+
+class ProspectRequest(BaseModel):
+    industry: str = Field(..., example="roofing")
+    location: str = Field(..., example="Austin, TX")
+    limit: int = Field(default=20, ge=1, le=60)
+
+# ── Job Queue Models ─────────────────────────────────────────────
+class JobStatus(BaseModel):
+    job_id: str
+    status: str  # pending | running | done | failed
+    total: int
+    completed: int
+    failed: int
+    results: List[Dict[str, Any]] = []
+    error: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None

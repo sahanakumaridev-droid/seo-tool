@@ -1,7 +1,11 @@
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
-import { TrendingUp, Search, FileText, Globe, ArrowUpRight, AlertCircle } from 'lucide-react'
+import { TrendingUp, Search, FileText, Globe, ArrowUpRight, AlertCircle, Briefcase, Users, MessageSquare, Zap } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import { TRAFFIC_TREND, INTENT_DIST, CITIES_DATA, KEYWORD_DATA } from '../data/mockData'
+import { useState, useEffect } from 'react'
+import axios from 'axios'
+
+const BASE = import.meta.env.VITE_API_URL || '/api'
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
@@ -21,6 +25,15 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function DashboardPage() {
   const topKws = KEYWORD_DATA.slice(0, 5)
+  const [mpStats, setMpStats] = useState(null)
+
+  useEffect(() => {
+    const token = localStorage.getItem('mp_token')
+    if (!token) return
+    axios.get(`${BASE}/marketplace/admin/stats`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).then(r => setMpStats(r.data)).catch(() => {})
+  }, [])
 
   return (
     <div className="space-y-6 fade-in">
@@ -54,6 +67,20 @@ export default function DashboardPage() {
         <StatCard label="Cities Covered" value="50" delta="+50" sub="San Diego area" accent="sky"
           icon={<Globe size={14} className="text-sky-400" />} />
       </div>
+
+      {/* Marketplace KPIs */}
+      {mpStats && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard label="Total Users"    value={mpStats.total_users}         delta="" sub="on platform"    accent="indigo"
+            icon={<Users size={14} className="text-indigo-400" />} />
+          <StatCard label="Open Requests"  value={mpStats.open_requests}       delta="" sub="awaiting quotes" accent="emerald"
+            icon={<Briefcase size={14} className="text-emerald-400" />} />
+          <StatCard label="Total Quotes"   value={mpStats.total_quotes}        delta="" sub="submitted"      accent="violet"
+            icon={<FileText size={14} className="text-violet-400" />} />
+          <StatCard label="Credits Sold"   value={mpStats.total_credits_sold}  delta="" sub="all time"       accent="amber"
+            icon={<Zap size={14} className="text-amber-400" />} />
+        </div>
+      )}
 
       {/* Charts row */}
       <div className="grid lg:grid-cols-3 gap-4">
@@ -206,6 +233,30 @@ export default function DashboardPage() {
               <div className="text-base mb-1">{a.icon}</div>
               <p className="text-xs text-slate-400 leading-relaxed">{a.text}</p>
             </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Marketplace quick links */}
+      <div className="card p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Briefcase size={14} className="text-indigo-400" />
+          <h2 className="text-sm font-semibold text-white">Marketplace</h2>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400">New</span>
+        </div>
+        <div className="grid md:grid-cols-3 gap-3">
+          {[
+            { href: '/marketplace',   icon: '🔍', title: 'Browse Requests',     desc: 'Find clients looking for SEO, web dev, and marketing services', color: 'border-indigo-500/30 bg-indigo-500/5' },
+            { href: '/professionals', icon: '👥', title: 'Find Professionals',  desc: 'Hire verified SEO experts and digital marketers', color: 'border-violet-500/30 bg-violet-500/5' },
+            { href: '/credits',       icon: '⚡', title: 'Buy Credits',         desc: 'Get credits to respond to leads and unlock premium features', color: 'border-amber-500/30 bg-amber-500/5' },
+          ].map(item => (
+            <a key={item.href} href={item.href}
+              className={`rounded-xl border p-4 block transition-all hover:scale-[1.01] ${item.color}`}
+              style={{ textDecoration: 'none' }}>
+              <div className="text-xl mb-2">{item.icon}</div>
+              <p className="text-sm font-semibold text-white">{item.title}</p>
+              <p className="text-xs text-slate-400 mt-1 leading-relaxed">{item.desc}</p>
+            </a>
           ))}
         </div>
       </div>

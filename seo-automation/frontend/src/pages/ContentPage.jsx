@@ -1,16 +1,32 @@
-import { useState } from 'react'
-import { Zap, MapPin, Globe, Eye, X, RefreshCw, Save, CheckCircle, FileJson, Tag, Plus } from 'lucide-react'
-import { generateBulk, exportJson, exportWordpress, generateSingle, savePage } from '../api'
+import { useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Zap, MapPin, Globe, Eye, X, RefreshCw, Save, CheckCircle,
+         FileJson, Tag, Plus, Upload, ChevronDown, ChevronUp } from 'lucide-react'
+import { generateBulk, exportJson, exportWordpress, generateSingle,
+         savePage, publishToWordPress, publishBulkToWordPress, startBulkGenerateJob } from '../api'
 
-const BUSINESS_TYPES = ['Plumbing', 'HVAC', 'Roofing', 'Landscaping', 'Cleaning', 'Electrical', 'Painting', 'SEO Agency', 'Pest Control', 'Moving']
-const SD_CITIES_PREVIEW = ['San Diego','La Jolla','Chula Vista','El Cajon','Escondido','Oceanside','Carlsbad','Vista','San Marcos','Santee','Poway','La Mesa','National City','Coronado','Encinitas']
-const KW_SUGGESTIONS = ['emergency plumber san diego', 'drain cleaning near me', 'licensed plumber ca', 'same day plumbing service', 'water heater repair', 'pipe leak repair']
+const BUSINESS_TYPES = ['Web Design', 'SEO Agency', 'Plumbing', 'HVAC', 'Roofing',
+  'Landscaping', 'Cleaning', 'Electrical', 'Painting', 'Pest Control', 'Moving']
+const INDUSTRIES = ['Contractors', 'Healthcare', 'Retail', 'Restaurants',
+  'Professional Services', 'Real Estate', 'Legal', 'Finance', 'Education', 'Other']
+const SD_CITIES_PREVIEW = ['San Diego','La Jolla','Chula Vista','El Cajon','Escondido',
+  'Oceanside','Carlsbad','Vista','San Marcos','Santee','Poway','La Mesa',
+  'National City','Coronado','Encinitas']
+const KW_SUGGESTIONS = ['web design san diego', 'affordable web design', 'small business website',
+  'website designer near me', 'wordpress website san diego', 'custom website design']
+const SEO_PLUGINS = [
+  { value: 'rankmath', label: 'RankMath' },
+  { value: 'aioseo', label: 'All in One SEO' },
+  { value: 'yoast', label: 'Yoast SEO' },
+]
 
 // ── Preview Modal ──────────────────────────────────────────────
-function PreviewModal({ block, businessType, targetKeywords = [], onClose, onRegenerate }) {
+function PreviewModal({ block, businessType, targetKeywords = [], wpConfig, onClose, onRegenerate }) {
   const [tab, setTab] = useState('content')
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [publishing, setPublishing] = useState(false)
+  const [publishResult, setPublishResult] = useState(null)
 
   const handleRegen = async () => {
     setLoading(true)
@@ -26,6 +42,20 @@ function PreviewModal({ block, businessType, targetKeywords = [], onClose, onReg
     setTimeout(() => setSaved(false), 2500)
   }
 
+  const handlePublish = async () => {
+    if (!wpConfig.wp_url) return
+    setPublishing(true)
+    setPublishResult(null)
+    try {
+      const res = await publishToWordPress(block, wpConfig)
+      setPublishResult(res.data)
+    } catch (e) {
+      setPublishResult({ success: false, error: e.response?.data?.detail || e.message })
+    } finally { setPublishing(false) }
+  }
+
+  const tabs = ['content', 'intro', 'keywords', 'questions', 'faqs', 'schema']
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
@@ -36,7 +66,7 @@ function PreviewModal({ block, businessType, targetKeywords = [], onClose, onReg
             <h2 className="font-bold text-white text-base">{block.city}, {block.state}</h2>
             <p className="text-xs text-slate-500 mt-0.5">{businessType} · SEO Page Preview</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             <button onClick={handleRegen} disabled={loading}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/8 text-slate-300 text-xs hover:bg-white/8 transition-colors disabled:opacity-50">
               <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Regenerate
@@ -45,16 +75,30 @@ function PreviewModal({ block, businessType, targetKeywords = [], onClose, onReg
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors ${saved ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-white/5 border border-white/8 text-slate-300 hover:bg-white/8'}`}>
               {saved ? <><CheckCircle size={11} /> Saved</> : <><Save size={11} /> Save</>}
             </button>
+            {wpConfig.wp_url && (
+              <button onClick={handlePublish} disabled={publishing}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors ${publishResult?.success ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-indigo-600/20 border border-indigo-600/30 text-indigo-300 hover:bg-indigo-600/30'} disabled:opacity-50`}>
+                <Upload size={11} className={publishing ? 'animate-pulse' : ''} />
+                {publishing ? 'Publishing...' : publishResult?.success ? 'Published!' : 'Publish to WP'}
+              </button>
+            )}
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/8 text-slate-400 hover:text-white transition-colors">
               <X size={16} />
             </button>
           </div>
         </div>
-        <div className="flex border-b border-white/6 px-6 flex-shrink-0">
-          {['content', 'keywords', 'faqs', 'schema'].map(t => (
+        {publishResult && (
+          <div className={`px-6 py-2 text-xs flex items-center gap-2 ${publishResult.success ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+            {publishResult.success
+              ? <>✓ Published — <a href={publishResult.post_url} target="_blank" rel="noreferrer" className="underline">{publishResult.post_url}</a></>
+              : <>✗ {publishResult.error}</>}
+          </div>
+        )}
+        <div className="flex border-b border-white/6 px-6 flex-shrink-0 overflow-x-auto">
+          {tabs.map(t => (
             <button key={t} onClick={() => setTab(t)}
-              className={`px-4 py-3 text-sm font-medium capitalize transition-colors ${tab === t ? 'tab-active' : 'tab-inactive'}`}>
-              {t === 'content' ? 'Content & Meta' : t === 'keywords' ? 'Keywords' : t === 'faqs' ? 'FAQs' : 'Schema'}
+              className={`px-4 py-3 text-sm font-medium capitalize whitespace-nowrap transition-colors ${tab === t ? 'tab-active' : 'tab-inactive'}`}>
+              {t === 'content' ? 'Content & Meta' : t === 'intro' ? 'Intro' : t === 'keywords' ? 'Keywords' : t === 'questions' ? 'User Questions' : t === 'faqs' ? 'FAQs' : 'Schema'}
             </button>
           ))}
         </div>
@@ -63,11 +107,12 @@ function PreviewModal({ block, businessType, targetKeywords = [], onClose, onReg
             <>
               <MetaRow label="SEO Title" value={block.title} />
               <MetaRow label="Meta Description" value={block.meta_description} />
+              <MetaRow label="URL Slug" value={block.slug || `${block.business_type?.toLowerCase().replace(/ /g,'-')}-${block.city?.toLowerCase().replace(/ /g,'-')}`} />
               <MetaRow label="H1" value={block.h1} />
               <div className="rounded-lg bg-white/3 border border-white/6 p-4">
-                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">H2 Headings</div>
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">H2 Headings (Question-based)</div>
                 <ul className="space-y-2">
-                  {block.h2s.map((h, i) => (
+                  {block.h2s?.map((h, i) => (
                     <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
                       <span className="text-indigo-400 text-xs font-bold mt-0.5 flex-shrink-0">H2</span>{h}
                     </li>
@@ -77,7 +122,7 @@ function PreviewModal({ block, businessType, targetKeywords = [], onClose, onReg
               <div className="rounded-lg bg-white/3 border border-white/6 p-4">
                 <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">H3 Headings</div>
                 <ul className="space-y-2">
-                  {block.h3s.map((h, i) => (
+                  {block.h3s?.map((h, i) => (
                     <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
                       <span className="text-violet-400 text-xs font-bold mt-0.5 flex-shrink-0">H3</span>{h}
                     </li>
@@ -91,6 +136,15 @@ function PreviewModal({ block, businessType, targetKeywords = [], onClose, onReg
                 <ScoreBar label="Keyword Density" value={Math.min(100, Math.round((block.keyword_density || 1.5) * 20))} color="#8b5cf6" />
                 <ScoreBar label="Meta Complete" value={100} color="#10b981" />
               </div>
+            </>
+          )}
+          {tab === 'intro' && (
+            <>
+              <div className="rounded-lg bg-indigo-500/8 border border-indigo-500/20 p-4 mb-2">
+                <p className="text-xs text-indigo-300 mb-1 font-semibold">AI Overview Optimized Intro</p>
+                <p className="text-xs text-slate-400">First 2–3 lines answer directly, include location + keyword — optimized for Google AI Overviews, Bing Copilot, and ChatGPT retrieval.</p>
+              </div>
+              <MetaRow label="Intro Paragraph" value={block.intro || block.content?.split('\n\n')[0]} multiline />
             </>
           )}
           {tab === 'keywords' && (
@@ -108,17 +162,32 @@ function PreviewModal({ block, businessType, targetKeywords = [], onClose, onReg
               <div>
                 <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Primary Keyword</div>
                 <span className="inline-block px-3 py-1.5 rounded-lg bg-indigo-500/20 text-indigo-200 border border-indigo-500/30 text-sm font-medium">
-                  {block.keywords.primary}
+                  {block.keywords?.primary}
                 </span>
               </div>
-              <KwGroup label="Secondary Keywords" kws={block.keywords.secondary} color="violet" />
-              <KwGroup label="Long-tail Keywords" kws={block.keywords.long_tail} color="sky" />
-              <KwGroup label='"Near Me" Variations' kws={block.keywords.near_me} color="emerald" />
+              <KwGroup label="Short-tail / Main Keywords" kws={block.keywords?.secondary?.slice(0,3) || []} color="violet" />
+              <KwGroup label="Long-tail Keywords" kws={block.keywords?.long_tail || []} color="sky" />
+              <KwGroup label='"Near Me" Variations' kws={block.keywords?.near_me || []} color="emerald" />
             </>
+          )}
+          {tab === 'questions' && (
+            <div className="space-y-2">
+              <div className="rounded-lg bg-amber-500/8 border border-amber-500/20 p-4 mb-2">
+                <p className="text-xs text-amber-300 font-semibold mb-1">Real User Questions</p>
+                <p className="text-xs text-slate-400">Sourced from Google PAA, Suggest patterns. Used as H2s and FAQs for AI Overview optimization.</p>
+              </div>
+              {(block.keywords?.user_questions || []).map((q, i) => (
+                <div key={i} className="flex items-start gap-3 rounded-lg bg-white/3 border border-white/6 p-3">
+                  <span className="text-amber-400 text-xs font-bold mt-0.5 flex-shrink-0">Q{i+1}</span>
+                  <span className="text-sm text-slate-300">{q}</span>
+                </div>
+              ))}
+            </div>
           )}
           {tab === 'faqs' && (
             <div className="space-y-3">
-              {block.faqs.map((faq, i) => (
+              <div className="text-xs text-slate-500 mb-2">{block.faqs?.length || 0} FAQs — structured for AI extraction (schema.org/FAQPage)</div>
+              {block.faqs?.map((faq, i) => (
                 <div key={i} className="rounded-xl bg-white/3 border border-white/6 p-4">
                   <p className="text-sm font-semibold text-indigo-300 mb-2">{faq.question}</p>
                   <p className="text-sm text-slate-400 leading-relaxed">{faq.answer}</p>
@@ -127,12 +196,17 @@ function PreviewModal({ block, businessType, targetKeywords = [], onClose, onReg
             </div>
           )}
           {tab === 'schema' && (
-            <div>
+            <div className="space-y-4">
               <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">JSON-LD Schema Markup</div>
-              <pre className="rounded-xl p-4 text-xs text-emerald-400 overflow-auto border leading-relaxed"
-                style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)' }}>
-                {JSON.stringify(block.schema_markup, null, 2)}
-              </pre>
+              {block.schema_markup && Object.entries(block.schema_markup).map(([key, val]) => (
+                <div key={key}>
+                  <div className="text-xs text-indigo-400 font-semibold mb-1 capitalize">{key.replace('_', ' ')}</div>
+                  <pre className="rounded-xl p-4 text-xs text-emerald-400 overflow-auto border leading-relaxed"
+                    style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)' }}>
+                    {JSON.stringify(val, null, 2)}
+                  </pre>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -182,17 +256,126 @@ function ScoreBar({ label, value, color }) {
   )
 }
 
+// ── WordPress Config Panel ─────────────────────────────────────
+function WordPressPanel({ wpConfig, setWpConfig }) {
+  const [open, setOpen] = useState(false)
+  const connected = !!wpConfig.wp_url
+
+  return (
+    <div className="card border-violet-500/20">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-5 py-4"
+      >
+        <div className="flex items-center gap-2">
+          <Globe size={15} className="text-violet-400" />
+          <span className="text-sm font-semibold text-white">WordPress Auto-Publish</span>
+          {connected && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-400/10 text-emerald-400 border border-emerald-400/20">
+              Configured
+            </span>
+          )}
+        </div>
+        {open ? <ChevronUp size={14} className="text-slate-500" /> : <ChevronDown size={14} className="text-slate-500" />}
+      </button>
+      {open && (
+        <div className="px-5 pb-5 space-y-3 border-t border-white/5 pt-4">
+          <p className="text-xs text-slate-500">
+            Enter your WordPress credentials to auto-publish pages. Use an{' '}
+            <a href="https://wordpress.org/documentation/article/application-passwords/" target="_blank" rel="noreferrer"
+              className="text-indigo-400 underline">Application Password</a> (not your login password).
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">WordPress URL</label>
+              <input type="url" value={wpConfig.wp_url}
+                onChange={e => setWpConfig(c => ({ ...c, wp_url: e.target.value }))}
+                placeholder="https://yoursite.com"
+                className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Username</label>
+              <input type="text" value={wpConfig.wp_username}
+                onChange={e => setWpConfig(c => ({ ...c, wp_username: e.target.value }))}
+                placeholder="your_wp_username"
+                className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Application Password</label>
+              <input type="password" value={wpConfig.wp_app_password}
+                onChange={e => setWpConfig(c => ({ ...c, wp_app_password: e.target.value }))}
+                placeholder="xxxx xxxx xxxx xxxx"
+                className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">SEO Plugin</label>
+              <select value={wpConfig.seo_plugin}
+                onChange={e => setWpConfig(c => ({ ...c, seo_plugin: e.target.value }))}
+                className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500/50">
+                {SEO_PLUGINS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Publish Status</label>
+            <div className="flex gap-2">
+              {['draft', 'publish'].map(s => (
+                <button key={s} type="button"
+                  onClick={() => setWpConfig(c => ({ ...c, status: s }))}
+                  className={`px-3 py-1 rounded-md text-xs font-medium capitalize transition-colors ${wpConfig.status === s ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-600/30' : 'bg-white/4 text-slate-400 border border-white/6 hover:border-white/15'}`}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main Page ──────────────────────────────────────────────────
 export default function ContentPage() {
-  const [form, setForm] = useState({ business_type: 'Plumbing', base_location: 'San Diego, CA', num_cities: 10 })
+  const DEFAULTS = { business_type: 'Web Design', base_location: 'San Diego, CA', num_cities: 10, industry: 'Contractors' }
+  const navigate = useNavigate()
+  const [form, setForm] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('seo_project') || '{}')
+      return { ...DEFAULTS, ...saved }
+    } catch { return DEFAULTS }
+  })
+
+  const updateForm = (updater) => {
+    setForm(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      localStorage.setItem('seo_project', JSON.stringify(next))
+      window.dispatchEvent(new Event('seo_project_updated'))
+      return next
+    })
+  }
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [pages, setPages] = useState([])
   const [filter, setFilter] = useState('')
   const [exporting, setExporting] = useState('')
-  const [preview, setPreview] = useState(null)
   const [kwInput, setKwInput] = useState('')
   const [targetKeywords, setTargetKeywords] = useState([])
+  const [useAi, setUseAi] = useState(false)
+  const [useAsync, setUseAsync] = useState(false)
+  const [asyncJobId, setAsyncJobId] = useState('')
+  const [wpConfig, setWpConfig] = useState({
+    wp_url: '', wp_username: '', wp_app_password: '',
+    seo_plugin: 'rankmath', status: 'draft',
+  })
+  const [publishingAll, setPublishingAll] = useState(false)
+  const [publishResults, setPublishResults] = useState({})
+  const [toast, setToast] = useState(null)
+  const resultsRef = useRef(null)
+
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 4000)
+  }
 
   const addKeyword = (kw) => {
     const k = (kw || kwInput).trim().toLowerCase()
@@ -205,9 +388,27 @@ export default function ContentPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
+    setPublishResults({})
+    setAsyncJobId('')
     try {
-      const res = await generateBulk({ ...form, num_cities: Number(form.num_cities), target_keywords: targetKeywords })
-      setPages(res.data.pages)
+      const payload = {
+        ...form,
+        num_cities: Number(form.num_cities),
+        target_keywords: targetKeywords,
+        use_ai: useAi,
+      }
+      if (useAsync) {
+        const res = await startBulkGenerateJob(payload)
+        setAsyncJobId(res.data.job_id)
+        const existing = JSON.parse(localStorage.getItem('seo_jobs') || '[]')
+        localStorage.setItem('seo_jobs', JSON.stringify([res.data.job_id, ...existing]))
+        showToast(`Async job started — ID: ${res.data.job_id.slice(0, 8)}...`)
+      } else {
+        const res = await generateBulk(payload)
+        setPages(res.data.pages)
+        showToast(`${res.data.pages.length} pages generated successfully!`)
+        setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'Backend not running. Start uvicorn on port 8000.')
     } finally { setLoading(false) }
@@ -230,78 +431,85 @@ export default function ContentPage() {
     } finally { setExporting('') }
   }
 
+  const handlePublishSingle = async (block, index) => {
+    if (!wpConfig.wp_url) return
+    setPublishResults(r => ({ ...r, [index]: 'loading' }))
+    try {
+      const res = await publishToWordPress(block, wpConfig)
+      setPublishResults(r => ({ ...r, [index]: res.data }))
+    } catch (e) {
+      setPublishResults(r => ({ ...r, [index]: { success: false, error: e.response?.data?.detail || e.message } }))
+    }
+  }
+  const handlePublishAll = async () => {
+    if (!wpConfig.wp_url || !pages.length) return
+    setPublishingAll(true)
+    try {
+      const res = await publishBulkToWordPress(pages, wpConfig)
+      const map = {}
+      res.data.forEach((r, i) => { map[i] = r })
+      setPublishResults(map)
+    } catch (e) {
+      setError(e.response?.data?.detail || 'WordPress publish failed.')
+    } finally { setPublishingAll(false) }
+  }
+
   const filtered = pages.filter(p => p.city.toLowerCase().includes(filter.toLowerCase()))
 
   return (
     <div className="space-y-5 fade-in">
-
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-5 py-3 rounded-xl shadow-2xl text-sm font-semibold transition-all
+          ${toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
+          <CheckCircle size={16} />
+          {toast.msg}
+          <button onClick={() => setToast(null)} className="ml-2 opacity-70 hover:opacity-100"><X size={14} /></button>
+        </div>
+      )}
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-white">Content Generation</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Generate location-optimized SEO pages at scale</p>
+          <p className="text-sm text-slate-500 mt-0.5">AI-powered, SGE/Copilot/ChatGPT-optimized SEO pages at scale</p>
         </div>
-        {pages.length > 0 && (
-          <div className="flex gap-2">
-            <button onClick={() => handleExport('json')} disabled={exporting === 'json'}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/5 border border-white/8 text-slate-300 text-sm hover:bg-white/8 transition-colors disabled:opacity-50">
-              <FileJson size={14} /> {exporting === 'json' ? 'Exporting...' : 'Download JSON'}
-            </button>
-            <button onClick={() => handleExport('wp')} disabled={exporting === 'wp'}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/5 border border-white/8 text-slate-300 text-sm hover:bg-white/8 transition-colors disabled:opacity-50">
-              <Globe size={14} /> {exporting === 'wp' ? 'Exporting...' : 'Download WordPress'}
-            </button>
-          </div>
-        )}
       </div>
 
-      {/* ── TARGET KEYWORDS — full width, always on top ── */}
+      {/* Target Keywords */}
       <div className="card p-5 border-indigo-500/20">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Tag size={15} className="text-indigo-400" />
             <span className="text-sm font-semibold text-white">Target Keywords</span>
-            <span className="text-xs text-slate-500">— added keywords get woven into every generated page</span>
+            <span className="text-xs text-slate-500">— woven into every generated page</span>
           </div>
           {targetKeywords.length > 0 && (
-            <button onClick={() => setTargetKeywords([])}
-              className="text-xs text-slate-500 hover:text-red-400 transition-colors">
+            <button onClick={() => setTargetKeywords([])} className="text-xs text-slate-500 hover:text-red-400 transition-colors">
               Clear all
             </button>
           )}
         </div>
-
-        {/* Input row */}
         <div className="flex gap-2 mb-3">
-          <input
-            type="text"
-            value={kwInput}
+          <input type="text" value={kwInput}
             onChange={e => setKwInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword() } }}
-            placeholder="Type a keyword and press Enter — e.g. emergency plumber san diego"
-            className="flex-1 bg-white/4 border border-white/8 rounded-lg px-4 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50"
-          />
+            placeholder="e.g. web design san diego — press Enter to add"
+            className="flex-1 bg-white/4 border border-white/8 rounded-lg px-4 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50" />
           <button type="button" onClick={() => addKeyword()}
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-indigo-600/20 border border-indigo-600/30 text-indigo-300 hover:bg-indigo-600/30 transition-colors text-sm font-medium">
             <Plus size={14} /> Add
           </button>
         </div>
-
-        {/* Added keywords */}
-        {targetKeywords.length > 0 ? (
+        {targetKeywords.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3">
             {targetKeywords.map(kw => (
               <span key={kw} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-indigo-500/15 text-indigo-300 border border-indigo-500/25 font-medium">
                 {kw}
-                <button onClick={() => removeKeyword(kw)} className="hover:text-white transition-colors">
-                  <X size={10} />
-                </button>
+                <button onClick={() => removeKeyword(kw)} className="hover:text-white transition-colors"><X size={10} /></button>
               </span>
             ))}
           </div>
-        ) : null}
-
-        {/* Suggestions */}
+        )}
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-slate-600">Suggestions:</span>
           {KW_SUGGESTIONS.filter(s => !targetKeywords.includes(s)).map(s => (
@@ -313,7 +521,7 @@ export default function ContentPage() {
         </div>
       </div>
 
-      {/* ── CAMPAIGN SETUP + CITY PREVIEW ── */}
+      {/* Campaign Setup + City Preview */}
       <div className="grid lg:grid-cols-3 gap-4">
         <div className="card p-5">
           <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
@@ -324,26 +532,30 @@ export default function ContentPage() {
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Business Niche</label>
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {BUSINESS_TYPES.map(bt => (
-                  <button key={bt} type="button" onClick={() => setForm(f => ({ ...f, business_type: bt }))}
-                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors
-                      ${form.business_type === bt
-                        ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-600/30'
-                        : 'bg-white/4 text-slate-400 border border-white/6 hover:border-white/15 hover:text-slate-200'}`}>
+                  <button key={bt} type="button" onClick={() => updateForm(f => ({ ...f, business_type: bt }))}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${form.business_type === bt ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-600/30' : 'bg-white/4 text-slate-400 border border-white/6 hover:border-white/15 hover:text-slate-200'}`}>
                     {bt}
                   </button>
                 ))}
               </div>
               <input type="text" value={form.business_type}
-                onChange={e => setForm(f => ({ ...f, business_type: e.target.value }))}
+                onChange={e => updateForm(f => ({ ...f, business_type: e.target.value }))}
                 placeholder="Custom niche..."
                 className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Industry / Audience</label>
+              <select value={form.industry} onChange={e => updateForm(f => ({ ...f, industry: e.target.value }))}
+                className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500/50">
+                {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
+              </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
                 <MapPin size={10} className="inline mr-1" />Base Location
               </label>
               <input type="text" value={form.base_location}
-                onChange={e => setForm(f => ({ ...f, base_location: e.target.value }))}
+                onChange={e => updateForm(f => ({ ...f, base_location: e.target.value }))}
                 placeholder="e.g. San Diego, CA"
                 className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50" />
             </div>
@@ -353,15 +565,46 @@ export default function ContentPage() {
                 <span className="text-sm font-bold text-indigo-400">{form.num_cities}</span>
               </div>
               <input type="range" min="1" max="50" value={form.num_cities}
-                onChange={e => setForm(f => ({ ...f, num_cities: Number(e.target.value) }))}
+                onChange={e => updateForm(f => ({ ...f, num_cities: Number(e.target.value) }))}
                 className="w-full accent-indigo-500" />
             </div>
             {error && <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 text-xs">{error}</div>}
+
+            {/* AI + Async toggles */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-white/3 border border-white/6">
+                <div>
+                  <div className="text-xs font-semibold text-slate-300">🤖 AI Content (GPT-4)</div>
+                  <div className="text-[10px] text-slate-500">Unique, high-quality content per city</div>
+                </div>
+                <button type="button" onClick={() => setUseAi(a => !a)}
+                  className={`w-9 h-5 rounded-full transition-colors relative flex-shrink-0 ${useAi ? 'bg-indigo-500' : 'bg-white/10'}`}>
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${useAi ? 'left-4' : 'left-0.5'}`} />
+                </button>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-white/3 border border-white/6">
+                <div>
+                  <div className="text-xs font-semibold text-slate-300">⚡ Async Job (50+ pages)</div>
+                  <div className="text-[10px] text-slate-500">Background processing, track in Jobs page</div>
+                </div>
+                <button type="button" onClick={() => setUseAsync(a => !a)}
+                  className={`w-9 h-5 rounded-full transition-colors relative flex-shrink-0 ${useAsync ? 'bg-amber-500' : 'bg-white/10'}`}>
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${useAsync ? 'left-4' : 'left-0.5'}`} />
+                </button>
+              </div>
+            </div>
+
+            {asyncJobId && (
+              <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs">
+                ✓ Job started: <code className="font-mono">{asyncJobId.slice(0, 12)}...</code>
+              </div>
+            )}
+
             <button type="submit" disabled={loading}
               className="btn-primary w-full py-2.5 rounded-lg text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
               {loading
                 ? <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.2)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/></svg>Generating {form.num_cities} pages...</>
-                : <><Zap size={14} />Generate Pages</>}
+                : <><Zap size={14} />{useAsync ? 'Start Async Job' : 'Generate Pages'}{useAi ? ' (AI)' : ''}</>}
             </button>
           </form>
         </div>
@@ -383,9 +626,46 @@ export default function ContentPage() {
         </div>
       </div>
 
-      {/* ── RESULTS TABLE ── */}
+      {/* WordPress Panel */}
+      <WordPressPanel wpConfig={wpConfig} setWpConfig={setWpConfig} />
+
+      {/* ── SUCCESS BANNER — appears immediately after generation ── */}
       {pages.length > 0 && (
-        <div className="card">
+        <div ref={resultsRef} className="rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+          style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(124,58,237,0.1))', border: '1px solid rgba(99,102,241,0.3)' }}>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
+              <CheckCircle size={18} className="text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-white font-semibold text-sm">{pages.length} SEO pages generated</p>
+              <p className="text-slate-400 text-xs mt-0.5">
+                {form.business_type} · {form.base_location} · Ready to download or publish
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={() => handleExport('json')} disabled={exporting === 'json'}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/8 border border-white/12 text-slate-200 text-sm font-medium hover:bg-white/12 transition-colors disabled:opacity-50">
+              <FileJson size={14} /> {exporting === 'json' ? 'Exporting...' : 'Download JSON'}
+            </button>
+            <button onClick={() => handleExport('wp')} disabled={exporting === 'wp'}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg btn-primary text-white text-sm font-semibold disabled:opacity-50">
+              <Globe size={14} /> {exporting === 'wp' ? 'Exporting...' : 'Download WordPress Format'}
+            </button>
+            {wpConfig.wp_url && (
+              <button onClick={handlePublishAll} disabled={publishingAll}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-600/20 border border-violet-600/30 text-violet-300 text-sm font-medium hover:bg-violet-600/30 transition-colors disabled:opacity-50">
+                <Upload size={14} /> {publishingAll ? 'Publishing...' : 'Publish All to WordPress'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Results Table */}
+      {pages.length > 0 && (
+        <div className="card" ref={resultsRef}>
           <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
             <div className="flex items-center gap-3">
               <h3 className="text-sm font-semibold text-white">{pages.length} Pages Generated</h3>
@@ -398,12 +678,13 @@ export default function ContentPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>#</th><th>City</th><th>SEO Title</th><th>SEO Score</th><th>Primary Keyword</th><th>Actions</th>
+                <th>#</th><th>City</th><th>SEO Title</th><th>Score</th><th>Primary Keyword</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((block, i) => {
                 const score = Math.round(block.readability_score || 75)
+                const pr = publishResults[i]
                 return (
                   <tr key={`${block.city}-${i}`}>
                     <td className="text-slate-600 text-xs">{i + 1}</td>
@@ -411,25 +692,36 @@ export default function ContentPage() {
                       <div className="font-semibold text-slate-200">{block.city}</div>
                       <div className="text-xs text-slate-500">{block.state}</div>
                     </td>
-                    <td className="max-w-[260px]">
+                    <td className="max-w-[240px]">
                       <div className="text-slate-300 text-xs truncate">{block.title}</div>
-                      <div className="text-slate-600 text-xs truncate mt-0.5">{block.meta_description}</div>
+                      <div className="text-slate-600 text-xs truncate mt-0.5">{block.slug}</div>
                     </td>
                     <td>
                       <div className="flex items-center gap-2">
-                        <div className="w-16 h-1.5 rounded-full bg-white/8 overflow-hidden">
+                        <div className="w-14 h-1.5 rounded-full bg-white/8 overflow-hidden">
                           <div className="h-full rounded-full"
                             style={{ width: `${score}%`, background: score >= 75 ? '#10b981' : score >= 50 ? '#f59e0b' : '#ef4444' }} />
                         </div>
                         <span className={`text-xs font-bold ${score >= 75 ? 'text-emerald-400' : score >= 50 ? 'text-amber-400' : 'text-red-400'}`}>{score}</span>
                       </div>
                     </td>
-                    <td className="text-xs text-slate-400 max-w-[160px] truncate">{block.keywords?.primary}</td>
+                    <td className="text-xs text-slate-400 max-w-[140px] truncate">{block.keywords?.primary}</td>
                     <td>
-                      <button onClick={() => setPreview({ block, index: i })}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/15 border border-indigo-600/25 text-indigo-300 text-xs hover:bg-indigo-600/25 transition-colors">
-                        <Eye size={11} /> View
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => navigate('/page-preview', { state: { block, index: i, businessType: form.business_type, wpConfig } })}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs transition-colors"
+                          style={{ background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.25)', color: '#67E8F9' }}>
+                          <Eye size={11} /> View
+                        </button>
+                        {wpConfig.wp_url && (
+                          <button onClick={() => handlePublishSingle(block, i)}
+                            disabled={pr === 'loading'}
+                            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs transition-colors ${pr?.success ? 'bg-emerald-500/15 border border-emerald-500/25 text-emerald-400' : pr?.error ? 'bg-red-500/15 border border-red-500/25 text-red-400' : 'bg-white/5 border border-white/8 text-slate-400 hover:bg-white/8'} disabled:opacity-50`}>
+                            <Upload size={11} />
+                            {pr === 'loading' ? '...' : pr?.success ? 'Done' : pr?.error ? 'Err' : 'WP'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )
@@ -439,18 +731,6 @@ export default function ContentPage() {
         </div>
       )}
 
-      {preview && (
-        <PreviewModal
-          block={preview.block}
-          businessType={form.business_type}
-          targetKeywords={targetKeywords}
-          onClose={() => setPreview(null)}
-          onRegenerate={(newBlock) => {
-            setPages(prev => prev.map((p, i) => i === preview.index ? newBlock : p))
-            setPreview({ block: newBlock, index: preview.index })
-          }}
-        />
-      )}
     </div>
   )
 }
