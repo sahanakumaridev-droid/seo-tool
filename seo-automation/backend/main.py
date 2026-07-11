@@ -1,9 +1,10 @@
 import os
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
+from db import get_session
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -118,6 +119,9 @@ app.include_router(leads.router,     prefix="/api/leads",     tags=["Leads"])
 app.include_router(jobs.router,      prefix="/api/jobs",      tags=["Jobs"])
 app.include_router(images.router,    prefix="/api/images",    tags=["Images"])
 
+from routes import indexing
+app.include_router(indexing.router,  prefix="/api/indexing",  tags=["Google Indexing"])
+
 # Instagram auto-posting
 from routes import instagram
 app.include_router(instagram.router, prefix="/api/instagram", tags=["Instagram"])
@@ -165,3 +169,25 @@ async def root():
         "docs": "/docs",
         "health": "/health"
     }
+
+
+# ── Public "Publish to Web" pages ───────────────────────────────
+@app.get("/p/{slug}", response_class=HTMLResponse, tags=["Public Pages"])
+async def public_page(slug: str, session=Depends(get_session)):
+    """Serve a published page as standalone, publicly viewable HTML."""
+    from sqlalchemy import select
+    from db import PageRecord
+    from models.schemas import SEOBlock
+    from services.public_page_service import render_public_html
+
+    result = await session.execute(select(PageRecord).where(PageRecord.slug == slug))
+    row = result.scalar_one_or_none()
+    if not row:
+        return HTMLResponse(
+            "<div style='font-family:sans-serif;text-align:center;padding:80px;color:#475569'>"
+            "<h1 style='color:#0F172A'>404 — Page not found</h1>"
+            "<p>This page hasn't been published yet.</p></div>",
+            status_code=404,
+        )
+    block = SEOBlock(**row.seo_block)
+    return HTMLResponse(render_public_html(block))

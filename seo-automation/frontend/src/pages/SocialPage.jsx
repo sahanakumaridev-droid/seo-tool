@@ -96,7 +96,7 @@ const PLATFORMS = {
     profileUrl: 'https://www.threads.net/',
     shareUrl: (u, t) => `https://www.threads.net/intent/post?text=${encodeURIComponent(t + ' ' + u)}`,
     bg: '#000000',
-    color: '#8b5cf6',
+    color: '#2563EB',
     tagline: 'ZeOrbit on Threads',
     handle: '@zeorbit',
     logo: (
@@ -139,11 +139,11 @@ function PlatformCard({ id, platform, onShare, hasPage }) {
     <div
       style={{
         borderRadius: 16, overflow: 'hidden',
-        border: '1px solid rgba(255,255,255,0.08)',
-        background: 'rgba(13,18,32,0.9)',
+        border: '1px solid var(--border)',
+        background: 'var(--bg-surface)',
         transition: 'transform 0.2s, box-shadow 0.2s',
         transform: hovered ? 'translateY(-3px)' : 'none',
-        boxShadow: hovered ? '0 12px 40px rgba(0,0,0,0.5)' : '0 2px 8px rgba(0,0,0,0.3)',
+        boxShadow: hovered ? 'var(--shadow-lg)' : 'var(--shadow-sm)',
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -183,9 +183,9 @@ function PlatformCard({ id, platform, onShare, hasPage }) {
 
         {/* Share post */}
         <button onClick={() => onShare(id)} disabled={!hasPage}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 12px', borderRadius: 9, background: 'rgba(255,255,255,0.06)', color: hasPage ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.25)', border: '1px solid rgba(255,255,255,0.1)', cursor: hasPage ? 'pointer' : 'not-allowed', fontSize: 12, fontWeight: 600 }}
-          onMouseEnter={e => { if (hasPage) e.currentTarget.style.background = 'rgba(255,255,255,0.12)' }}
-          onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}>
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 12px', borderRadius: 9, background: 'var(--bg-raised)', color: hasPage ? 'var(--text-1)' : 'var(--text-4)', border: '1px solid var(--border-bright)', cursor: hasPage ? 'pointer' : 'not-allowed', fontSize: 12, fontWeight: 600 }}
+          onMouseEnter={e => { if (hasPage) e.currentTarget.style.background = 'var(--bg-overlay)' }}
+          onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-raised)'}>
           <Share2 size={12} /> Share SEO Post
         </button>
       </div>
@@ -337,7 +337,7 @@ export default function SocialPage() {
               onClick={handleGenerateImage}
               disabled={generatingImage || !selected}
               className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-40 flex-shrink-0"
-              style={{ background: 'linear-gradient(135deg,#7C3AED,#6366F1)' }}
+              style={{ background: 'linear-gradient(135deg,#2563EB,#1D4ED8)' }}
             >
               {generatingImage ? <RefreshCw size={11} className="animate-spin" /> : <Sparkles size={11} />}
               {generatingImage ? '...' : 'Generate'}
@@ -394,11 +394,11 @@ export default function SocialPage() {
                     onClick={() => setSelectedPlatforms(prev => active ? prev.filter(x => x !== id) : [...prev, id])}
                     className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs border transition-colors"
                     style={{
-                      background: active ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.02)',
-                      borderColor: active ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)',
-                      color: active ? 'white' : 'rgba(255,255,255,0.3)',
+                      background: active ? 'var(--brand-soft)' : 'var(--bg-surface)',
+                      borderColor: active ? 'var(--brand)' : 'var(--border-bright)',
+                      color: active ? 'var(--brand)' : 'var(--text-3)',
                     }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: active ? p.color : 'rgba(255,255,255,0.2)', flexShrink: 0 }} />
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: active ? p.color : 'var(--border-bright)', flexShrink: 0 }} />
                     {p.label}
                     {apiStatus[id] && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-400" />}
                   </button>

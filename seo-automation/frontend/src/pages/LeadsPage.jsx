@@ -323,24 +323,6 @@ export default function LeadsPage() {
         )}
       </div>
 
-      {/* Webhook info */}
-      <div className="card p-5">
-        <div className="text-sm font-semibold text-white mb-3">Webhook Integration</div>
-        <p className="text-xs text-slate-400 mb-3">
-          Configure Bark or Thumbtack to send leads directly to your webhook URL. Leads will appear automatically in this dashboard.
-        </p>
-        <div className="space-y-2">
-          {['bark', 'thumbtack'].map(src => (
-            <div key={src} className="flex items-center gap-3 p-3 rounded-lg bg-white/3 border border-white/6">
-              <span className="text-xs font-semibold text-slate-300 w-20 capitalize">{src}</span>
-              <code className="text-xs text-indigo-400 flex-1">{window.location.origin}/api/leads/webhook/{src}</code>
-              <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/api/leads/webhook/${src}`)}
-                className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Copy</button>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {showAdd && <AddLeadModal onClose={() => setShowAdd(false)} onAdded={lead => { setLeads(prev => [lead, ...prev]); loadLeads() }} />}
     </div>
   )

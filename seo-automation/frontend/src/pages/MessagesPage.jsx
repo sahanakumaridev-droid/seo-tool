@@ -127,7 +127,7 @@ export default function MessagesPage() {
                   key={msg.id}
                   onClick={() => markRead(msg.id)}
                   className="px-4 py-3 cursor-pointer transition-colors hover:bg-white/3"
-                  style={{ background: !msg.read ? 'rgba(99,102,241,0.05)' : 'transparent' }}
+                  style={{ background: !msg.read ? 'var(--brand-soft)' : 'transparent' }}
                 >
                   <div className="flex items-center justify-between mb-0.5">
                     <p className="text-xs font-semibold" style={{ color: 'var(--text-1)' }}>{msg.sender_name}</p>

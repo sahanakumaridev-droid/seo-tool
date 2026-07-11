@@ -71,15 +71,15 @@ export default function KeywordsPage() {
             <h3 className="text-sm font-semibold text-white mb-4">Search Volume by Keyword</h3>
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={volumeChartData} margin={{ left: -20, bottom: 40 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#2A3B57" />
                 <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} angle={-30} textAnchor="end" axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
                 <Tooltip
-                  contentStyle={{ background: '#111827', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, fontSize: 12 }}
-                  labelStyle={{ color: '#94a3b8' }}
-                  itemStyle={{ color: '#e2e8f0' }}
+                  contentStyle={{ background: '#1E2940', border: '1px solid #2A3B57', borderRadius: 8, fontSize: 12, color: '#F1F5F9' }}
+                  labelStyle={{ color: '#94A3B8' }}
+                  itemStyle={{ color: '#F1F5F9' }}
                 />
-                <Bar dataKey="volume" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="volume" fill="#1D4ED8" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

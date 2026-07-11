@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bell, Search, ChevronDown, LogOut } from 'lucide-react'
+import { Bell, Search, ChevronDown, LogOut, Menu } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 
@@ -17,7 +17,7 @@ function useBackendStatus() {
   return status
 }
 
-export default function Topbar({ onLogout }) {
+export default function Topbar({ onLogout, onMenuClick }) {
   const status = useBackendStatus()
   const navigate = useNavigate()
   const [showMenu, setShowMenu] = useState(false)
@@ -34,8 +34,14 @@ export default function Topbar({ onLogout }) {
       padding: '0 24px', flexShrink: 0, position: 'sticky', top: 0, zIndex: 30,
       background: 'var(--bg-base)', borderBottom: '1px solid var(--border)',
     }}>
+      {/* Mobile menu toggle */}
+      <button className="mobile-only" onClick={onMenuClick} aria-label="Toggle navigation"
+        style={{ padding: 7, borderRadius: 8, background: 'none', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text-2)', marginRight: 8 }}>
+        <Menu size={16} />
+      </button>
+
       {/* Search */}
-      <div style={{ position: 'relative', width: 280 }}>
+      <div className="topbar-search" style={{ position: 'relative', width: 280 }}>
         <Search size={13} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-4)', pointerEvents: 'none' }} />
         <input
           type="text"
@@ -64,7 +70,7 @@ export default function Topbar({ onLogout }) {
         <div style={{ position: 'relative' }}>
           <button onClick={() => setShowMenu(m => !m)}
             style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 12, background: 'none', border: 'none', cursor: 'pointer', borderLeft: '1px solid var(--border)' }}>
-            <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg,#38BDF8,#6366F1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'white', flexShrink: 0 }}>A</div>
+            <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg,#2563EB,#1D4ED8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'white', flexShrink: 0 }}>A</div>
             <div style={{ textAlign: 'left' }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-1)', lineHeight: 1 }}>Admin</div>
               <div style={{ fontSize: 10, color: 'var(--text-4)', marginTop: 2 }}>admin@zeorbit.com</div>

@@ -91,7 +91,7 @@ export default function LoginPage({ onLogin }) {
 
           <h1 style={{ color: 'white', fontSize: 42, fontWeight: 900, lineHeight: 1.15, margin: '0 0 16px', letterSpacing: '-1px' }}>
             Dominate Local Search<br />
-            <span style={{ background: 'linear-gradient(135deg,#06B6D4,#6366F1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            <span style={{ background: 'linear-gradient(135deg,#06B6D4,#1D4ED8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               in Every City
             </span>
           </h1>

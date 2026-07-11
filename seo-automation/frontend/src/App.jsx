@@ -1,7 +1,8 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Sidebar from './components/Sidebar'
 import Topbar from './components/Topbar'
+import Footer from './components/Footer'
 import LandingPage from './pages/LandingPage'
 import SimpleDashboard from './pages/SimpleDashboard'
 import DashboardPage from './pages/DashboardPage'
@@ -32,13 +33,21 @@ function useAuth() {
 }
 
 function DashboardLayout({ children, onLogout }) {
+  const [navOpen, setNavOpen] = useState(false)
+  const location = useLocation()
+  // Close the mobile drawer on route change
+  useEffect(() => { setNavOpen(false) }, [location.pathname])
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-base)', color: 'var(--text-1)' }}>
-      <Sidebar />
-      <div className="main-content" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <Topbar onLogout={onLogout} />
-        <div style={{ flex: 1, padding: 24, overflow: 'auto' }}>
-          {children}
+      <Sidebar open={navOpen} />
+      {navOpen && <div className="sidebar-backdrop" onClick={() => setNavOpen(false)} />}
+      <div className="main-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <Topbar onLogout={onLogout} onMenuClick={() => setNavOpen(v => !v)} />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
+          <div style={{ flex: 1, padding: 24 }}>
+            {children}
+          </div>
+          <Footer />
         </div>
       </div>
     </div>
@@ -62,7 +71,7 @@ export default function App() {
       {/* Landing page is the root — passes login handler so it can show the dialog */}
       <Route path="/" element={
         authed
-          ? <Navigate to="/simple" replace />
+          ? <Navigate to="/articles" replace />
           : <LandingPage onLogin={login} />
       } />
 

@@ -45,8 +45,8 @@ export const TRAFFIC_TREND = [
 ]
 
 export const INTENT_DIST = [
-  { name: 'Transactional', value: 38, color: '#6366f1' },
-  { name: 'Commercial', value: 44, color: '#8b5cf6' },
+  { name: 'Transactional', value: 38, color: '#1D4ED8' },
+  { name: 'Commercial', value: 44, color: '#2563EB' },
   { name: 'Informational', value: 14, color: '#06b6d4' },
   { name: 'Navigational', value: 4, color: '#64748b' },
 ]

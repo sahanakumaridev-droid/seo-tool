@@ -138,9 +138,9 @@ Image: ${block.featured_image_url}
   }
 
   return (
-    <div style={{ 
-      minHeight: '100vh', 
-      background: '#FFFFFF',
+    <div style={{
+      minHeight: '100vh',
+      background: '#0B0F1A',
     }}>
       {/* App Bar - Like Landing Page Navbar */}
       <div style={{
@@ -159,7 +159,7 @@ Image: ${block.featured_image_url}
           <div style={{
             width: '40px',
             height: '40px',
-            background: 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)',
+            background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
             borderRadius: '10px',
             display: 'flex',
             alignItems: 'center',
@@ -211,7 +211,7 @@ Image: ${block.featured_image_url}
               disabled={!results}
               style={{
                 padding: '10px 20px',
-                background: results ? 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)' : '#4B5563',
+                background: results ? 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' : '#4B5563',
                 color: 'white',
                 border: 'none',
                 borderRadius: '8px',
@@ -241,32 +241,33 @@ Image: ${block.featured_image_url}
                 position: 'absolute',
                 top: '50px',
                 right: 0,
-                background: 'white',
+                background: '#111827',
+                border: '1px solid #1E2D42',
                 borderRadius: '12px',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
                 padding: '8px',
                 minWidth: '200px',
                 zIndex: 1000,
               }}>
-                <button onClick={() => handleShareToSocial('facebook')} style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', fontSize: '14px', color: '#111827', transition: 'background 0.2s' }} onMouseEnter={e => e.target.style.background = '#F3F4F6'} onMouseLeave={e => e.target.style.background = 'transparent'}>
+                <button onClick={() => handleShareToSocial('facebook')} style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', fontSize: '14px', color: '#F1F5F9', transition: 'background 0.2s' }} onMouseEnter={e => e.target.style.background = '#1A2235'} onMouseLeave={e => e.target.style.background = 'transparent'}>
                   Facebook Profile
                 </button>
-                <button onClick={() => handleShareToSocial('facebookPage')} style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', fontSize: '14px', color: '#111827', transition: 'background 0.2s' }} onMouseEnter={e => e.target.style.background = '#F3F4F6'} onMouseLeave={e => e.target.style.background = 'transparent'}>
+                <button onClick={() => handleShareToSocial('facebookPage')} style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', fontSize: '14px', color: '#F1F5F9', transition: 'background 0.2s' }} onMouseEnter={e => e.target.style.background = '#1A2235'} onMouseLeave={e => e.target.style.background = 'transparent'}>
                   Facebook Page
                 </button>
-                <button onClick={() => handleShareToSocial('twitter')} style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', fontSize: '14px', color: '#111827', transition: 'background 0.2s' }} onMouseEnter={e => e.target.style.background = '#F3F4F6'} onMouseLeave={e => e.target.style.background = 'transparent'}>
+                <button onClick={() => handleShareToSocial('twitter')} style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', fontSize: '14px', color: '#F1F5F9', transition: 'background 0.2s' }} onMouseEnter={e => e.target.style.background = '#1A2235'} onMouseLeave={e => e.target.style.background = 'transparent'}>
                   Twitter/X
                 </button>
-                <button onClick={() => handleShareToSocial('linkedin')} style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', fontSize: '14px', color: '#111827', transition: 'background 0.2s' }} onMouseEnter={e => e.target.style.background = '#F3F4F6'} onMouseLeave={e => e.target.style.background = 'transparent'}>
+                <button onClick={() => handleShareToSocial('linkedin')} style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', fontSize: '14px', color: '#F1F5F9', transition: 'background 0.2s' }} onMouseEnter={e => e.target.style.background = '#1A2235'} onMouseLeave={e => e.target.style.background = 'transparent'}>
                   LinkedIn
                 </button>
-                <button onClick={() => handleShareToSocial('instagram')} style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', fontSize: '14px', color: '#111827', transition: 'background 0.2s' }} onMouseEnter={e => e.target.style.background = '#F3F4F6'} onMouseLeave={e => e.target.style.background = 'transparent'}>
+                <button onClick={() => handleShareToSocial('instagram')} style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', fontSize: '14px', color: '#F1F5F9', transition: 'background 0.2s' }} onMouseEnter={e => e.target.style.background = '#1A2235'} onMouseLeave={e => e.target.style.background = 'transparent'}>
                   Instagram
                 </button>
-                <button onClick={() => handleShareToSocial('pinterest')} style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', fontSize: '14px', color: '#111827', transition: 'background 0.2s' }} onMouseEnter={e => e.target.style.background = '#F3F4F6'} onMouseLeave={e => e.target.style.background = 'transparent'}>
+                <button onClick={() => handleShareToSocial('pinterest')} style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', fontSize: '14px', color: '#F1F5F9', transition: 'background 0.2s' }} onMouseEnter={e => e.target.style.background = '#1A2235'} onMouseLeave={e => e.target.style.background = 'transparent'}>
                   Pinterest
                 </button>
-                <button onClick={() => handleShareToSocial('youtube')} style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', fontSize: '14px', color: '#111827', transition: 'background 0.2s' }} onMouseEnter={e => e.target.style.background = '#F3F4F6'} onMouseLeave={e => e.target.style.background = 'transparent'}>
+                <button onClick={() => handleShareToSocial('youtube')} style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', fontSize: '14px', color: '#F1F5F9', transition: 'background 0.2s' }} onMouseEnter={e => e.target.style.background = '#1A2235'} onMouseLeave={e => e.target.style.background = 'transparent'}>
                   YouTube
                 </button>
               </div>
@@ -314,23 +315,23 @@ Image: ${block.featured_image_url}
       }}>
         {/* Header */}
         <div style={{
-          background: '#FFFFFF',
+          background: 'transparent',
           padding: '32px 0',
           textAlign: 'center',
           marginBottom: '32px',
         }}>
-          <h1 style={{ 
-            fontSize: '36px', 
-            fontWeight: '900', 
-            color: '#111827',
+          <h1 style={{
+            fontSize: '36px',
+            fontWeight: '900',
+            color: '#F1F5F9',
             margin: '0 0 12px',
             letterSpacing: '-0.5px',
           }}>
             SEO Automation
           </h1>
-          <p style={{ 
-            fontSize: '18px', 
-            color: '#6B7280',
+          <p style={{
+            fontSize: '18px',
+            color: '#94A3B8',
             margin: 0,
           }}>
             Generate → Share → Get Leads
@@ -338,12 +339,12 @@ Image: ${block.featured_image_url}
         </div>
 
         {/* Content */}
-        <div style={{ 
-          background: 'white',
+        <div style={{
+          background: '#111827',
           borderRadius: '16px',
           padding: '40px',
-          boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
-          border: '1px solid #E2E8F0',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+          border: '1px solid #1E2D42',
         }}>
           
           {/* STEP 1: INPUT FORM */}
@@ -354,7 +355,7 @@ Image: ${block.featured_image_url}
                   display: 'block', 
                   fontSize: '14px', 
                   fontWeight: '600', 
-                  color: '#374151',
+                  color: '#CBD5E1',
                   marginBottom: '8px',
                 }}>
                   🏢 Business Type
@@ -368,14 +369,16 @@ Image: ${block.featured_image_url}
                     width: '100%',
                     padding: '14px 16px',
                     fontSize: '16px',
-                    border: '2px solid #e5e7eb',
+                    border: '2px solid #2A3B57',
+                    background: '#1A2235',
+                    color: '#F1F5F9',
                     borderRadius: '12px',
                     outline: 'none',
                     transition: 'border-color 0.2s',
                     boxSizing: 'border-box',
                   }}
-                  onFocus={e => e.target.style.borderColor = '#667eea'}
-                  onBlur={e => e.target.style.borderColor = '#e5e7eb'}
+                  onFocus={e => e.target.style.borderColor = '#2563EB'}
+                  onBlur={e => e.target.style.borderColor = '#2A3B57'}
                 />
               </div>
 
@@ -384,7 +387,7 @@ Image: ${block.featured_image_url}
                   display: 'block', 
                   fontSize: '14px', 
                   fontWeight: '600', 
-                  color: '#374151',
+                  color: '#CBD5E1',
                   marginBottom: '8px',
                 }}>
                   📍 Locations (comma-separated)
@@ -398,7 +401,9 @@ Image: ${block.featured_image_url}
                     width: '100%',
                     padding: '14px 16px',
                     fontSize: '16px',
-                    border: '2px solid #e5e7eb',
+                    border: '2px solid #2A3B57',
+                    background: '#1A2235',
+                    color: '#F1F5F9',
                     borderRadius: '12px',
                     outline: 'none',
                     transition: 'border-color 0.2s',
@@ -406,8 +411,8 @@ Image: ${block.featured_image_url}
                     fontFamily: 'inherit',
                     boxSizing: 'border-box',
                   }}
-                  onFocus={e => e.target.style.borderColor = '#667eea'}
-                  onBlur={e => e.target.style.borderColor = '#e5e7eb'}
+                  onFocus={e => e.target.style.borderColor = '#2563EB'}
+                  onBlur={e => e.target.style.borderColor = '#2A3B57'}
                 />
               </div>
 
@@ -416,7 +421,7 @@ Image: ${block.featured_image_url}
                   display: 'block', 
                   fontSize: '14px', 
                   fontWeight: '600', 
-                  color: '#374151',
+                  color: '#CBD5E1',
                   marginBottom: '8px',
                 }}>
                   📄 Number of Pages
@@ -431,24 +436,26 @@ Image: ${block.featured_image_url}
                     width: '100%',
                     padding: '14px 16px',
                     fontSize: '16px',
-                    border: '2px solid #e5e7eb',
+                    border: '2px solid #2A3B57',
+                    background: '#1A2235',
+                    color: '#F1F5F9',
                     borderRadius: '12px',
                     outline: 'none',
                     transition: 'border-color 0.2s',
                     boxSizing: 'border-box',
                   }}
-                  onFocus={e => e.target.style.borderColor = '#667eea'}
-                  onBlur={e => e.target.style.borderColor = '#e5e7eb'}
+                  onFocus={e => e.target.style.borderColor = '#2563EB'}
+                  onBlur={e => e.target.style.borderColor = '#2A3B57'}
                 />
               </div>
 
               {error && (
                 <div style={{
                   padding: '12px 16px',
-                  background: '#fef2f2',
-                  border: '1px solid #fecaca',
+                  background: 'rgba(248,113,113,0.14)',
+                  border: '1px solid rgba(248,113,113,0.30)',
                   borderRadius: '12px',
-                  color: '#dc2626',
+                  color: '#F87171',
                   fontSize: '14px',
                 }}>
                   ⚠️ {error}
@@ -460,7 +467,7 @@ Image: ${block.featured_image_url}
                 style={{
                   width: '100%',
                   padding: '18px',
-                  background: 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)',
+                  background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
                   color: 'white',
                   fontSize: '18px',
                   fontWeight: '700',
@@ -490,11 +497,11 @@ Image: ${block.featured_image_url}
 
               <div style={{
                 padding: '16px',
-                background: '#f0f9ff',
-                border: '1px solid #bae6fd',
+                background: 'rgba(59,130,246,0.10)',
+                border: '1px solid rgba(59,130,246,0.25)',
                 borderRadius: '12px',
                 fontSize: '13px',
-                color: '#0369a1',
+                color: '#93C5FD',
                 lineHeight: '1.6',
               }}>
                 <strong>✨ What happens next:</strong><br />
@@ -524,17 +531,17 @@ Image: ${block.featured_image_url}
                 }} 
               />
               <div>
-                <h2 style={{ 
-                  fontSize: '24px', 
-                  fontWeight: '700', 
-                  color: '#111827',
+                <h2 style={{
+                  fontSize: '24px',
+                  fontWeight: '700',
+                  color: '#F1F5F9',
                   margin: '0 0 8px',
                 }}>
                   Generating Your Content...
                 </h2>
-                <p style={{ 
-                  fontSize: '16px', 
-                  color: '#6b7280',
+                <p style={{
+                  fontSize: '16px',
+                  color: '#94A3B8',
                   margin: 0,
                 }}>
                   This may take 1-2 minutes
@@ -544,13 +551,13 @@ Image: ${block.featured_image_url}
                 width: '100%',
                 maxWidth: '300px',
                 height: '8px',
-                background: '#e5e7eb',
+                background: '#1A2235',
                 borderRadius: '4px',
                 overflow: 'hidden',
               }}>
                 <div style={{
                   height: '100%',
-                  background: 'linear-gradient(90deg, #3B82F6, #8B5CF6)',
+                  background: 'linear-gradient(90deg, #3B82F6, #2563EB)',
                   animation: 'progress 2s ease-in-out infinite',
                   width: '60%',
                 }} />
@@ -575,17 +582,17 @@ Image: ${block.featured_image_url}
                 }}>
                   <CheckCircle size={48} color="white" />
                 </div>
-                <h2 style={{ 
-                  fontSize: '32px', 
-                  fontWeight: '800', 
-                  color: '#111827',
+                <h2 style={{
+                  fontSize: '32px',
+                  fontWeight: '800',
+                  color: '#F1F5F9',
                   margin: '0 0 8px',
                 }}>
                   Success! 🎉
                 </h2>
-                <p style={{ 
-                  fontSize: '18px', 
-                  color: '#6b7280',
+                <p style={{
+                  fontSize: '18px',
+                  color: '#94A3B8',
                   margin: 0,
                 }}>
                   {results.pagesGenerated} SEO pages generated with images and keywords
@@ -594,13 +601,13 @@ Image: ${block.featured_image_url}
 
               {/* Generated Pages - Full Preview */}
               <div>
-                <h3 style={{ 
-                  fontSize: '20px', 
-                  fontWeight: '700', 
-                  color: '#111827',
+                <h3 style={{
+                  fontSize: '20px',
+                  fontWeight: '700',
+                  color: '#F1F5F9',
                   marginBottom: '24px',
                   paddingBottom: '12px',
-                  borderBottom: '2px solid #E2E8F0',
+                  borderBottom: '2px solid #1E2D42',
                 }}>
                   📄 Generated Content
                 </h3>
@@ -608,14 +615,14 @@ Image: ${block.featured_image_url}
                 {results.seoBlocks.map((block, i) => (
                   <div key={i} style={{
                     marginBottom: '48px',
-                    background: 'white',
+                    background: '#111827',
                     borderRadius: '16px',
                     overflow: 'hidden',
-                    boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
-                    border: '1px solid #E2E8F0',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+                    border: '1px solid #1E2D42',
                   }}>
                     {/* Featured Image - Large */}
-                    <div style={{ position: 'relative', width: '100%', height: '400px', overflow: 'hidden', background: 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)' }}>
+                    <div style={{ position: 'relative', width: '100%', height: '400px', overflow: 'hidden', background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' }}>
                       <img 
                         src={block.featured_image_url || `https://picsum.photos/seed/${block.business_type}-${block.city}/1200/600`}
                         alt={block.title}
@@ -659,10 +666,10 @@ Image: ${block.featured_image_url}
                     {/* Content Details */}
                     <div style={{ padding: '32px' }}>
                       {/* Title */}
-                      <h2 style={{ 
-                        fontSize: '28px', 
-                        fontWeight: '800', 
-                        color: '#111827',
+                      <h2 style={{
+                        fontSize: '28px',
+                        fontWeight: '800',
+                        color: '#F1F5F9',
                         margin: '0 0 8px',
                         lineHeight: '1.3',
                       }}>
@@ -672,7 +679,7 @@ Image: ${block.featured_image_url}
                       {/* Location */}
                       <div style={{ 
                         fontSize: '16px', 
-                        color: '#6b7280',
+                        color: '#94A3B8',
                         marginBottom: '24px',
                         display: 'flex',
                         alignItems: 'center',
@@ -687,7 +694,7 @@ Image: ${block.featured_image_url}
                         <div style={{ 
                           fontSize: '12px', 
                           fontWeight: '700', 
-                          color: '#6b7280',
+                          color: '#94A3B8',
                           textTransform: 'uppercase',
                           letterSpacing: '0.5px',
                           marginBottom: '8px',
@@ -696,11 +703,11 @@ Image: ${block.featured_image_url}
                         </div>
                         <p style={{ 
                           fontSize: '16px', 
-                          color: '#374151', 
+                          color: '#CBD5E1',
                           lineHeight: '1.7',
                           margin: 0,
                           padding: '16px',
-                          background: '#F9FAFB',
+                          background: '#1A2235',
                           borderRadius: '8px',
                           borderLeft: '4px solid #3B82F6',
                         }}>
@@ -713,7 +720,7 @@ Image: ${block.featured_image_url}
                         <div style={{ 
                           fontSize: '12px', 
                           fontWeight: '700', 
-                          color: '#6b7280',
+                          color: '#94A3B8',
                           textTransform: 'uppercase',
                           letterSpacing: '0.5px',
                           marginBottom: '8px',
@@ -721,11 +728,11 @@ Image: ${block.featured_image_url}
                           Content Preview
                         </div>
                         <div style={{ 
-                          fontSize: '15px', 
-                          color: '#4B5563', 
+                          fontSize: '15px',
+                          color: '#CBD5E1',
                           lineHeight: '1.8',
                           padding: '16px',
-                          background: '#F9FAFB',
+                          background: '#1A2235',
                           borderRadius: '8px',
                         }}>
                           {block.intro || block.content.substring(0, 400)}...
@@ -737,7 +744,7 @@ Image: ${block.featured_image_url}
                         <div style={{ 
                           fontSize: '12px', 
                           fontWeight: '700', 
-                          color: '#6b7280',
+                          color: '#94A3B8',
                           textTransform: 'uppercase',
                           letterSpacing: '0.5px',
                           marginBottom: '12px',
@@ -748,7 +755,7 @@ Image: ${block.featured_image_url}
                           {/* Primary Keyword */}
                           <span style={{
                             padding: '8px 16px',
-                            background: 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)',
+                            background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
                             color: 'white',
                             fontSize: '13px',
                             borderRadius: '8px',
@@ -764,12 +771,12 @@ Image: ${block.featured_image_url}
                           {block.keywords.secondary.slice(0, 5).map((kw, idx) => (
                             <span key={idx} style={{
                               padding: '8px 16px',
-                              background: '#EFF6FF',
-                              color: '#1E40AF',
+                              background: 'rgba(59,130,246,0.10)',
+                              color: '#93C5FD',
                               fontSize: '13px',
                               borderRadius: '8px',
                               fontWeight: '500',
-                              border: '1px solid #DBEAFE',
+                              border: '1px solid rgba(59,130,246,0.25)',
                             }}>
                               {kw}
                             </span>
@@ -783,7 +790,7 @@ Image: ${block.featured_image_url}
                           <div style={{ 
                             fontSize: '12px', 
                             fontWeight: '700', 
-                            color: '#6b7280',
+                            color: '#94A3B8',
                             textTransform: 'uppercase',
                             letterSpacing: '0.5px',
                             marginBottom: '16px',
@@ -794,21 +801,21 @@ Image: ${block.featured_image_url}
                             {block.faqs.map((faq, faqIdx) => (
                               <div key={faqIdx} style={{
                                 padding: '20px',
-                                background: '#F9FAFB',
+                                background: '#1A2235',
                                 borderRadius: '12px',
-                                border: '1px solid #E5E7EB',
+                                border: '1px solid #1E2D42',
                               }}>
                                 <div style={{
                                   fontSize: '16px',
                                   fontWeight: '700',
-                                  color: '#111827',
+                                  color: '#F1F5F9',
                                   marginBottom: '12px',
                                 }}>
                                   {faq.question}
                                 </div>
                                 <div style={{
                                   fontSize: '15px',
-                                  color: '#4B5563',
+                                  color: '#CBD5E1',
                                   lineHeight: '1.7',
                                 }}>
                                   {faq.answer}
@@ -825,7 +832,7 @@ Image: ${block.featured_image_url}
                         gridTemplateColumns: 'repeat(3, 1fr)',
                         gap: '16px',
                         padding: '20px',
-                        background: '#F9FAFB',
+                        background: '#1A2235',
                         borderRadius: '12px',
                         marginBottom: '20px',
                       }}>
@@ -833,7 +840,7 @@ Image: ${block.featured_image_url}
                           <div style={{ fontSize: '24px', fontWeight: '800', color: '#3B82F6', marginBottom: '4px' }}>
                             {block.readability_score || 85}
                           </div>
-                          <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600' }}>
+                          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '600' }}>
                             SEO Score
                           </div>
                         </div>
@@ -841,7 +848,7 @@ Image: ${block.featured_image_url}
                           <div style={{ fontSize: '24px', fontWeight: '800', color: '#10B981', marginBottom: '4px' }}>
                             {block.faqs?.length || 0}
                           </div>
-                          <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600' }}>
+                          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '600' }}>
                             FAQs
                           </div>
                         </div>
@@ -849,7 +856,7 @@ Image: ${block.featured_image_url}
                           <div style={{ fontSize: '24px', fontWeight: '800', color: '#F59E0B', marginBottom: '4px' }}>
                             {block.h2s?.length || 0}
                           </div>
-                          <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600' }}>
+                          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '600' }}>
                             Headings
                           </div>
                         </div>
@@ -865,7 +872,7 @@ Image: ${block.featured_image_url}
                               flex: 1,
                               minWidth: '150px',
                               padding: '12px 20px',
-                              background: 'white',
+                              background: '#111827',
                               color: '#3B82F6',
                               fontSize: '14px',
                               fontWeight: '600',
@@ -883,7 +890,7 @@ Image: ${block.featured_image_url}
                               e.target.style.color = 'white'
                             }}
                             onMouseLeave={e => {
-                              e.target.style.background = 'white'
+                              e.target.style.background = '#111827'
                               e.target.style.color = '#3B82F6'
                             }}
                           >
@@ -929,11 +936,11 @@ Image: ${block.featured_image_url}
                               flex: 1,
                               minWidth: '150px',
                               padding: '12px 20px',
-                              background: 'white',
-                              color: '#8B5CF6',
+                              background: '#111827',
+                              color: '#2563EB',
                               fontSize: '14px',
                               fontWeight: '600',
-                              border: '2px solid #8B5CF6',
+                              border: '2px solid #2563EB',
                               borderRadius: '10px',
                               cursor: 'pointer',
                               transition: 'all 0.2s',
@@ -943,12 +950,12 @@ Image: ${block.featured_image_url}
                               gap: '8px',
                             }}
                             onMouseEnter={e => {
-                              e.target.style.background = '#8B5CF6'
+                              e.target.style.background = '#2563EB'
                               e.target.style.color = 'white'
                             }}
                             onMouseLeave={e => {
-                              e.target.style.background = 'white'
-                              e.target.style.color = '#8B5CF6'
+                              e.target.style.background = '#111827'
+                              e.target.style.color = '#2563EB'
                             }}
                           >
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1000,11 +1007,11 @@ Image: ${block.featured_image_url}
                         {/* Workflow Guide */}
                         <div style={{
                           padding: '12px 16px',
-                          background: '#EFF6FF',
-                          border: '1px solid #DBEAFE',
+                          background: 'rgba(59,130,246,0.10)',
+                          border: '1px solid rgba(59,130,246,0.25)',
                           borderRadius: '8px',
                           fontSize: '12px',
-                          color: '#1E40AF',
+                          color: '#93C5FD',
                           lineHeight: '1.6',
                         }}>
                           <strong>📌 SEO Workflow:</strong> 1) Copy Meta Tags → 2) Add to your page's &lt;head&gt; → 3) Publish → 4) Share! (Image + title show automatically)
@@ -1064,7 +1071,7 @@ Image: ${block.featured_image_url}
                   onClick={handleReset}
                   style={{
                     padding: '16px 32px',
-                    background: 'white',
+                    background: '#111827',
                     color: '#3B82F6',
                     fontSize: '16px',
                     fontWeight: '600',
@@ -1078,7 +1085,7 @@ Image: ${block.featured_image_url}
                     e.target.style.color = 'white'
                   }}
                   onMouseLeave={e => {
-                    e.target.style.background = 'white'
+                    e.target.style.background = '#111827'
                     e.target.style.color = '#3B82F6'
                   }}
                 >
@@ -1106,7 +1113,7 @@ Image: ${block.featured_image_url}
           padding: '20px',
         }} onClick={() => setSharePreview(null)}>
           <div style={{
-            background: 'white',
+            background: '#111827',
             borderRadius: '16px',
             maxWidth: '600px',
             width: '100%',
@@ -1117,12 +1124,12 @@ Image: ${block.featured_image_url}
             {/* Modal Header */}
             <div style={{
               padding: '24px',
-              borderBottom: '1px solid #E5E7EB',
+              borderBottom: '1px solid #1E2D42',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
             }}>
-              <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>
+              <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#F1F5F9', margin: 0 }}>
                 📱 Social Media Preview
               </h3>
               <button onClick={() => setSharePreview(null)} style={{
@@ -1130,7 +1137,7 @@ Image: ${block.featured_image_url}
                 border: 'none',
                 fontSize: '24px',
                 cursor: 'pointer',
-                color: '#6B7280',
+                color: '#94A3B8',
                 padding: '4px',
               }}>×</button>
             </div>
@@ -1139,7 +1146,7 @@ Image: ${block.featured_image_url}
             <div style={{ padding: '24px' }}>
               {/* Preview Card - Looks like a social media post */}
               <div style={{
-                border: '1px solid #E5E7EB',
+                border: '1px solid #1E2D42',
                 borderRadius: '12px',
                 overflow: 'hidden',
                 marginBottom: '24px',
@@ -1160,7 +1167,7 @@ Image: ${block.featured_image_url}
                   <h4 style={{
                     fontSize: '18px',
                     fontWeight: '700',
-                    color: '#111827',
+                    color: '#F1F5F9',
                     margin: '0 0 8px',
                     lineHeight: '1.4',
                   }}>
@@ -1168,7 +1175,7 @@ Image: ${block.featured_image_url}
                   </h4>
                   <p style={{
                     fontSize: '14px',
-                    color: '#6B7280',
+                    color: '#94A3B8',
                     lineHeight: '1.6',
                     margin: '0 0 12px',
                   }}>
@@ -1361,17 +1368,17 @@ Image: ${block.featured_image_url}
               {/* Instagram Caption Preview */}
               <div style={{
                 padding: '16px',
-                background: '#FFF7ED',
-                border: '1px solid #FED7AA',
+                background: 'rgba(251,191,36,0.14)',
+                border: '1px solid rgba(251,191,36,0.30)',
                 borderRadius: '8px',
                 marginBottom: '16px',
               }}>
-                <div style={{ fontSize: '13px', fontWeight: '700', color: '#9A3412', marginBottom: '8px' }}>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: '#FBBF24', marginBottom: '8px' }}>
                   📸 Instagram Caption Preview:
                 </div>
                 <div style={{
                   fontSize: '13px',
-                  color: '#7C2D12',
+                  color: '#FCD34D',
                   lineHeight: '1.6',
                   fontFamily: 'monospace',
                   whiteSpace: 'pre-wrap',
@@ -1386,11 +1393,11 @@ Image: ${block.featured_image_url}
               {/* Instructions */}
               <div style={{
                 padding: '16px',
-                background: '#EFF6FF',
-                border: '1px solid #DBEAFE',
+                background: 'rgba(59,130,246,0.10)',
+                border: '1px solid rgba(59,130,246,0.25)',
                 borderRadius: '8px',
                 fontSize: '13px',
-                color: '#1E40AF',
+                color: '#93C5FD',
                 lineHeight: '1.6',
               }}>
                 <strong>💡 How to share:</strong><br />

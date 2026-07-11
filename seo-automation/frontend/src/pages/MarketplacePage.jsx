@@ -279,7 +279,7 @@ function RequestCard({ req, onQuote }) {
 
       <div className="flex flex-wrap gap-2">
         <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full"
-          style={{ background: 'rgba(99,102,241,0.1)', color: '#818cf8' }}>
+          style={{ background: 'var(--brand-soft)', color: '#3B82F6' }}>
           <Tag size={9} /> {req.category}
         </span>
         {req.location && (

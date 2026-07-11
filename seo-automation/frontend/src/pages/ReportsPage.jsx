@@ -31,15 +31,15 @@ export default function ReportsPage() {
             <AreaChart data={TRAFFIC_TREND} margin={{ left: -20 }}>
               <defs>
                 <linearGradient id="tGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#1D4ED8" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="#1D4ED8" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#2A3B57" />
               <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ background: '#111827', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, fontSize: 12 }} labelStyle={{ color: '#94a3b8' }} />
-              <Area type="monotone" dataKey="organic" name="Organic" stroke="#6366f1" strokeWidth={2} fill="url(#tGrad)" />
+              <Tooltip contentStyle={{ background: '#1E2940', border: '1px solid #2A3B57', borderRadius: 8, fontSize: 12, color: '#F1F5F9' }} labelStyle={{ color: '#94A3B8' }} />
+              <Area type="monotone" dataKey="organic" name="Organic" stroke="#1D4ED8" strokeWidth={2} fill="url(#tGrad)" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -50,11 +50,11 @@ export default function ReportsPage() {
           <p className="text-xs text-slate-500 mb-4">Traffic by city page</p>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={CITIES_DATA} margin={{ left: -20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#2A3B57" />
               <XAxis dataKey="city" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ background: '#111827', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, fontSize: 12 }} labelStyle={{ color: '#94a3b8' }} />
-              <Bar dataKey="traffic" name="Traffic" fill="#8b5cf6" radius={[3, 3, 0, 0]} />
+              <Tooltip contentStyle={{ background: '#1E2940', border: '1px solid #2A3B57', borderRadius: 8, fontSize: 12, color: '#F1F5F9' }} labelStyle={{ color: '#94A3B8' }} />
+              <Bar dataKey="traffic" name="Traffic" fill="#2563EB" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

@@ -69,7 +69,7 @@ export default function CompetitorsPage() {
             <RadarChart data={radarData}>
               <PolarGrid stroke="rgba(255,255,255,0.06)" />
               <PolarAngleAxis dataKey="metric" tick={{ fontSize: 11, fill: '#64748b' }} />
-              <Radar name="You" dataKey="you" stroke="#6366f1" fill="#6366f1" fillOpacity={0.15} strokeWidth={2} />
+              <Radar name="You" dataKey="you" stroke="#1D4ED8" fill="#1D4ED8" fillOpacity={0.15} strokeWidth={2} />
               <Radar name="Avg" dataKey="avg" stroke="#475569" fill="#475569" fillOpacity={0.08} strokeWidth={1.5} strokeDasharray="4 2" />
             </RadarChart>
           </ResponsiveContainer>
@@ -88,16 +88,16 @@ export default function CompetitorsPage() {
               data={[{ name: 'You', traffic: 11200 }, ...COMPETITOR_DATA.map(c => ({ name: c.domain.split('.')[0], traffic: c.traffic }))]}
               margin={{ left: -20 }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#2A3B57" />
               <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
               <Tooltip
-                contentStyle={{ background: '#111827', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, fontSize: 12 }}
-                labelStyle={{ color: '#94a3b8' }}
+                contentStyle={{ background: '#1E2940', border: '1px solid #2A3B57', borderRadius: 8, fontSize: 12, color: '#F1F5F9' }}
+                labelStyle={{ color: '#94A3B8' }}
                 itemStyle={{ color: '#e2e8f0' }}
               />
               <Bar dataKey="traffic" name="Traffic" radius={[4, 4, 0, 0]}
-                fill="#6366f1"
+                fill="#1D4ED8"
                 label={false}
               />
             </BarChart>

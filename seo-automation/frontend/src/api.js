@@ -48,9 +48,19 @@ export const publishToWordPress = (seoBlock, wpConfig) =>
 export const publishBulkToWordPress = (pages, wpConfig) =>
   api.post('/wordpress/publish/bulk', { pages, wp_config: wpConfig })
 
+// ── Publish to Web (hosted public page on this app) ──────────────
+export const publishToWeb = (seoBlock) =>
+  api.post('/pages/publish-web', seoBlock)
+
+export const publishAllToWeb = (pages) =>
+  api.post('/pages/publish-web/bulk', pages)
+
 // ── Jobs (async bulk operations) ─────────────────────────────────
 export const startBulkGenerateJob = (data) =>
   api.post('/jobs/generate', data)
+
+export const getJob = (jobId) =>
+  api.get(`/jobs/${jobId}`)
 
 export const startBulkPublishJob = (pages, wpConfig) =>
   api.post('/jobs/publish', { pages, wp_config: wpConfig })

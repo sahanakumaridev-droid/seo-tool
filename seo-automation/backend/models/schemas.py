@@ -120,10 +120,11 @@ class CityInfo(BaseModel):
 
 # WordPress integration models
 class WordPressConfig(BaseModel):
-    wp_url: str = Field(..., example="https://yoursite.com")
-    wp_username: str
-    wp_app_password: str
-    seo_plugin: str = Field(default="rankmath", description="rankmath | aioseo | yoast")
+    # Blank/omitted → server falls back to the configured connection (env).
+    wp_url: str = Field(default="", example="https://yoursite.com")
+    wp_username: str = Field(default="")
+    wp_app_password: str = Field(default="")
+    seo_plugin: str = Field(default="aioseo", description="rankmath | aioseo | yoast")
     status: str = Field(default="draft", description="draft | publish")
     category_ids: List[int] = Field(default=[], description="WordPress category IDs")
     tag_ids: List[int] = Field(default=[], description="WordPress tag IDs")

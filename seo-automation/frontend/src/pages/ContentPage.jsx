@@ -1,9 +1,9 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Zap, MapPin, Globe, Eye, X, RefreshCw, Save, CheckCircle,
          FileJson, Tag, Plus, Upload, ChevronDown, ChevronUp } from 'lucide-react'
 import { generateBulk, exportJson, exportWordpress, generateSingle,
-         savePage, publishToWordPress, publishBulkToWordPress, startBulkGenerateJob } from '../api'
+         savePage, publishToWordPress, publishBulkToWordPress, startBulkGenerateJob, getJob, publishAllToWeb } from '../api'
 
 const BUSINESS_TYPES = ['Web Design', 'SEO Agency', 'Plumbing', 'HVAC', 'Roofing',
   'Landscaping', 'Cleaning', 'Electrical', 'Painting', 'Pest Control', 'Moving']
@@ -132,8 +132,8 @@ function PreviewModal({ block, businessType, targetKeywords = [], wpConfig, onCl
               <MetaRow label="Body Content" value={block.content} multiline />
               <MetaRow label="Call to Action" value={block.cta} />
               <div className="grid grid-cols-3 gap-4">
-                <ScoreBar label="Readability" value={Math.round(block.readability_score || 75)} color="#6366f1" />
-                <ScoreBar label="Keyword Density" value={Math.min(100, Math.round((block.keyword_density || 1.5) * 20))} color="#8b5cf6" />
+                <ScoreBar label="Readability" value={Math.round(block.readability_score || 75)} color="#1D4ED8" />
+                <ScoreBar label="Keyword Density" value={Math.min(100, Math.round((block.keyword_density || 1.5) * 20))} color="#2563EB" />
                 <ScoreBar label="Meta Complete" value={100} color="#10b981" />
               </div>
             </>
@@ -304,7 +304,7 @@ function WordPressPanel({ wpConfig, setWpConfig }) {
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Application Password</label>
               <input type="password" value={wpConfig.wp_app_password}
                 onChange={e => setWpConfig(c => ({ ...c, wp_app_password: e.target.value }))}
-                placeholder="xxxx xxxx xxxx xxxx"
+                placeholder="Connected on server — leave blank"
                 className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50" />
             </div>
             <div>
@@ -355,17 +355,23 @@ export default function ContentPage() {
   }
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [pages, setPages] = useState([])
+  // Persist generated results across navigation (View -> back must not wipe them)
+  const [pages, setPages] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('seo_pages') || '[]') } catch { return [] }
+  })
   const [filter, setFilter] = useState('')
   const [exporting, setExporting] = useState('')
   const [kwInput, setKwInput] = useState('')
-  const [targetKeywords, setTargetKeywords] = useState([])
+  const [targetKeywords, setTargetKeywords] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('seo_keywords') || '[]') } catch { return [] }
+  })
   const [useAi, setUseAi] = useState(false)
   const [useAsync, setUseAsync] = useState(false)
   const [asyncJobId, setAsyncJobId] = useState('')
+  const [jobProgress, setJobProgress] = useState(null)  // { completed, failed, total, status }
   const [wpConfig, setWpConfig] = useState({
-    wp_url: '', wp_username: '', wp_app_password: '',
-    seo_plugin: 'rankmath', status: 'draft',
+    wp_url: 'https://zeorbit.com', wp_username: 'zeor@admnir', wp_app_password: '',
+    seo_plugin: 'aioseo', status: 'publish',
   })
   const [publishingAll, setPublishingAll] = useState(false)
   const [publishResults, setPublishResults] = useState({})
@@ -376,6 +382,40 @@ export default function ContentPage() {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 4000)
   }
+
+  // Keep results + keywords alive when navigating to a page preview and back
+  useEffect(() => { sessionStorage.setItem('seo_pages', JSON.stringify(pages)) }, [pages])
+  useEffect(() => { sessionStorage.setItem('seo_keywords', JSON.stringify(targetKeywords)) }, [targetKeywords])
+
+  // Poll an async job until it finishes, then drop the generated pages into
+  // the results table (same review/publish flow as sync generation).
+  useEffect(() => {
+    if (!asyncJobId) return
+    let stop = false
+    const tick = async () => {
+      try {
+        const { data } = await getJob(asyncJobId)
+        if (stop) return
+        setJobProgress({ completed: data.completed, failed: data.failed, total: data.total, status: data.status })
+        const finished = data.status === 'completed' || (data.completed + data.failed) >= data.total
+        if (finished) {
+          const done = (data.results || []).filter(r => r && !r.error)
+          setPages(done)
+          setLoading(false)
+          setAsyncJobId('')
+          setJobProgress(null)
+          showToast(`${done.length} pages generated!`)
+          setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
+        } else {
+          setTimeout(tick, 2000)
+        }
+      } catch {
+        if (!stop) setTimeout(tick, 2500)
+      }
+    }
+    tick()
+    return () => { stop = true }
+  }, [asyncJobId])
 
   const addKeyword = (kw) => {
     const k = (kw || kwInput).trim().toLowerCase()
@@ -410,7 +450,12 @@ export default function ContentPage() {
         setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Backend not running. Start uvicorn on port 8000.')
+      setError(
+        err.response?.data?.detail
+        || (err.code === 'ERR_NETWORK'
+            ? 'Cannot reach the backend. Start it with: uvicorn main:app --port 8000'
+            : `Generation failed${err.message ? ` — ${err.message}` : ''}. Please try again.`)
+      )
     } finally { setLoading(false) }
   }
 
@@ -452,6 +497,19 @@ export default function ContentPage() {
     } catch (e) {
       setError(e.response?.data?.detail || 'WordPress publish failed.')
     } finally { setPublishingAll(false) }
+  }
+
+  const [webAll, setWebAll] = useState(null)   // { loading } | { links: [...] } | { error }
+  const handlePublishAllWeb = async () => {
+    if (!pages.length) return
+    setWebAll({ loading: true })
+    try {
+      const res = await publishAllToWeb(pages)
+      setWebAll({ links: res.data.published })
+      showToast(`${res.data.count} pages published to the web!`)
+    } catch (e) {
+      setWebAll({ error: e.response?.data?.detail || 'Publish failed. Please try again.' })
+    }
   }
 
   const filtered = pages.filter(p => p.city.toLowerCase().includes(filter.toLowerCase()))
@@ -594,16 +652,32 @@ export default function ContentPage() {
               </div>
             </div>
 
-            {asyncJobId && (
-              <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs">
-                ✓ Job started: <code className="font-mono">{asyncJobId.slice(0, 12)}...</code>
-              </div>
-            )}
+            {asyncJobId && (() => {
+              const total = jobProgress?.total || form.num_cities
+              const done = (jobProgress?.completed || 0) + (jobProgress?.failed || 0)
+              const pct = total ? Math.round((done / total) * 100) : 0
+              const R = 26, C = 2 * Math.PI * R
+              return (
+                <div className="flex flex-col items-center gap-2 py-3 rounded-xl" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
+                  <svg width="70" height="70" viewBox="0 0 70 70" style={{ transform: 'rotate(-90deg)' }}>
+                    <circle cx="35" cy="35" r={R} fill="none" stroke="var(--border-bright)" strokeWidth="6" />
+                    <circle cx="35" cy="35" r={R} fill="none" stroke="var(--brand)" strokeWidth="6" strokeLinecap="round"
+                      strokeDasharray={C} strokeDashoffset={C - (pct / 100) * C}
+                      style={{ transition: 'stroke-dashoffset .4s ease' }} />
+                  </svg>
+                  <div style={{ marginTop: -52, fontSize: 15, fontWeight: 800, color: 'var(--text-1)' }}>{pct}%</div>
+                  <div style={{ marginTop: 34, fontSize: 12.5, fontWeight: 600, color: 'var(--text-2)' }}>
+                    Generating with AI… {done} / {total} pages
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-4)' }}>You can review &amp; publish each below when ready</div>
+                </div>
+              )
+            })()}
 
-            <button type="submit" disabled={loading}
+            <button type="submit" disabled={loading || !!asyncJobId}
               className="btn-primary w-full py-2.5 rounded-lg text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
-              {loading
-                ? <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.2)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/></svg>Generating {form.num_cities} pages...</>
+              {loading || asyncJobId
+                ? <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.2)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/></svg>{asyncJobId ? 'Generating…' : `Generating ${form.num_cities} pages...`}</>
                 : <><Zap size={14} />{useAsync ? 'Start Async Job' : 'Generate Pages'}{useAi ? ' (AI)' : ''}</>}
             </button>
           </form>
@@ -649,9 +723,15 @@ export default function ContentPage() {
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/8 border border-white/12 text-slate-200 text-sm font-medium hover:bg-white/12 transition-colors disabled:opacity-50">
               <FileJson size={14} /> {exporting === 'json' ? 'Exporting...' : 'Download JSON'}
             </button>
+            <button onClick={handlePublishAllWeb} disabled={webAll?.loading}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg btn-primary text-white text-sm font-semibold disabled:opacity-60">
+              {webAll?.loading
+                ? <><svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" strokeWidth="3" strokeLinecap="round"/></svg>Publishing all…</>
+                : <><Globe size={14} /> Publish All {pages.length} to Web</>}
+            </button>
             <button onClick={() => handleExport('wp')} disabled={exporting === 'wp'}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg btn-primary text-white text-sm font-semibold disabled:opacity-50">
-              <Globe size={14} /> {exporting === 'wp' ? 'Exporting...' : 'Download WordPress Format'}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/8 border border-white/12 text-slate-200 text-sm font-medium hover:bg-white/12 transition-colors disabled:opacity-50">
+              <FileJson size={14} /> {exporting === 'wp' ? 'Exporting...' : 'WP Format'}
             </button>
             {wpConfig.wp_url && (
               <button onClick={handlePublishAll} disabled={publishingAll}
@@ -659,6 +739,33 @@ export default function ContentPage() {
                 <Upload size={14} /> {publishingAll ? 'Publishing...' : 'Publish All to WordPress'}
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Published-to-web links panel */}
+      {webAll?.error && <div className="alert alert-error">✗ {webAll.error}</div>}
+      {webAll?.links && (
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <CheckCircle size={16} style={{ color: 'var(--green)' }} />
+            <h3 className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{webAll.links.length} pages are live on the web</h3>
+          </div>
+          <div className="space-y-2">
+            {webAll.links.map((l, i) => (
+              <div key={i} className="flex items-center justify-between gap-3 rounded-lg px-3 py-2" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold truncate" style={{ color: 'var(--text-1)' }}>{l.city}{l.state ? `, ${l.state}` : ''}</div>
+                  <a href={l.public_url} target="_blank" rel="noreferrer" className="text-xs truncate block" style={{ color: 'var(--brand-violet)' }}>{l.public_url}</a>
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <button onClick={() => navigator.clipboard?.writeText(l.public_url)}
+                    className="px-2.5 py-1.5 rounded-lg text-xs" style={{ background: 'var(--bg-overlay)', border: '1px solid var(--border-bright)', color: 'var(--text-2)' }}>Copy</button>
+                  <a href={l.public_url} target="_blank" rel="noreferrer"
+                    className="px-2.5 py-1.5 rounded-lg text-xs btn-primary" style={{ color: '#fff' }}>Open</a>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -710,7 +817,7 @@ export default function ContentPage() {
                       <div className="flex items-center gap-1.5">
                         <button onClick={() => navigate('/page-preview', { state: { block, index: i, businessType: form.business_type, wpConfig } })}
                           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs transition-colors"
-                          style={{ background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.25)', color: '#67E8F9' }}>
+                          style={{ background: 'var(--brand-soft)', border: '1px solid rgba(59,130,246,0.3)', color: 'var(--brand)' }}>
                           <Eye size={11} /> View
                         </button>
                         {wpConfig.wp_url && (

@@ -1,0 +1,32 @@
+# ── Python ──────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+
+# ── Databases ───────────────────────────────────────
+*.db
+seo_automation.db
+
+# ── Env / secrets (never commit) ────────────────────
+.env
+.env.local
+.env.*.local
+*.key
+*credential*.json
+*service-account*.json
+google-indexing-key.json
+
+# ── Node / frontend build ───────────────────────────
+node_modules/
+dist/
+.vite/
+
+# ── OS / editor ─────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.log
+
+# Local backup archive — do not commit
+backend.zip

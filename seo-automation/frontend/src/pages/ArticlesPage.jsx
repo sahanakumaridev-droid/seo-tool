@@ -1,8 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Zap, MapPin, Globe, Eye, CheckCircle, X, Search, Link2, FileText, Image as ImageIcon,
          Upload, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
-import { analyzeWebsite, generateArticles, publishToWordPress, publishBulkToWordPress } from '../api'
+import { analyzeWebsite, generateArticles, publishToWordPress, publishBulkToWordPress, publishToWeb } from '../api'
 
 const SEO_PLUGINS = [
   { value: 'rankmath', label: 'RankMath' },
@@ -36,7 +36,7 @@ function WordPressPanel({ wpConfig, setWpConfig }) {
             <div><label className={lbl}>Username</label>
               <input type="text" value={wpConfig.wp_username} onChange={e => setWpConfig(c => ({ ...c, wp_username: e.target.value }))} placeholder="your_wp_username" className={inp} /></div>
             <div><label className={lbl}>Application Password</label>
-              <input type="password" value={wpConfig.wp_app_password} onChange={e => setWpConfig(c => ({ ...c, wp_app_password: e.target.value }))} placeholder="xxxx xxxx xxxx xxxx" className={inp} /></div>
+              <input type="password" value={wpConfig.wp_app_password} onChange={e => setWpConfig(c => ({ ...c, wp_app_password: e.target.value }))} placeholder="Connected on server — leave blank" className={inp} /></div>
             <div><label className={lbl}>SEO Plugin</label>
               <select value={wpConfig.seo_plugin} onChange={e => setWpConfig(c => ({ ...c, seo_plugin: e.target.value }))} className={inp}>
                 {SEO_PLUGINS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
@@ -128,12 +128,27 @@ export default function ArticlesPage() {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [articles, setArticles] = useState([])
+  const [articles, setArticles] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('seo_articles') || '[]') } catch { return [] }
+  })
+  useEffect(() => { sessionStorage.setItem('seo_articles', JSON.stringify(articles)) }, [articles])
   const [toast, setToast] = useState(null)
   const resultsRef = useRef(null)
-  const [wpConfig, setWpConfig] = useState({ wp_url: '', wp_username: '', wp_app_password: '', seo_plugin: 'rankmath', status: 'publish' })
+  const [wpConfig, setWpConfig] = useState({ wp_url: 'https://zeorbit.com', wp_username: 'zeor@admnir', wp_app_password: '', seo_plugin: 'aioseo', status: 'publish' })
   const [publishResults, setPublishResults] = useState({})
   const [publishingAll, setPublishingAll] = useState(false)
+  const [webResults, setWebResults] = useState({})
+
+  const handlePublishWebOne = async (block, i) => {
+    setWebResults(r => ({ ...r, [i]: 'loading' }))
+    try {
+      const res = await publishToWeb(block)
+      setWebResults(r => ({ ...r, [i]: { url: res.data.public_url } }))
+      window.open(res.data.public_url, '_blank', 'noopener')
+    } catch (e) {
+      setWebResults(r => ({ ...r, [i]: { error: e.response?.data?.detail || 'Failed' } }))
+    }
+  }
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type })
@@ -344,9 +359,21 @@ export default function ArticlesPage() {
                       <div className="flex items-center gap-1.5">
                         <button onClick={() => navigate('/page-preview', { state: { block, index: i, businessType: block.business_type, wpConfig } })}
                           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs transition-colors"
-                          style={{ background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.25)', color: '#67E8F9' }}>
+                          style={{ background: 'var(--brand-soft)', border: '1px solid rgba(59,130,246,0.3)', color: 'var(--brand)' }}>
                           <Eye size={11} /> View
                         </button>
+                        {webResults[i]?.url ? (
+                          <a href={webResults[i].url} target="_blank" rel="noreferrer"
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/25 transition-colors">
+                            <Globe size={11} /> Live
+                          </a>
+                        ) : (
+                          <button onClick={() => handlePublishWebOne(block, i)} disabled={webResults[i] === 'loading'}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs btn-primary disabled:opacity-50"
+                            title={webResults[i]?.error || 'Publish to Web — get a public link'}>
+                            <Globe size={11} /> {webResults[i] === 'loading' ? '...' : webResults[i]?.error ? 'Retry' : 'Publish to Web'}
+                          </button>
+                        )}
                         {wpConfig.wp_url && pr?.success && pr?.post_url ? (
                           <a href={pr.post_url} target="_blank" rel="noreferrer"
                             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/25 transition-colors">

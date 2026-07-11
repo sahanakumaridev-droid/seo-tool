@@ -1,14 +1,14 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { ArrowLeft, RefreshCw, Save, CheckCircle, Upload, Globe, ExternalLink } from 'lucide-react'
-import { generateSingle, savePage, publishToWordPress } from '../api'
+import { generateSingle, savePage, publishToWordPress, publishToWeb } from '../api'
 
 function ScoreRing({ value, color }) {
   const r = 20, c = 2 * Math.PI * r
   const dash = (value / 100) * c
   return (
     <svg width="52" height="52" viewBox="0 0 52 52">
-      <circle cx="26" cy="26" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="4" />
+      <circle cx="26" cy="26" r={r} fill="none" stroke="#2A3B57" strokeWidth="4" />
       <circle cx="26" cy="26" r={r} fill="none" stroke={color} strokeWidth="4"
         strokeDasharray={`${dash} ${c}`} strokeLinecap="round"
         transform="rotate(-90 26 26)" />
@@ -19,7 +19,7 @@ function ScoreRing({ value, color }) {
 
 function MetaRow({ label, value, multiline }) {
   return (
-    <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)' }}>
+    <div className="rounded-xl p-4" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
       <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>{label}</div>
       <p className={`text-sm leading-relaxed ${multiline ? 'whitespace-pre-line' : ''}`} style={{ color: 'var(--text-primary)' }}>{value}</p>
     </div>
@@ -54,9 +54,23 @@ export default function PagePreviewPage() {
   const [saved, setSaved] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [publishResult, setPublishResult] = useState(null)
+  const [webPublishing, setWebPublishing] = useState(false)
+  const [webUrl, setWebUrl] = useState(null)
+  const [webError, setWebError] = useState('')
 
   const businessType = state?.businessType || block?.business_type || ''
   const wpConfig = state?.wpConfig
+
+  const handlePublishWeb = async () => {
+    setWebPublishing(true); setWebError('')
+    try {
+      const res = await publishToWeb(block)
+      setWebUrl(res.data.public_url)
+      window.open(res.data.public_url, '_blank', 'noopener')  // open live page immediately
+    } catch (e) {
+      setWebError(e.response?.data?.detail || 'Publish failed. Is the backend running?')
+    } finally { setWebPublishing(false) }
+  }
 
   if (!block) {
     return (
@@ -98,8 +112,19 @@ export default function PagePreviewPage() {
     } finally { setPublishing(false) }
   }
 
+  // All images to review: in-content assets + the featured image (deduped by url)
+  const imageAssets = (() => {
+    const list = [...(block.in_content_images || [])]
+    const hasFeatured = list.some(im => im.is_featured || im.url === block.featured_image_url)
+    if (block.featured_image_url && !hasFeatured) {
+      list.unshift({ url: block.featured_image_url, is_featured: true, alt_text: block.h1 || block.title, caption: 'Featured image' })
+    }
+    return list.filter(im => im && im.url)
+  })()
+
   const TABS = [
     { id: 'content', label: 'Content & Meta' },
+    { id: 'images', label: `Images (${imageAssets.length})` },
     { id: 'intro', label: 'Intro' },
     { id: 'keywords', label: 'Keywords' },
     { id: 'questions', label: 'User Questions' },
@@ -114,7 +139,7 @@ export default function PagePreviewPage() {
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(-1)}
             className="p-2 rounded-lg transition-colors"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+            style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
             <ArrowLeft size={15} />
           </button>
           <div>
@@ -129,25 +154,47 @@ export default function PagePreviewPage() {
         <div className="flex items-center gap-2 flex-wrap justify-end">
           <button onClick={handleRegen} disabled={loading}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+            style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Regenerate
           </button>
           <button onClick={handleSave}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors ${saved ? 'text-emerald-400' : ''}`}
             style={saved
               ? { background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)' }
-              : { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+              : { background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
             {saved ? <><CheckCircle size={13} /> Saved</> : <><Save size={13} /> Save</>}
           </button>
           {wpConfig?.wp_url && (
             <button onClick={handlePublish} disabled={publishing}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium btn-primary disabled:opacity-50">
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border-bright)', color: 'var(--text-1)' }}>
               <Upload size={13} className={publishing ? 'animate-pulse' : ''} />
               {publishing ? 'Publishing...' : publishResult?.success ? 'Published!' : 'Publish to WordPress'}
             </button>
           )}
+          <button onClick={webUrl ? () => window.open(webUrl, '_blank', 'noopener') : handlePublishWeb} disabled={webPublishing}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold btn-primary disabled:opacity-50">
+            {webPublishing
+              ? <svg className="animate-spin" width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" strokeWidth="3" strokeLinecap="round"/></svg>
+              : <Globe size={13} />}
+            {webPublishing ? 'Publishing…' : webUrl ? 'Published — View Live' : 'Publish to Web'}
+          </button>
         </div>
       </div>
+
+      {/* Live web link banner */}
+      {(webUrl || webError) && (
+        <div className={`alert ${webError ? 'alert-error' : 'alert-success'}`}>
+          {webError
+            ? <span>✗ {webError}</span>
+            : <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <CheckCircle size={15} /> Live on the web:&nbsp;
+                <a href={webUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-violet)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  {webUrl} <ExternalLink size={12} />
+                </a>
+              </span>}
+        </div>
+      )}
 
       {/* Publish result banner */}
       {publishResult && (
@@ -194,7 +241,7 @@ export default function PagePreviewPage() {
               <MetaRow label="Meta Description" value={block.meta_description} />
               <MetaRow label="URL Slug" value={block.slug} />
               <MetaRow label="H1" value={block.h1} />
-              <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)' }}>
+              <div className="rounded-xl p-4" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
                 <div className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>H2 Headings — Question Based</div>
                 <ul className="space-y-2">
                   {block.h2s?.map((h, i) => (
@@ -204,7 +251,7 @@ export default function PagePreviewPage() {
                   ))}
                 </ul>
               </div>
-              <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)' }}>
+              <div className="rounded-xl p-4" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
                 <div className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>H3 Headings</div>
                 <ul className="space-y-2">
                   {block.h3s?.map((h, i) => (
@@ -217,6 +264,33 @@ export default function PagePreviewPage() {
               <MetaRow label="Body Content" value={block.content} multiline />
               <MetaRow label="Call to Action" value={block.cta} />
             </>
+          )}
+
+          {tab === 'images' && (
+            imageAssets.length === 0
+              ? <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No images were attached to this page.</p>
+              : (
+                <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+                  {imageAssets.map((img, i) => (
+                    <div key={i} className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
+                      <div style={{ position: 'relative', aspectRatio: '16 / 10', background: 'var(--bg-overlay)' }}>
+                        <img src={img.url} alt={img.alt_text || ''} loading="lazy"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                        {img.is_featured && (
+                          <span style={{ position: 'absolute', top: 8, left: 8, fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 999, background: 'var(--brand)', color: '#fff' }}>FEATURED</span>
+                        )}
+                      </div>
+                      <div className="p-3">
+                        {img.caption && <div className="text-xs font-semibold" style={{ color: 'var(--text-1)' }}>{img.caption}</div>}
+                        {img.alt_text && <div className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>alt: {img.alt_text}</div>}
+                        <a href={img.url} target="_blank" rel="noreferrer" className="text-xs mt-1 inline-flex items-center gap-1" style={{ color: 'var(--brand-violet)' }}>
+                          Open full size <ExternalLink size={10} />
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
           )}
 
           {tab === 'intro' && (
@@ -236,7 +310,7 @@ export default function PagePreviewPage() {
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Primary Keyword</div>
                 <span className="inline-block px-3 py-1.5 rounded-lg text-sm font-medium"
-                  style={{ background: 'rgba(6,182,212,0.15)', color: '#67E8F9', border: '1px solid rgba(6,182,212,0.3)' }}>
+                  style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid rgba(59,130,246,0.3)' }}>
                   {block.keywords?.primary}
                 </span>
               </div>
@@ -249,15 +323,15 @@ export default function PagePreviewPage() {
           {tab === 'questions' && (
             <div className="space-y-2">
               <div className="rounded-xl p-4 mb-2" style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)' }}>
-                <p className="text-xs font-semibold mb-1" style={{ color: '#F59E0B' }}>Real User Questions</p>
+                <p className="text-xs font-semibold mb-1" style={{ color: 'var(--amber)' }}>Real User Questions</p>
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                   Sourced from Google PAA & Suggest patterns. Used as H2s and FAQs for AI Overview optimization.
                 </p>
               </div>
               {(block.keywords?.user_questions || []).map((q, i) => (
                 <div key={i} className="flex items-start gap-3 rounded-xl p-3"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)' }}>
-                  <span className="text-xs font-bold mt-0.5 flex-shrink-0" style={{ color: '#F59E0B' }}>Q{i + 1}</span>
+                  style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
+                  <span className="text-xs font-bold mt-0.5 flex-shrink-0" style={{ color: 'var(--amber)' }}>Q{i + 1}</span>
                   <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{q}</span>
                 </div>
               ))}
@@ -267,7 +341,7 @@ export default function PagePreviewPage() {
           {tab === 'faqs' && (
             <div className="space-y-3">
               {block.faqs?.map((faq, i) => (
-                <div key={i} className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)' }}>
+                <div key={i} className="rounded-xl p-4" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
                   <p className="text-sm font-semibold mb-2" style={{ color: 'var(--brand)' }}>{faq.question}</p>
                   <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{faq.answer}</p>
                 </div>
@@ -283,7 +357,7 @@ export default function PagePreviewPage() {
                     {key.replace('_', ' ')}
                   </div>
                   <pre className="rounded-xl p-4 text-xs overflow-auto leading-relaxed"
-                    style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', color: '#34D399' }}>
+                    style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-1)' }}>
                     {JSON.stringify(val, null, 2)}
                   </pre>
                 </div>

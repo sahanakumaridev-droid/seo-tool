@@ -208,7 +208,31 @@ async def _hosted_image_url(query: str, seed: str) -> str:
                         return pick["src"]["large2x"]
         except Exception as e:
             print(f"[Image] Pexels search error: {e}")
-    # Deterministic, always-available fallback so previews still render.
+    # Free, no-key, KEYWORD-RELEVANT source: Openverse (WordPress's own CC image API).
+    # Try the full query, then progressively simpler queries so we still get a RELEVANT image.
+    words = [w for w in re.findall(r"[a-zA-Z]+", query.lower())
+             if w not in {"the", "in", "of", "and", "a", "professional", "at", "work"}]
+    candidates = [query, " ".join(words[:2]), (words[0] if words else "business")]
+    tried = set()
+    try:
+        async with httpx.AsyncClient(timeout=12) as client:
+            for q in candidates:
+                q = q.strip()
+                if not q or q in tried:
+                    continue
+                tried.add(q)
+                resp = await client.get(
+                    "https://api.openverse.org/v1/images/",
+                    params={"q": q, "page_size": 10, "license_type": "commercial", "mature": "false"},
+                    headers={"User-Agent": "seo-automation/1.0"},
+                )
+                if resp.status_code == 200:
+                    results = [r for r in resp.json().get("results", []) if r.get("url")]
+                    if results:
+                        return results[abs(hash(seed)) % len(results)]["url"]
+    except Exception as e:
+        print(f"[Image] Openverse error: {e}")
+    # Last resort so a preview always renders.
     return f"https://picsum.photos/seed/{_slug(seed) or 'seo'}/1200/675"
 
 
@@ -225,13 +249,13 @@ async def generate_article_images(
     """
     count = max(1, min(count, 3))
     assets: List[ImageAsset] = []
-    base_query = f"{focus_keyword} {location}".strip()
-    angle_terms = ["professional", "team at work", "detail closeup"]
+    # Clean, image-search-friendly query: just the keyword (city name without state code).
+    city_only = location.split(",")[0].strip()
+    base_query = f"{focus_keyword} {city_only}".strip()
 
     for i in range(count):
         is_featured = i == 0
-        query = f"{base_query} {angle_terms[i % len(angle_terms)]}".strip()
-        url = await _hosted_image_url(query, seed=f"{base_query}-{i}")
+        url = await _hosted_image_url(base_query, seed=f"{base_query}-{i}")
         meta = build_image_metadata(focus_keyword, location, business_name, i, is_featured)
         assets.append(ImageAsset(
             url=url,

@@ -10,7 +10,7 @@ function ScoreRing({ score }) {
   return (
     <div className="relative w-12 h-12 flex-shrink-0">
       <svg className="w-12 h-12 -rotate-90" viewBox="0 0 56 56">
-        <circle cx="28" cy="28" r={r} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="4" />
+        <circle cx="28" cy="28" r={r} fill="none" stroke="#2A3B57" strokeWidth="4" />
         <circle cx="28" cy="28" r={r} fill="none" stroke={color} strokeWidth="4"
           strokeLinecap="round"
           strokeDasharray={circ}
@@ -210,8 +210,8 @@ export default function SEOCard({ block, businessType, index, onRegenerate }) {
             {activeTab === 'schema' && (
               <div>
                 <Label>JSON-LD Schema Markup</Label>
-                <pre className="mt-3 rounded-xl p-4 text-xs text-emerald-400 overflow-auto max-h-64 border leading-relaxed"
-                  style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)' }}>
+                <pre className="mt-3 rounded-xl p-4 text-xs overflow-auto max-h-64 border leading-relaxed"
+                  style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-1)' }}>
                   {JSON.stringify(block.schema_markup, null, 2)}
                 </pre>
               </div>

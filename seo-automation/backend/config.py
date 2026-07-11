@@ -47,7 +47,15 @@ class Settings(BaseSettings):
     WP_APP_PASSWORD: str = ""
     WP_SEO_PLUGIN: str = "rankmath"
     FRONTEND_URL: str = ""
-    
+    # Base URL used to build public "Publish to Web" links. If empty, it is
+    # derived from the incoming request. e.g. https://seo.159.198.79.219.nip.io
+    PUBLIC_BASE_URL: str = ""
+
+    # Google Indexing API — path to the service-account JSON key. When set (and
+    # the service account is an Owner in Search Console), published URLs are
+    # auto-submitted to Google for fast crawling.
+    GOOGLE_INDEXING_KEY_FILE: str = ""
+
     # ── Image APIs ───────────────────────────────────────────────
     UNSPLASH_ACCESS_KEY: str = ""
     PEXELS_API_KEY: str = ""

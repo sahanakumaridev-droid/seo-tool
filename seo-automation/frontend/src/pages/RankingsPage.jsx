@@ -53,24 +53,24 @@ export default function RankingsPage() {
             <p className="text-xs text-slate-500 mt-0.5">Lower is better · Top 3 tracked keywords</p>
           </div>
           <div className="flex items-center gap-3 text-xs text-slate-500">
-            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-indigo-400 inline-block rounded" />plumbing services sd</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-violet-400 inline-block rounded" />plumber near me</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-sky-400 inline-block rounded" />emergency plumber</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 inline-block rounded" style={{ background: '#2563EB' }} />plumbing services sd</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 inline-block rounded" style={{ background: '#3B82F6' }} />plumber near me</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 inline-block rounded" style={{ background: '#60A5FA' }} />emergency plumber</span>
           </div>
         </div>
         <ResponsiveContainer width="100%" height={260}>
           <LineChart data={chartData} margin={{ left: -20 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#2A3B57" />
             <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
             <CustomYAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
             <Tooltip
-              contentStyle={{ background: '#111827', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, fontSize: 12 }}
-              labelStyle={{ color: '#94a3b8' }}
+              contentStyle={{ background: '#1E2940', border: '1px solid #2A3B57', borderRadius: 8, fontSize: 12, color: '#F1F5F9' }}
+              labelStyle={{ color: '#94A3B8' }}
               formatter={(v) => [`#${v}`, '']}
             />
-            <Line type="monotone" dataKey="pos1" stroke="#818cf8" strokeWidth={2} dot={{ r: 3, fill: '#818cf8' }} />
-            <Line type="monotone" dataKey="pos2" stroke="#a78bfa" strokeWidth={2} dot={{ r: 3, fill: '#a78bfa' }} />
-            <Line type="monotone" dataKey="pos3" stroke="#38bdf8" strokeWidth={2} dot={{ r: 3, fill: '#38bdf8' }} />
+            <Line type="monotone" dataKey="pos1" stroke="#2563EB" strokeWidth={2} dot={{ r: 3, fill: '#2563EB' }} />
+            <Line type="monotone" dataKey="pos2" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3, fill: '#3B82F6' }} />
+            <Line type="monotone" dataKey="pos3" stroke="#60A5FA" strokeWidth={2} dot={{ r: 3, fill: '#60A5FA' }} />
           </LineChart>
         </ResponsiveContainer>
       </div>
