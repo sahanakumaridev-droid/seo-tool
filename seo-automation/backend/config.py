@@ -51,10 +51,34 @@ class Settings(BaseSettings):
     # derived from the incoming request. e.g. https://seo.159.198.79.219.nip.io
     PUBLIC_BASE_URL: str = ""
 
-    # Google Indexing API — path to the service-account JSON key. When set (and
-    # the service account is an Owner in Search Console), published URLs are
-    # auto-submitted to Google for fast crawling.
+    # ── Marketing / Tracking ─────────────────────────────────────
+    # Google Tag Manager container (e.g. "GTM-XXXXXXX"). Empty = no tag loaded,
+    # so published /p/ pages ship inert until an ID is set. Manage GA4, Google
+    # Ads conversions & remarketing inside GTM once populated.
+    GTM_CONTAINER_ID: str = ""
+
+    # Google AdSense publisher ID (e.g. "ca-pub-1234567890123456"). Empty = no
+    # ad script loaded, so published /p/ pages ship without ads until it's
+    # set. Once set, auto ads run site-wide and an in-article unit renders
+    # inside each published page (optionally scoped to ADSENSE_SLOT_ID).
+    ADSENSE_CLIENT_ID: str = ""
+    ADSENSE_SLOT_ID: str = ""
+
+    # Google Indexing API — path to the service-account JSON key. NOTE: Google
+    # restricts this API to JobPosting/BroadcastEvent pages, so it is NOT
+    # auto-invoked for ordinary blog posts (see routes/wordpress.py) — it
+    # remains available only as a manual, opt-in endpoint (/api/indexing/submit).
     GOOGLE_INDEXING_KEY_FILE: str = ""
+
+    # Google Search Console API (Sitemaps + URL Inspection) — the compliant
+    # path for blog content. Reuses GOOGLE_INDEXING_KEY_FILE's service account
+    # (same Google Cloud project, already an Owner on the property) with a
+    # different OAuth scope. GSC_SITE_URL is the verified property, e.g.
+    # "https://zeorbit.com/" or "sc-domain:zeorbit.com". WP_SITEMAP_URL is the
+    # exact sitemap URL your SEO plugin (RankMath/AIOSEO) already publishes,
+    # e.g. "https://zeorbit.com/sitemap_index.xml".
+    GSC_SITE_URL: str = ""
+    WP_SITEMAP_URL: str = ""
 
     # ── Image APIs ───────────────────────────────────────────────
     UNSPLASH_ACCESS_KEY: str = ""
@@ -77,8 +101,20 @@ class Settings(BaseSettings):
     THREADS_ACCESS_TOKEN: str = ""
     THREADS_USER_ID: str = ""
     GBP_ACCESS_TOKEN: str = ""
+    GBP_REFRESH_TOKEN: str = ""
     GBP_ACCOUNT_ID: str = ""
     GBP_LOCATION_ID: str = ""
+
+    # ── Google Ads (campaign creation/publishing) ────────────────
+    # From Google Ads API Center (console.cloud.google.com OAuth client +
+    # ads.google.com API Center for the developer token). All five must be
+    # set for campaign creation to run; otherwise it's credential-gated off.
+    GOOGLE_ADS_DEVELOPER_TOKEN: str = ""
+    GOOGLE_ADS_CLIENT_ID: str = ""
+    GOOGLE_ADS_CLIENT_SECRET: str = ""
+    GOOGLE_ADS_REFRESH_TOKEN: str = ""
+    GOOGLE_ADS_CUSTOMER_ID: str = ""       # the ad account to create campaigns in (digits only, no dashes)
+    GOOGLE_ADS_LOGIN_CUSTOMER_ID: str = "" # manager (MCC) account id, if the above is a client account under one
 
     # ── Lead capture ─────────────────────────────────────────────
     BARK_API_KEY: str = ""

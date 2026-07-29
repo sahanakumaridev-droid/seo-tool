@@ -480,6 +480,16 @@ async def _get_business_image(business_type: str, city: str) -> str:
     
     return image_url
 
+def _kw_words_present(text: str, keyword: str) -> bool:
+    """True if every significant word of `keyword` appears in `text`,
+    regardless of order or adjacency. Real SEO copy rarely repeats a keyword
+    as one exact contiguous phrase — "Web Design Services in San Diego" is
+    better writing than the literal "web design san diego" and should still
+    get full credit for covering the keyword, not be penalized for it."""
+    text_l = text.lower()
+    return all(word in text_l for word in keyword.lower().split())
+
+
 def _seo_score(
     text: str, title: str, meta: str, h2s: list, faqs: list,
     keyword: str, city: str, slug: str
@@ -506,11 +516,11 @@ def _seo_score(
     words = text.lower().split()
     first_100 = " ".join(words[:100])
 
-    if kw in title_l:                                    score += 15
-    if kw in meta_l:                                     score += 10
+    if _kw_words_present(title, keyword):                score += 15
+    if _kw_words_present(meta, keyword):                 score += 10
     if kw.replace(" ", "-") in slug_l or kw.replace(" ", "") in slug_l: score += 10
-    if kw in first_100:                                  score += 15
-    if sum(1 for h in h2s if kw in h.lower()) >= 2:     score += 10
+    if _kw_words_present(first_100, keyword):            score += 15
+    if sum(1 for h in h2s if _kw_words_present(h, keyword)) >= 2: score += 10
     if len(words) >= 300:                                score += 10
     if len(faqs) >= 5:                                   score += 10
     if city_l in title_l:                                score += 10
@@ -520,12 +530,20 @@ def _seo_score(
     return float(min(score, 100))
 
 def _keyword_density(text: str, keyword: str) -> float:
-    """Returns keyword density as a percentage (0-100 scale for display)."""
+    """Returns keyword density as a percentage (0-100 scale for display).
+
+    Counts each significant keyword word's occurrences independently rather
+    than requiring the exact contiguous phrase — natural copy mentions
+    keyword components ("web design", "San Diego") throughout far more often
+    than the literal full phrase back-to-back, so phrase-only counting
+    under-reports real keyword coverage.
+    """
     words = text.lower().split()
-    kw_words = keyword.lower().split()
-    count = sum(1 for i in range(len(words) - len(kw_words) + 1)
-                if words[i:i+len(kw_words)] == kw_words)
-    raw = (count / max(len(words), 1)) * 100  # e.g. 1.5%
+    kw_words = [w for w in keyword.lower().split() if w]
+    if not kw_words or not words:
+        return 0.0
+    total_hits = sum(words.count(w) for w in kw_words)
+    raw = (total_hits / len(kw_words)) / len(words) * 100  # avg occurrences per keyword word, as %
     # Ideal keyword density is 1-3%. Map 2% → 100, cap at 100.
     return round(min((raw / 2.0) * 100, 100), 1)
 

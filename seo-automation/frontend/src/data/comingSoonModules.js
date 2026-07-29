@@ -1,0 +1,27 @@
+// Shared copy for sidebar sub-items that don't have a built page yet.
+// Keyed by the slug used in the /coming-soon/:slug route.
+export const COMING_SOON_MODULES = {
+  'keyword-explorer': { title: 'Keyword Explorer', description: 'Browse millions of keyword ideas with volume, difficulty, and SERP data in a single explorer view.' },
+  'content-opportunities': { title: 'Content Opportunities', description: 'Find content gaps and topic clusters your site should be targeting based on competitor coverage.' },
+  'pages': { title: 'Pages', description: 'A full inventory of every crawled page on your site, with per-page SEO scores.' },
+  'technical-seo': { title: 'Technical SEO', description: 'Deep technical diagnostics — crawlability, indexation, structured data, and more.' },
+  'core-web-vitals': { title: 'Core Web Vitals', description: 'Track LCP, INP, and CLS over time across your most important pages.' },
+  'rank-tracking-keywords': { title: 'Rank Tracking', description: 'Track daily keyword positions across the U.S., by state and city.' },
+  'rank-tracking-locations': { title: 'Locations', description: 'Manage the cities and regions you track rankings in.' },
+  'serp-features': { title: 'SERP Features', description: 'See which of your keywords trigger featured snippets, local packs, and other SERP features.' },
+  'competitor-overview': { title: 'Competitor Overview', description: 'A side-by-side comparison of your site against your top organic competitors.' },
+  'keyword-gap': { title: 'Keyword Gap', description: 'Find keywords your competitors rank for that you don’t.' },
+  'content-gap': { title: 'Content Gap', description: 'Compare content coverage and topic depth against your competitors.' },
+  'backlink-overview': { title: 'Backlink Overview', description: 'Monitor your total backlinks, referring domains, and link quality over time.' },
+  'referring-domains': { title: 'Referring Domains', description: 'A full list of domains linking to your site, with authority and relevance scores.' },
+  'lost-new-links': { title: 'Lost / New Links', description: 'Track newly acquired and recently lost backlinks so you never miss a change.' },
+  'google-business-profile': { title: 'Google Business Profile', description: 'Manage your GBP listing performance, posts, and insights.' },
+  'local-rankings': { title: 'Local Rankings', description: 'Track map-pack and local-pack rankings by city and neighborhood.' },
+  'reviews': { title: 'Reviews', description: 'Monitor review volume, average rating, and sentiment across platforms.' },
+  'ai-overview': { title: 'AI Overview', description: 'A summary of how your brand shows up across AI search engines.' },
+  'brand-mentions': { title: 'Brand Mentions', description: 'Track every time your brand is mentioned in an AI-generated answer.' },
+  'citations': { title: 'Citations', description: 'See which sources AI engines cite when answering questions about your industry.' },
+  'ai-competitors': { title: 'AI Visibility Competitors', description: 'Compare your AI search visibility against your competitors.' },
+  'reports': { title: 'Reports', description: 'Generate polished, white-label client reports with one click.' },
+  'settings': { title: 'Settings', description: 'Manage your workspace, billing, team members, and integrations.' },
+}

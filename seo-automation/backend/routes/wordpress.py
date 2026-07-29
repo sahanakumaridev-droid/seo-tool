@@ -1,22 +1,76 @@
-from fastapi import APIRouter, HTTPException
-from models.schemas import PublishRequest, BulkPublishRequest, PublishResult
+import logging
+import httpx
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from models.schemas import PublishRequest, BulkPublishRequest, PublishResult, SEOBlock
 from services.wordpress_service import publish_to_wordpress
-from services.indexing_service import submit_url
+from services import crawl_check_service, search_console_service
 from config import settings
+from db import get_session, PublishedUrlRecord
 from typing import List
-import asyncio
+from datetime import datetime, timezone
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
-async def _auto_index(result: PublishResult):
-    """After a successful publish, ping Google to crawl the new URL (best effort)."""
+async def _track_and_verify(result: PublishResult, block: SEOBlock, session: AsyncSession):
+    """After a successful publish: verify the URL is actually crawlable, then
+    hand it to the compliant Google Search Console pipeline (sitemap +
+    URL Inspection) — never the Indexing API, which Google restricts to
+    JobPosting/BroadcastEvent pages, not ordinary blog posts."""
+    url = getattr(result, "post_url", None)
+    if not getattr(result, "success", False) or not url:
+        return
     try:
-        url = getattr(result, "post_url", None)
-        if getattr(result, "success", False) and url:
-            await asyncio.to_thread(submit_url, url, "URL_UPDATED")
-    except Exception:
-        pass
+        existing = (await session.execute(
+            select(PublishedUrlRecord).where(PublishedUrlRecord.url == url)
+        )).scalar_one_or_none()
+        record = existing or PublishedUrlRecord(url=url, source="wordpress")
+        record.title = block.title or ""
+        record.post_id = str(getattr(result, "post_id", "") or "")
+        record.status = "published"
+        record.error_message = ""
+        if not existing:
+            session.add(record)
+        await session.commit()
+
+        check = await crawl_check_service.check_url(url)
+        record.http_status = check["http_status"]
+        record.robots_allowed = check["robots_allowed"]
+        record.has_noindex = check["has_noindex"]
+        record.canonical_ok = check["canonical_ok"]
+        if not check["ok"]:
+            record.status = "error"
+            record.error_message = check["error"]
+            await session.commit()
+            return
+
+        sitemap_url = settings.WP_SITEMAP_URL
+        if sitemap_url:
+            try:
+                async with httpx.AsyncClient(timeout=15) as client:
+                    r = await client.get(sitemap_url)
+                in_sitemap = r.status_code == 200 and url in r.text
+            except Exception as e:
+                logger.warning(f"Sitemap fetch failed for {sitemap_url}: {e}")
+                in_sitemap = False
+            if in_sitemap:
+                record.status = "sitemap_added"
+                record.sitemap_submitted_at = datetime.now(timezone.utc)
+            # Not yet in the sitemap is non-fatal — it can lag a few minutes;
+            # /api/seo-indexing/refresh re-checks later.
+            search_console_service.submit_sitemap(sitemap_url)
+
+        inspect = search_console_service.inspect_url(url)
+        if inspect.get("ok"):
+            record.status = inspect["status"]
+            record.coverage_state = inspect.get("coverage_state", "")
+            record.last_inspected_at = datetime.now(timezone.utc)
+        await session.commit()
+    except Exception as e:
+        logger.error(f"Publish tracking failed for {url}: {e}")
 
 
 def _apply_defaults(wp_config):
@@ -35,18 +89,18 @@ def _apply_defaults(wp_config):
 
 
 @router.post("/publish", response_model=PublishResult)
-async def publish_single(req: PublishRequest):
+async def publish_single(req: PublishRequest, session: AsyncSession = Depends(get_session)):
     """Publish a single SEO page to WordPress."""
     _apply_defaults(req.wp_config)
     if not req.wp_config.wp_url or not req.wp_config.wp_username or not req.wp_config.wp_app_password:
         raise HTTPException(status_code=400, detail="WordPress connection not configured.")
     result = await publish_to_wordpress(req.seo_block, req.wp_config)
-    await _auto_index(result)
+    await _track_and_verify(result, req.seo_block, session)
     return result
 
 
 @router.post("/publish/bulk", response_model=List[PublishResult])
-async def publish_bulk(req: BulkPublishRequest):
+async def publish_bulk(req: BulkPublishRequest, session: AsyncSession = Depends(get_session)):
     """Publish multiple SEO pages to WordPress."""
     _apply_defaults(req.wp_config)
     if not req.wp_config.wp_url or not req.wp_config.wp_username or not req.wp_config.wp_app_password:
@@ -54,6 +108,6 @@ async def publish_bulk(req: BulkPublishRequest):
     results = []
     for block in req.pages:
         result = await publish_to_wordpress(block, req.wp_config)
-        await _auto_index(result)
+        await _track_and_verify(result, block, session)
         results.append(result)
     return results

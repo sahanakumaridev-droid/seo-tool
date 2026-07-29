@@ -4,7 +4,7 @@ Automates social media posting to Facebook, Twitter/X, LinkedIn, Instagram.
 """
 import httpx
 from typing import List, Optional
-from models.schemas import SocialPostRequest, SocialPostResult
+from models.schemas import SocialPostRequest, SocialPostResult, GBPPostRequest, GBPPostResult
 from config import settings
 
 
@@ -319,22 +319,66 @@ async def post_to_threads(req: SocialPostRequest) -> SocialPostResult:
         return SocialPostResult(platform="threads", success=False, error=str(e))
 
 
-async def post_to_gbp(req: SocialPostRequest) -> SocialPostResult:
-    """Create a Google Business Profile local post (credential-gated)."""
-    token = settings.GBP_ACCESS_TOKEN
+def gbp_configured() -> bool:
+    has_token = bool(settings.GBP_REFRESH_TOKEN or settings.GBP_ACCESS_TOKEN)
+    return bool(has_token and settings.GBP_ACCOUNT_ID and settings.GBP_LOCATION_ID)
+
+
+async def _get_gbp_access_token() -> tuple[Optional[str], Optional[str]]:
+    """Returns (token, error). Prefers minting a fresh access token from the
+    long-lived refresh token (OAuth access tokens expire in ~1hr, so a static
+    GBP_ACCESS_TOKEN alone would silently break shortly after setup). Falls
+    back to a raw GBP_ACCESS_TOKEN if no refresh token is configured."""
+    if settings.GBP_REFRESH_TOKEN:
+        if not (settings.GOOGLE_ADS_CLIENT_ID and settings.GOOGLE_ADS_CLIENT_SECRET):
+            return None, "GBP_REFRESH_TOKEN is set but no OAuth client id/secret is configured to refresh it"
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.post(
+                    "https://oauth2.googleapis.com/token",
+                    data={
+                        "grant_type": "refresh_token",
+                        "client_id": settings.GOOGLE_ADS_CLIENT_ID,
+                        "client_secret": settings.GOOGLE_ADS_CLIENT_SECRET,
+                        "refresh_token": settings.GBP_REFRESH_TOKEN,
+                    },
+                )
+                if resp.status_code != 200:
+                    return None, f"GBP token refresh failed {resp.status_code}: {resp.text[:200]}"
+                return resp.json().get("access_token"), None
+        except Exception as e:
+            return None, f"GBP token refresh error: {e}"
+    return settings.GBP_ACCESS_TOKEN or None, None
+
+
+async def _create_gbp_local_post(
+    summary: str, cta_type: str = "LEARN_MORE", cta_url: Optional[str] = None, image_url: Optional[str] = None,
+) -> tuple[bool, str]:
+    """Core Google Business Profile "local post" API call (credential-gated,
+    100% free — GBP posts show up in Google Search/Maps for the business's
+    listing, no ad spend involved). Returns (success, post_name_or_error).
+    Shared by the SEO-content share flow (post_to_gbp) and the standalone
+    free-post composer (post_gbp_update).
+    """
+    if not gbp_configured():
+        return False, "Google Business Profile credentials not configured"
+
+    token, token_error = await _get_gbp_access_token()
+    if token_error:
+        return False, token_error
     account_id = settings.GBP_ACCOUNT_ID
     location_id = settings.GBP_LOCATION_ID
-    if not all([token, account_id, location_id]):
-        return SocialPostResult(platform="gbp", success=False, error="Google Business Profile credentials not configured")
 
-    payload = {
+    payload: dict = {
         "languageCode": "en-US",
-        "summary": _build_caption(req, "gbp"),
-        "callToAction": {"actionType": "LEARN_MORE", "url": req.post_url},
+        "summary": summary,
         "topicType": "STANDARD",
     }
-    if req.image_url:
-        payload["media"] = [{"mediaFormat": "PHOTO", "sourceUrl": req.image_url}]
+    if cta_url:
+        payload["callToAction"] = {"actionType": cta_type, "url": cta_url}
+    if image_url:
+        payload["media"] = [{"mediaFormat": "PHOTO", "sourceUrl": image_url}]
+
     url = f"https://mybusiness.googleapis.com/v4/accounts/{account_id}/locations/{location_id}/localPosts"
     try:
         async with httpx.AsyncClient(timeout=25) as client:
@@ -343,11 +387,27 @@ async def post_to_gbp(req: SocialPostRequest) -> SocialPostResult:
                 headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
             )
             if resp.status_code in (200, 201):
-                name = resp.json().get("name", "")
-                return SocialPostResult(platform="gbp", success=True, post_id=name)
-            return SocialPostResult(platform="gbp", success=False, error=f"GBP API {resp.status_code}: {resp.text[:200]}")
+                return True, resp.json().get("name", "")
+            return False, f"GBP API {resp.status_code}: {resp.text[:200]}"
     except Exception as e:
-        return SocialPostResult(platform="gbp", success=False, error=str(e))
+        return False, str(e)
+
+
+async def post_to_gbp(req: SocialPostRequest) -> SocialPostResult:
+    """Create a Google Business Profile local post from a published SEO page (credential-gated)."""
+    success, result = await _create_gbp_local_post(
+        summary=_build_caption(req, "gbp"), cta_url=req.post_url, image_url=req.image_url,
+    )
+    return SocialPostResult(platform="gbp", success=success, post_id=result if success else None, error=None if success else result)
+
+
+async def post_gbp_update(req: GBPPostRequest) -> GBPPostResult:
+    """Publish a standalone, freeform Google Business Profile post — the free
+    alternative to a paid Google Ads campaign for local visibility."""
+    success, result = await _create_gbp_local_post(
+        summary=req.message, cta_type=req.cta_type, cta_url=req.cta_url, image_url=req.image_url,
+    )
+    return GBPPostResult(success=success, post_name=result if success else None, error=None if success else result)
 
 
 async def share_to_social(req: SocialPostRequest) -> List[SocialPostResult]:

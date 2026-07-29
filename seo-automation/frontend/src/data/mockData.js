@@ -33,6 +33,18 @@ export const RANKING_HISTORY = [
   { date: 'Jul', pos1: 2, pos2: 4, pos3: 6 },
 ]
 
+// Organic Performance dashboard chart — one row per month, one field per switchable series
+export const ORGANIC_PERFORMANCE = [
+  { month: 'Aug', traffic: 3200, impressions: 41000, clicks: 1180, position: 18.4 },
+  { month: 'Sep', traffic: 4100, impressions: 46500, clicks: 1420, position: 17.1 },
+  { month: 'Oct', traffic: 5800, impressions: 52800, clicks: 1960, position: 15.8 },
+  { month: 'Nov', traffic: 7200, impressions: 59200, clicks: 2510, position: 14.6 },
+  { month: 'Dec', traffic: 6900, impressions: 58100, clicks: 2380, position: 14.9 },
+  { month: 'Jan', traffic: 8400, impressions: 65400, clicks: 2940, position: 13.7 },
+  { month: 'Feb', traffic: 9800, impressions: 71200, clicks: 3410, position: 13.0 },
+  { month: 'Mar', traffic: 11200, impressions: 78900, clicks: 3980, position: 12.6 },
+]
+
 export const TRAFFIC_TREND = [
   { month: 'Aug', organic: 3200, paid: 800 },
   { month: 'Sep', organic: 4100, paid: 900 },
@@ -69,8 +81,51 @@ export const difficultyLabel = (d) => {
 }
 
 export const intentColor = (intent) => ({
-  Transactional: 'text-indigo-400',
-  Commercial: 'text-violet-400',
-  Informational: 'text-sky-400',
-  Navigational: 'text-slate-400',
-}[intent] || 'text-slate-400')
+  Transactional: 'text-indigo-600',
+  Commercial: 'text-violet-600',
+  Informational: 'text-sky-600',
+  Navigational: 'text-slate-500',
+}[intent] || 'text-slate-500')
+
+// ── Dashboard (main SEO analytics overview) ───────────────────────
+export const DASHBOARD_KPIS = [
+  { key: 'seoHealth',   label: 'SEO Health',       value: 92,      suffix: '/100', delta: '+4',    deltaUp: true },
+  { key: 'traffic',     label: 'Organic Traffic',  value: '48.2K', delta: '+18.4%', deltaUp: true },
+  { key: 'keywords',    label: 'Organic Keywords', value: '3,482', delta: '+8.2%', deltaUp: true },
+  { key: 'backlinks',   label: 'Backlinks',        value: '18.4K', delta: '+4.1%', deltaUp: true },
+  { key: 'avgPosition', label: 'Average Position', value: 12.6,    delta: '+2.3', deltaUp: true },
+  { key: 'aiVisibility',label: 'AI Visibility',    value: '68%',   delta: '+12%', deltaUp: true },
+]
+
+export const SEO_OPPORTUNITIES = [
+  { label: '18 critical technical issues',   to: '/site-audit', tone: 'red' },
+  { label: '32 pages missing meta descriptions', to: '/site-audit', tone: 'amber' },
+  { label: '14 keywords close to page 1',    to: '/keywords',   tone: 'green' },
+  { label: '8 declining keywords',           to: '/keywords',   tone: 'red' },
+  { label: '27 content opportunities',       to: '/keywords',   tone: 'amber' },
+  { label: '12 broken links',                to: '/site-audit', tone: 'red' },
+]
+
+// ── Marketing homepage demo data ──────────────────────────────────
+export const HERO_METRICS = [
+  { label: 'Organic Traffic', value: '+28.4%' },
+  { label: 'Keywords',        value: '1,284' },
+  { label: 'SEO Health',      value: '92/100' },
+  { label: 'AI Visibility',   value: '68%' },
+  { label: 'Backlinks',       value: '12.8K' },
+  { label: 'Average Position',value: '8.4' },
+]
+
+export const TRUSTED_LOGOS = ['Acme Co', 'Nova Retail', 'Brightline Agency', 'Harbor & Co', 'Fieldstone Group', 'Lumen Digital']
+
+export const CASE_STUDIES = [
+  { value: '+214%', label: 'Organic Traffic', sub: 'Example results, 6 months' },
+  { value: '+86%',  label: 'Qualified Leads', sub: 'Example results, 4 months' },
+  { value: '#1–3',  label: 'Google Rankings', sub: 'Example results, primary keywords' },
+]
+
+export const PRICING_TIERS = [
+  { name: 'Starter', price: '$49', period: '/mo', desc: 'For small businesses getting started with SEO.', features: ['1 website', 'Weekly rank tracking', 'Site audit', '100 tracked keywords'] },
+  { name: 'Professional', price: '$129', period: '/mo', desc: 'For growing businesses and in-house marketers.', featured: true, features: ['5 websites', 'Daily rank tracking', 'Competitor analysis', '1,000 tracked keywords', 'AI visibility tracking'] },
+  { name: 'Agency', price: '$349', period: '/mo', desc: 'For agencies managing multiple clients.', features: ['25 websites', 'White-label reports', 'All Professional features', '10,000 tracked keywords', 'Priority support'] },
+]

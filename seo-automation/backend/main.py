@@ -3,13 +3,14 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, PlainTextResponse, Response
+from fastapi.staticfiles import StaticFiles
 from db import get_session
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from routes import locations, content, pages, keywords, wordpress
-from routes import social, leads, jobs, images
+from routes import social, leads, jobs, images, seo_audit, google_ads, gbp
 from db import init_db
 import db_marketplace  # registers marketplace ORM models with Base
 from logging_config import setup_logging, logger
@@ -83,6 +84,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Serves brand assets (e.g. /static/zeorbit-logo.png) used in generated
+# location pages, which are rendered server-side and can't reach into the
+# frontend's own /public folder.
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 
 # ── Exception Handlers ──────────────────────────────────────────
 @app.exception_handler(Exception)
@@ -118,9 +124,15 @@ app.include_router(social.router,    prefix="/api/social",    tags=["Social Medi
 app.include_router(leads.router,     prefix="/api/leads",     tags=["Leads"])
 app.include_router(jobs.router,      prefix="/api/jobs",      tags=["Jobs"])
 app.include_router(images.router,    prefix="/api/images",    tags=["Images"])
+app.include_router(seo_audit.router, prefix="/api/seo-audit", tags=["Site Audit"])
+app.include_router(google_ads.router, prefix="/api/google-ads", tags=["Google Ads"])
+app.include_router(gbp.router,        prefix="/api/gbp",        tags=["Google Business Profile"])
 
 from routes import indexing
 app.include_router(indexing.router,  prefix="/api/indexing",  tags=["Google Indexing"])
+
+from routes import seo_indexing
+app.include_router(seo_indexing.router, prefix="/api/seo-indexing", tags=["Google Search Automation"])
 
 # Instagram auto-posting
 from routes import instagram
@@ -171,14 +183,44 @@ async def root():
     }
 
 
+@app.get("/robots.txt", response_class=PlainTextResponse, tags=["Public Pages"])
+async def robots_txt(request: Request):
+    """Permissive robots.txt for this app's own /p/{slug} pages, pointing
+    crawlers at the sitemap. (The real WordPress site has its own, generated
+    by its SEO plugin — this only covers pages hosted on this domain.)"""
+    base = str(request.base_url).rstrip("/")
+    return f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n"
+
+
+@app.get("/sitemap.xml", tags=["Public Pages"])
+async def sitemap_xml(request: Request, session=Depends(get_session)):
+    """Standard XML sitemap listing every published /p/{slug} page on this
+    app's own domain (WordPress posts have their own sitemap via RankMath/
+    AIOSEO on the real site — this only covers this app's demo pages)."""
+    from sqlalchemy import select
+    from db import PageRecord
+    from routes.pages import _public_base
+
+    base = _public_base(request)
+    rows = (await session.execute(select(PageRecord.slug, PageRecord.updated_at))).all()
+    urls = "".join(
+        f"<url><loc>{base}/p/{slug}</loc>"
+        f"<lastmod>{updated_at.date().isoformat() if updated_at else ''}</lastmod></url>"
+        for slug, updated_at in rows
+    )
+    xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>'
+    return Response(content=xml, media_type="application/xml")
+
+
 # ── Public "Publish to Web" pages ───────────────────────────────
 @app.get("/p/{slug}", response_class=HTMLResponse, tags=["Public Pages"])
-async def public_page(slug: str, session=Depends(get_session)):
+async def public_page(slug: str, request: Request, session=Depends(get_session)):
     """Serve a published page as standalone, publicly viewable HTML."""
     from sqlalchemy import select
     from db import PageRecord
     from models.schemas import SEOBlock
     from services.public_page_service import render_public_html
+    from routes.pages import _public_base
 
     result = await session.execute(select(PageRecord).where(PageRecord.slug == slug))
     row = result.scalar_one_or_none()
@@ -190,4 +232,5 @@ async def public_page(slug: str, session=Depends(get_session)):
             status_code=404,
         )
     block = SEOBlock(**row.seo_block)
-    return HTMLResponse(render_public_html(block))
+    public_url = f"{_public_base(request)}/p/{slug}"
+    return HTMLResponse(render_public_html(block, public_url))

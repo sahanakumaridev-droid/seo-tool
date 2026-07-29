@@ -73,23 +73,36 @@ def _build_content_html(block: SEOBlock) -> str:
                 parts.append(f'<p>{para}</p>')
 
     if block.h3s:
-        for h3 in block.h3s[:2]:
-            parts.append(f'<h3>{h3}</h3>')
+        # These are short trust/benefit statements ("Fast Turnaround for
+        # {city} Clients", "Transparent Pricing — No Hidden Fees"), not
+        # headings with their own body copy — render as a badge row instead
+        # of bare <h3> tags with nothing under them.
+        check_icon = (
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none">'
+            '<path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.5" '
+            'stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        )
+        badges = "".join(
+            f'<span class="trust-badge">{check_icon}<span>{h3}</span></span>'
+            for h3 in block.h3s[:4]
+        )
+        parts.append(f'<div class="trust-badges">{badges}</div>')
 
     if block.faqs:
         parts.append('<h2>Frequently Asked Questions</h2>')
         parts.append('<div class="faq-section" itemscope itemtype="https://schema.org/FAQPage">')
-        for faq in block.faqs:
+        for i, faq in enumerate(block.faqs):
             parts.append(
-                f'<div class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">'
-                f'<h3 itemprop="name">{faq.question}</h3>'
+                f'<details class="faq-item"{" open" if i == 0 else ""} '
+                f'itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">'
+                f'<summary itemprop="name">{faq.question}</summary>'
                 f'<div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">'
                 f'<p itemprop="text">{faq.answer}</p>'
-                f'</div></div>'
+                f'</div></details>'
             )
         parts.append('</div>')
 
-    parts.append(f'<div class="cta-section"><p><strong>{block.cta}</strong></p></div>')
+    parts.append(f'<div class="pull-quote"><p>{block.cta}</p></div>')
 
     schema = block.schema_markup
     if schema:

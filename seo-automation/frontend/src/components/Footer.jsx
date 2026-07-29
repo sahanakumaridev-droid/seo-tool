@@ -16,7 +16,7 @@ const LINKS = [
       { label: 'About', href: '#' },
       { label: 'Careers', href: '#' },
       { label: 'Contact', href: '#' },
-      { label: 'Blog', href: '#' },
+      { label: 'Blog', href: '/blog' },
     ],
   },
   {
@@ -52,7 +52,7 @@ export default function Footer() {
         {/* Brand */}
         <div>
           <div style={{ marginBottom: 12 }}>
-            <Logo size={18} />
+            <Logo size={22} />
           </div>
           <p style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.6, maxWidth: 260, margin: 0 }}>
             AI-powered local SEO automation built for U.S. businesses. Rank in every city, publish

@@ -31,12 +31,23 @@ export const getNearbyCities = (baseLocation, numCities) =>
 export const getKeywords = (businessType, city, state = 'CA') =>
   api.get('/keywords/generate', { params: { business_type: businessType, city, state } })
 
+export const researchKeywords = (keyword, location = 'US') =>
+  api.get('/keywords/research', { params: { keyword, location } })
+
+// ── Site Audit ───────────────────────────────────────────────────
+export const runSiteAudit = (url) =>
+  api.post('/seo-audit/run', { url })
+
 // ── Pages ────────────────────────────────────────────────────────
 export const savePage = (businessType, city, state = 'CA') =>
   api.post('/pages/save', null, { params: { business_type: businessType, city, state } })
 
 export const listPages = (skip = 0, limit = 20) =>
   api.get('/pages/', { params: { skip, limit } })
+
+/** Public blog feed: published /p/{slug} pages + tracked live WordPress URLs */
+export const listBlogPosts = (skip = 0, limit = 24) =>
+  api.get('/pages/blog', { params: { skip, limit } })
 
 export const deletePage = (slug) =>
   api.delete(`/pages/${slug}`)
@@ -48,7 +59,12 @@ export const publishToWordPress = (seoBlock, wpConfig) =>
 export const publishBulkToWordPress = (pages, wpConfig) =>
   api.post('/wordpress/publish/bulk', { pages, wp_config: wpConfig })
 
-// ── Publish to Web (hosted public page on this app) ──────────────
+// ── Publish to ZeOrbit (public page → appears on ZeOrbit blog) ───
+export const ZEORBIT_SITE_URL =
+  import.meta.env.VITE_ZEORBIT_SITE_URL || 'https://zeorbit.159.198.79.219.nip.io'
+
+export const zeorbitBlogUrl = () => `${ZEORBIT_SITE_URL.replace(/\/$/, '')}/blog`
+
 export const publishToWeb = (seoBlock) =>
   api.post('/pages/publish-web', seoBlock)
 
@@ -74,6 +90,27 @@ export const shareToSocial = (data) =>
 
 export const getSocialPlatforms = () =>
   api.get('/social/platforms')
+
+// ── Google Ads ───────────────────────────────────────────────────
+export const getGoogleAdsStatus = () =>
+  api.get('/google-ads/status')
+
+export const createGoogleAdsCampaign = (data) =>
+  api.post('/google-ads/create-campaign', data)
+
+// ── Google Business Profile (free) ────────────────────────────────
+export const getGbpStatus = () =>
+  api.get('/gbp/status')
+
+export const createGbpPost = (data) =>
+  api.post('/gbp/post', data)
+
+// ── Google Search Automation (sitemap + Search Console) ───────────
+export const getSeoIndexingStatus = () =>
+  api.get('/seo-indexing/status')
+
+export const refreshSeoIndexing = (id) =>
+  api.post('/seo-indexing/refresh', null, { params: id ? { id } : {} })
 
 // ── Leads ────────────────────────────────────────────────────────
 export const getLeads = (params = {}) =>

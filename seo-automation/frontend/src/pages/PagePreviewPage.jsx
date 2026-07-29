@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { ArrowLeft, RefreshCw, Save, CheckCircle, Upload, Globe, ExternalLink } from 'lucide-react'
-import { generateSingle, savePage, publishToWordPress, publishToWeb } from '../api'
+import { generateSingle, savePage, publishToWordPress, publishToWeb, zeorbitBlogUrl } from '../api'
 
 function ScoreRing({ value, color }) {
   const r = 20, c = 2 * Math.PI * r
@@ -28,10 +28,10 @@ function MetaRow({ label, value, multiline }) {
 
 function KwGroup({ label, kws = [], color }) {
   const colors = {
-    cyan:   'bg-cyan-500/15 text-cyan-300 border-cyan-500/25',
-    blue:   'bg-blue-500/15 text-blue-300 border-blue-500/25',
-    emerald:'bg-emerald-500/15 text-emerald-300 border-emerald-500/25',
-    violet: 'bg-violet-500/15 text-violet-300 border-violet-500/25',
+    cyan:   'bg-cyan-50 text-cyan-700 border-cyan-200',
+    blue:   'bg-blue-50 text-blue-700 border-blue-200',
+    emerald:'bg-emerald-50 text-emerald-700 border-emerald-200',
+    violet: 'bg-violet-50 text-violet-700 border-violet-200',
   }
   return (
     <div>
@@ -66,7 +66,8 @@ export default function PagePreviewPage() {
     try {
       const res = await publishToWeb(block)
       setWebUrl(res.data.public_url)
-      window.open(res.data.public_url, '_blank', 'noopener')  // open live page immediately
+      window.open(res.data.public_url, '_blank', 'noopener')
+      window.open(zeorbitBlogUrl(), '_blank', 'noopener')
     } catch (e) {
       setWebError(e.response?.data?.detail || 'Publish failed. Is the backend running?')
     } finally { setWebPublishing(false) }
@@ -158,9 +159,9 @@ export default function PagePreviewPage() {
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Regenerate
           </button>
           <button onClick={handleSave}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors ${saved ? 'text-emerald-400' : ''}`}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors"
             style={saved
-              ? { background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)' }
+              ? { background: 'var(--green-soft)', border: '1px solid rgba(23,128,61,0.3)', color: 'var(--green)' }
               : { background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
             {saved ? <><CheckCircle size={13} /> Saved</> : <><Save size={13} /> Save</>}
           </button>
@@ -172,25 +173,43 @@ export default function PagePreviewPage() {
               {publishing ? 'Publishing...' : publishResult?.success ? 'Published!' : 'Publish to WordPress'}
             </button>
           )}
-          <button onClick={webUrl ? () => window.open(webUrl, '_blank', 'noopener') : handlePublishWeb} disabled={webPublishing}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold btn-primary disabled:opacity-50">
+          <button
+            onClick={handlePublishWeb}
+            disabled={webPublishing}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold btn-primary disabled:opacity-50"
+            title="Publish this page to the ZeOrbit website blog"
+          >
             {webPublishing
               ? <svg className="animate-spin" width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" strokeWidth="3" strokeLinecap="round"/></svg>
               : <Globe size={13} />}
-            {webPublishing ? 'Publishing…' : webUrl ? 'Published — View Live' : 'Publish to Web'}
+            {webPublishing ? 'Publishing to ZeOrbit…' : webUrl ? 'Re-publish to ZeOrbit' : 'Publish to ZeOrbit'}
           </button>
+          {webUrl ? (
+            <button
+              type="button"
+              onClick={() => window.open(zeorbitBlogUrl(), '_blank', 'noopener')}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium"
+              style={{ background: 'var(--green-soft)', border: '1px solid rgba(23,128,61,0.3)', color: 'var(--green)' }}
+            >
+              <ExternalLink size={13} /> View ZeOrbit Blog
+            </button>
+          ) : null}
         </div>
       </div>
 
-      {/* Live web link banner */}
+      {/* ZeOrbit blog publish banner */}
       {(webUrl || webError) && (
         <div className={`alert ${webError ? 'alert-error' : 'alert-success'}`}>
           {webError
             ? <span>✗ {webError}</span>
             : <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <CheckCircle size={15} /> Live on the web:&nbsp;
+                <CheckCircle size={15} />
+                Published to ZeOrbit blog — it will appear under Blog on the marketing site.
+                <a href={zeorbitBlogUrl()} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-violet)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  Open ZeOrbit Blog <ExternalLink size={12} />
+                </a>
                 <a href={webUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-violet)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  {webUrl} <ExternalLink size={12} />
+                  Live page <ExternalLink size={12} />
                 </a>
               </span>}
         </div>
@@ -198,8 +217,12 @@ export default function PagePreviewPage() {
 
       {/* Publish result banner */}
       {publishResult && (
-        <div className={`rounded-xl px-4 py-3 text-sm flex items-center gap-2 ${publishResult.success ? 'text-emerald-400' : 'text-red-400'}`}
-          style={{ background: publishResult.success ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)', border: `1px solid ${publishResult.success ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}` }}>
+        <div className="rounded-xl px-4 py-3 text-sm flex items-center gap-2"
+          style={{
+            color: publishResult.success ? 'var(--green)' : 'var(--red)',
+            background: publishResult.success ? 'var(--green-soft)' : 'var(--red-soft)',
+            border: `1px solid ${publishResult.success ? 'rgba(23,128,61,0.25)' : 'rgba(220,38,38,0.25)'}`,
+          }}>
           {publishResult.success
             ? <><CheckCircle size={14} /> Published — <a href={publishResult.post_url} target="_blank" rel="noreferrer" className="underline flex items-center gap-1">{publishResult.post_url} <ExternalLink size={11} /></a></>
             : <>✗ {publishResult.error}</>}
@@ -310,7 +333,7 @@ export default function PagePreviewPage() {
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Primary Keyword</div>
                 <span className="inline-block px-3 py-1.5 rounded-lg text-sm font-medium"
-                  style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid rgba(59,130,246,0.3)' }}>
+                  style={{ background: 'var(--brand-soft)', color: 'var(--brand-dark)', border: '1px solid rgba(255,90,78,0.3)' }}>
                   {block.keywords?.primary}
                 </span>
               </div>

@@ -4,6 +4,17 @@ import Sidebar from './components/Sidebar'
 import Topbar from './components/Topbar'
 import Footer from './components/Footer'
 import LandingPage from './pages/LandingPage'
+import BlogPage from './pages/BlogPage'
+import LoginPage from './pages/LoginPage'
+import RegisterPage from './pages/RegisterPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
+import OnboardingPage from './pages/OnboardingPage'
+import SiteAuditPage from './pages/SiteAuditPage'
+import GoogleAdsPage from './pages/GoogleAdsPage'
+import GoogleBusinessProfilePage from './pages/GoogleBusinessProfilePage'
+import IndexingStatusPage from './pages/IndexingStatusPage'
+import ComingSoonPage from './pages/ComingSoonPage'
 import SimpleDashboard from './pages/SimpleDashboard'
 import DashboardPage from './pages/DashboardPage'
 import PremiumDashboard from './pages/PremiumDashboard'
@@ -56,7 +67,12 @@ function DashboardLayout({ children, onLogout }) {
 
 function RequireAuth({ authed, children }) {
   const location = useLocation()
-  if (!authed) return <Navigate to="/" state={{ from: location }} replace />
+  // `authed` is React state and can lag one render behind localStorage right
+  // after login()/onLogin() fires a navigate() in the same event handler —
+  // localStorage is written synchronously, so fall back to it to avoid
+  // bouncing through "/" on that first render.
+  const isAuthed = authed || localStorage.getItem('seo_auth') === 'true'
+  if (!isAuthed) return <Navigate to="/" state={{ from: location }} replace />
   return children
 }
 
@@ -68,11 +84,30 @@ export default function App() {
       {/* Premium Dashboard - Full screen, no sidebar */}
       <Route path="/premium" element={<PremiumDashboard />} />
       
-      {/* Landing page is the root — passes login handler so it can show the dialog */}
+      {/* Landing page is the root */}
       <Route path="/" element={
-        authed
-          ? <Navigate to="/articles" replace />
-          : <LandingPage onLogin={login} />
+        authed ? <Navigate to="/content" replace /> : <LandingPage />
+      } />
+
+      {/* Always-available revamp preview route (useful while logged in) */}
+      <Route path="/revamp-preview" element={<LandingPage />} />
+
+      {/* Public blog — live published SEO content */}
+      <Route path="/blog" element={<BlogPage />} />
+
+      {/* Auth screens — each page snapshots auth state once at mount to decide
+          whether to redirect away; this avoids racing the in-page navigate()
+          that fires right after a successful login/register in the same tick. */}
+      <Route path="/login" element={<LoginPage onLogin={login} />} />
+      <Route path="/register" element={<RegisterPage onLogin={login} />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+      {/* Onboarding — full-screen wizard, no sidebar */}
+      <Route path="/onboarding" element={
+        <RequireAuth authed={authed}>
+          <OnboardingPage />
+        </RequireAuth>
       } />
 
       {/* Simple Dashboard - No sidebar, just the form */}
@@ -86,6 +121,16 @@ export default function App() {
       <Route path="/dashboard" element={
         <RequireAuth authed={authed}>
           <DashboardLayout onLogout={logout}><DashboardPage /></DashboardLayout>
+        </RequireAuth>
+      } />
+      <Route path="/site-audit" element={
+        <RequireAuth authed={authed}>
+          <DashboardLayout onLogout={logout}><SiteAuditPage /></DashboardLayout>
+        </RequireAuth>
+      } />
+      <Route path="/coming-soon/:module" element={
+        <RequireAuth authed={authed}>
+          <DashboardLayout onLogout={logout}><ComingSoonPage /></DashboardLayout>
         </RequireAuth>
       } />
       <Route path="/content" element={
@@ -136,6 +181,21 @@ export default function App() {
       <Route path="/leads" element={
         <RequireAuth authed={authed}>
           <DashboardLayout onLogout={logout}><LeadsPage /></DashboardLayout>
+        </RequireAuth>
+      } />
+      <Route path="/google-ads" element={
+        <RequireAuth authed={authed}>
+          <DashboardLayout onLogout={logout}><GoogleAdsPage /></DashboardLayout>
+        </RequireAuth>
+      } />
+      <Route path="/gbp" element={
+        <RequireAuth authed={authed}>
+          <DashboardLayout onLogout={logout}><GoogleBusinessProfilePage /></DashboardLayout>
+        </RequireAuth>
+      } />
+      <Route path="/indexing" element={
+        <RequireAuth authed={authed}>
+          <DashboardLayout onLogout={logout}><IndexingStatusPage /></DashboardLayout>
         </RequireAuth>
       } />
 

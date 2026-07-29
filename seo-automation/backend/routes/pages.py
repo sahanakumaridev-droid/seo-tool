@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
-from db import get_session, PageRecord
+from db import get_session, PageRecord, PublishedUrlRecord
 from services.content_service import generate_seo_block
 from models.schemas import SEOBlock
 from config import settings
@@ -109,6 +109,93 @@ async def save_page(
 
     await session.commit()
     return {"slug": slug, "saved": True}
+
+@router.get("/blog", response_model=dict)
+async def list_blog_posts(
+    request: Request,
+    skip: int = 0,
+    limit: int = 24,
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Public blog feed for the marketing site.
+    Lists SEO content published to this app (/p/{slug}) plus tracked live WordPress URLs.
+    """
+    base = _public_base(request)
+    limit = max(1, min(limit, 100))
+    skip = max(0, skip)
+
+    page_result = await session.execute(
+        select(PageRecord).order_by(PageRecord.created_at.desc()).offset(0).limit(200)
+    )
+    page_rows = page_result.scalars().all()
+
+    posts = []
+    for r in page_rows:
+        block = r.seo_block if isinstance(r.seo_block, dict) else {}
+        title = (block.get("title") or block.get("h1") or r.business_type or "Untitled").strip()
+        excerpt = (
+            block.get("meta_description")
+            or block.get("intro")
+            or ""
+        ).strip()
+        if len(excerpt) > 220:
+            excerpt = excerpt[:217].rstrip() + "…"
+        category = (block.get("industry") or r.business_type or "SEO").strip()
+        posts.append({
+            "id": f"page-{r.id}",
+            "source": "web",
+            "title": title,
+            "excerpt": excerpt,
+            "category": category,
+            "slug": r.slug,
+            "url": f"/p/{r.slug}",
+            "public_url": f"{base}/p/{r.slug}",
+            "city": r.city,
+            "state": r.state,
+            "featured_image_url": block.get("featured_image_url") or None,
+            "published_at": (r.updated_at or r.created_at).isoformat() if (r.updated_at or r.created_at) else None,
+        })
+
+    try:
+        wp_result = await session.execute(
+            select(PublishedUrlRecord)
+            .where(PublishedUrlRecord.status != "error")
+            .order_by(PublishedUrlRecord.created_at.desc())
+            .limit(100)
+        )
+        for u in wp_result.scalars().all():
+            if not u.url:
+                continue
+            posts.append({
+                "id": f"wp-{u.id}",
+                "source": u.source or "wordpress",
+                "title": (u.title or u.url).strip(),
+                "excerpt": "Published live SEO article.",
+                "category": "Published",
+                "slug": "",
+                "url": u.url,
+                "public_url": u.url,
+                "city": "",
+                "state": "",
+                "featured_image_url": None,
+                "published_at": u.created_at.isoformat() if u.created_at else None,
+            })
+    except Exception:
+        # Table may be empty / unavailable in some local setups — pages feed still works.
+        pass
+
+    posts.sort(key=lambda p: p.get("published_at") or "", reverse=True)
+    total = len(posts)
+    slice_posts = posts[skip: skip + limit]
+
+    return {
+        "posts": slice_posts,
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+    }
+
 
 @router.get("/", response_model=List[dict])
 async def list_pages(

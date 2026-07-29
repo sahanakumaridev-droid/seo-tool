@@ -23,9 +23,9 @@ export default function Topbar({ onLogout, onMenuClick }) {
   const [showMenu, setShowMenu] = useState(false)
 
   const S = {
-    checking: { color: '#FBBF24', bg: 'rgba(251,191,36,0.08)', border: 'rgba(251,191,36,0.2)', label: 'Connecting' },
-    online:   { color: '#34D399', bg: 'rgba(52,211,153,0.08)',  border: 'rgba(52,211,153,0.2)',  label: 'API Online' },
-    offline:  { color: '#F87171', bg: 'rgba(248,113,113,0.08)', border: 'rgba(248,113,113,0.2)', label: 'Offline' },
+    checking: { color: '#B45309', bg: 'rgba(180,83,9,0.08)', border: 'rgba(180,83,9,0.2)', label: 'Connecting' },
+    online:   { color: '#17803D', bg: 'rgba(23,128,61,0.08)',  border: 'rgba(23,128,61,0.2)',  label: 'API Online' },
+    offline:  { color: '#DC2626', bg: 'rgba(220,38,38,0.08)', border: 'rgba(220,38,38,0.2)', label: 'Offline' },
   }[status]
 
   return (
@@ -70,7 +70,7 @@ export default function Topbar({ onLogout, onMenuClick }) {
         <div style={{ position: 'relative' }}>
           <button onClick={() => setShowMenu(m => !m)}
             style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 12, background: 'none', border: 'none', cursor: 'pointer', borderLeft: '1px solid var(--border)' }}>
-            <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg,#2563EB,#1D4ED8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'white', flexShrink: 0 }}>A</div>
+            <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg,#FF6B54,#E14636)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'white', flexShrink: 0 }}>A</div>
             <div style={{ textAlign: 'left' }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-1)', lineHeight: 1 }}>Admin</div>
               <div style={{ fontSize: 10, color: 'var(--text-4)', marginTop: 2 }}>admin@zeorbit.com</div>

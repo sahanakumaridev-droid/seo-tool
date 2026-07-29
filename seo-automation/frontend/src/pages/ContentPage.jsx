@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Zap, MapPin, Globe, Eye, X, RefreshCw, Save, CheckCircle,
          FileJson, Tag, Plus, Upload, ChevronDown, ChevronUp } from 'lucide-react'
 import { generateBulk, exportJson, exportWordpress, generateSingle,
-         savePage, publishToWordPress, publishBulkToWordPress, startBulkGenerateJob, getJob, publishAllToWeb } from '../api'
+         savePage, publishToWordPress, publishBulkToWordPress, startBulkGenerateJob, getJob, publishAllToWeb, zeorbitBlogUrl } from '../api'
 
 const BUSINESS_TYPES = ['Web Design', 'SEO Agency', 'Plumbing', 'HVAC', 'Roofing',
   'Landscaping', 'Cleaning', 'Electrical', 'Painting', 'Pest Control', 'Moving']
@@ -506,7 +506,8 @@ export default function ContentPage() {
     try {
       const res = await publishAllToWeb(pages)
       setWebAll({ links: res.data.published })
-      showToast(`${res.data.count} pages published to the web!`)
+      showToast(`${res.data.count} pages published to ZeOrbit!`)
+      window.open(zeorbitBlogUrl(), '_blank', 'noopener')
     } catch (e) {
       setWebAll({ error: e.response?.data?.detail || 'Publish failed. Please try again.' })
     }
@@ -727,7 +728,7 @@ export default function ContentPage() {
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg btn-primary text-white text-sm font-semibold disabled:opacity-60">
               {webAll?.loading
                 ? <><svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" strokeWidth="3" strokeLinecap="round"/></svg>Publishing all…</>
-                : <><Globe size={14} /> Publish All {pages.length} to Web</>}
+                : <><Globe size={14} /> Publish All {pages.length} to ZeOrbit</>}
             </button>
             <button onClick={() => handleExport('wp')} disabled={exporting === 'wp'}
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/8 border border-white/12 text-slate-200 text-sm font-medium hover:bg-white/12 transition-colors disabled:opacity-50">
@@ -749,7 +750,8 @@ export default function ContentPage() {
         <div className="card p-5">
           <div className="flex items-center gap-2 mb-3">
             <CheckCircle size={16} style={{ color: 'var(--green)' }} />
-            <h3 className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{webAll.links.length} pages are live on the web</h3>
+            <h3 className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{webAll.links.length} pages live on ZeOrbit</h3>
+            <a href={zeorbitBlogUrl()} target="_blank" rel="noreferrer" className="text-xs ml-auto" style={{ color: 'var(--brand-violet)' }}>Open blog →</a>
           </div>
           <div className="space-y-2">
             {webAll.links.map((l, i) => (

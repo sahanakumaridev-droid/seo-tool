@@ -4,11 +4,11 @@ db.py — auto-selects PostgreSQL or SQLite based on DATABASE_URL
 from config import settings
 
 if settings.DATABASE_URL.startswith("sqlite"):
-    from db_sqlite import Base, PageRecord, LeadRecord, init_db, get_session, AsyncSessionLocal, engine
+    from db_sqlite import Base, PageRecord, LeadRecord, PublishedUrlRecord, init_db, get_session, AsyncSessionLocal, engine
 else:
     from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
     from sqlalchemy.orm import DeclarativeBase
-    from sqlalchemy import Column, Integer, String, DateTime, JSON
+    from sqlalchemy import Column, Integer, String, DateTime, JSON, Boolean
     from sqlalchemy.sql import func
 
     engine = create_async_engine(settings.DATABASE_URL, echo=False)
@@ -46,6 +46,25 @@ else:
         message       = Column(String(2000), default="")
         status        = Column(String(20), default="new", index=True)
         created_at    = Column(DateTime(timezone=True), server_default=func.now())
+
+    class PublishedUrlRecord(Base):
+        __tablename__ = "published_urls"
+        id                  = Column(Integer, primary_key=True, autoincrement=True)
+        url                 = Column(String(500), nullable=False, unique=True, index=True)
+        source              = Column(String(40), nullable=False, default="wordpress", index=True)
+        post_id             = Column(String(60), default="")
+        title               = Column(String(300), default="")
+        status              = Column(String(20), nullable=False, default="published", index=True)
+        http_status         = Column(Integer, nullable=True)
+        robots_allowed      = Column(Boolean, nullable=True)
+        has_noindex         = Column(Boolean, nullable=True)
+        canonical_ok        = Column(Boolean, nullable=True)
+        coverage_state      = Column(String(200), default="")
+        error_message       = Column(String(500), default="")
+        sitemap_submitted_at = Column(DateTime(timezone=True), nullable=True)
+        last_inspected_at   = Column(DateTime(timezone=True), nullable=True)
+        created_at          = Column(DateTime(timezone=True), server_default=func.now())
+        updated_at          = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
 
     async def init_db():
         async with engine.begin() as conn:

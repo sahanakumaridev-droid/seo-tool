@@ -172,6 +172,35 @@ class SocialPostResult(BaseModel):
     post_url: Optional[str] = None
     error: Optional[str] = None
 
+# ── Google Ads ───────────────────────────────────────────────────
+class GoogleAdsCampaignRequest(BaseModel):
+    campaign_name: str = Field(..., example="Plumbing Services - Austin TX")
+    daily_budget: float = Field(..., gt=0, description="Daily budget in the account's currency, e.g. 25.00")
+    final_url: str = Field(..., example="https://example.com/plumbing-austin")
+    headlines: List[str] = Field(..., min_length=3, max_length=15, description="3-15 headlines, each <= 30 chars")
+    descriptions: List[str] = Field(..., min_length=2, max_length=4, description="2-4 descriptions, each <= 90 chars")
+    keywords: List[str] = Field(..., min_length=1, description="Keywords to target (broad match)")
+
+class GoogleAdsCampaignResult(BaseModel):
+    success: bool
+    campaign_id: Optional[str] = None
+    campaign_resource_name: Optional[str] = None
+    ad_group_resource_name: Optional[str] = None
+    manage_url: Optional[str] = None
+    error: Optional[str] = None
+
+# ── Google Business Profile (free local posts) ────────────────────
+class GBPPostRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=1500)
+    cta_type: str = Field(default="LEARN_MORE", description="LEARN_MORE | CALL | BOOK | ORDER | SHOP | SIGN_UP | GET_OFFER")
+    cta_url: Optional[str] = None
+    image_url: Optional[str] = None
+
+class GBPPostResult(BaseModel):
+    success: bool
+    post_name: Optional[str] = None
+    error: Optional[str] = None
+
 # ── Lead Models ──────────────────────────────────────────────────
 class Lead(BaseModel):
     id: Optional[int] = None
@@ -220,3 +249,40 @@ class JobStatus(BaseModel):
     error: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+# ── Site Audit ───────────────────────────────────────────────────
+class AuditIssue(BaseModel):
+    id: str
+    title: str
+    severity: str  # critical | warning | opportunity | passed
+    category: str  # Technical SEO | On-Page SEO | Performance | Content | Links
+    what: str
+    why: str
+    affected_pages: List[str] = []
+    how_to_fix: str
+
+class AuditCategory(BaseModel):
+    name: str
+    score: int  # 0-100
+
+class AuditResult(BaseModel):
+    url: str
+    overall_score: int  # 0-100
+    categories: List[AuditCategory]
+    issues: List[AuditIssue]
+
+# ── Keyword Research ─────────────────────────────────────────────
+class KeywordMetric(BaseModel):
+    keyword: str
+    volume: int
+    difficulty: int  # 0-100
+    cpc: float
+    intent: str  # Informational | Commercial | Transactional | Navigational
+    trend: str   # e.g. "+12%"
+    serp_features: List[str] = []
+
+class KeywordResearchResult(BaseModel):
+    location: str
+    language: str
+    primary: KeywordMetric
+    related: List[KeywordMetric]

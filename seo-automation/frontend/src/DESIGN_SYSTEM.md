@@ -1,6 +1,6 @@
 # ZEORBIT Design System
 
-One unified **dark** design language across the public landing page and the authenticated app. The single source of truth is [`src/index.css`](./index.css) (tokens + component classes) and the reusable primitives in [`src/components/ui/`](./components/ui).
+One unified **light** design language across the public landing page and the authenticated app — clean off-white surfaces, strong dark typography, coral/orange as the primary accent. The single source of truth is [`src/index.css`](./index.css) (tokens + component classes) and the reusable primitives in [`src/components/ui/`](./components/ui).
 
 ## Architecture
 
@@ -18,15 +18,15 @@ One unified **dark** design language across the public landing page and the auth
 
 | Token | Value | Use |
 |---|---|---|
-| `--bg-base` | `#0B0F1A` | app / page background |
-| `--bg-surface` | `#111827` | cards, panels |
-| `--bg-raised` | `#1A2235` | inputs, hover, rows |
-| `--bg-overlay` | `#1E2940` | dropdowns, modals |
-| `--border` / `--border-bright` | `#1E2D42` / `#2A3B57` | dividers, field borders |
-| `--brand` / `--brand-dark` | `#3B82F6` / `#2563EB` | primary actions |
-| `--brand-violet` | `#60A5FA` | accents/links on dark |
-| `--green` `--amber` `--red` | `#34D399` `#FBBF24` `#F87171` | semantic status (+ `-soft` fills) |
-| `--text-1…4` | `#F1F5F9 · #CBD5E1 · #94A3B8 · #64748B` | text hierarchy |
+| `--bg-base` | `#FAFAF8` | app / page background (warm off-white) |
+| `--bg-surface` | `#FFFFFF` | cards, panels |
+| `--bg-raised` | `#F5F4F0` | inputs, hover, rows |
+| `--bg-overlay` | `#FFFFFF` | dropdowns, modals |
+| `--border` / `--border-bright` | `#ECEAE4` / `#DEDBD3` | dividers, field borders |
+| `--brand` / `--brand-dark` | `#FF5A4E` / `#E14636` | primary actions (coral/orange) |
+| `--brand-violet` | `#E14636` | accent text/links |
+| `--green` `--amber` `--red` | `#17803D` `#B45309` `#DC2626` | semantic status (+ `-soft` fills) |
+| `--text-1…4` | `#171717 · #344054 · #667085 · #98A2B3` | text hierarchy |
 
 Type scale: `--font-sans` (Inter), `--font-display` (Sora). Radii: `--radius-sm 8` / `--radius 12` / `--radius-lg 16`. Shadows: `--shadow-sm/md/lg`.
 

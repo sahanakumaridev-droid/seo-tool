@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Zap, MapPin, Globe, Eye, CheckCircle, X, Search, Link2, FileText, Image as ImageIcon,
          Upload, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
-import { analyzeWebsite, generateArticles, publishToWordPress, publishBulkToWordPress, publishToWeb } from '../api'
+import { analyzeWebsite, generateArticles, publishToWordPress, publishBulkToWordPress, publishToWeb, zeorbitBlogUrl } from '../api'
 
 const SEO_PLUGINS = [
   { value: 'rankmath', label: 'RankMath' },
@@ -145,6 +145,7 @@ export default function ArticlesPage() {
       const res = await publishToWeb(block)
       setWebResults(r => ({ ...r, [i]: { url: res.data.public_url } }))
       window.open(res.data.public_url, '_blank', 'noopener')
+      window.open(zeorbitBlogUrl(), '_blank', 'noopener')
     } catch (e) {
       setWebResults(r => ({ ...r, [i]: { error: e.response?.data?.detail || 'Failed' } }))
     }
@@ -370,8 +371,8 @@ export default function ArticlesPage() {
                         ) : (
                           <button onClick={() => handlePublishWebOne(block, i)} disabled={webResults[i] === 'loading'}
                             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs btn-primary disabled:opacity-50"
-                            title={webResults[i]?.error || 'Publish to Web — get a public link'}>
-                            <Globe size={11} /> {webResults[i] === 'loading' ? '...' : webResults[i]?.error ? 'Retry' : 'Publish to Web'}
+                            title={webResults[i]?.error || 'Publish to ZeOrbit — live page + blog'}>
+                            <Globe size={11} /> {webResults[i] === 'loading' ? '...' : webResults[i]?.error ? 'Retry' : 'Publish to ZeOrbit'}
                           </button>
                         )}
                         {wpConfig.wp_url && pr?.success && pr?.post_url ? (
