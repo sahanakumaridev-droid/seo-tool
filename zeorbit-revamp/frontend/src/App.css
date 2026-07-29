@@ -1,0 +1,167 @@
+.page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.brand {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.brand span {
+  color: #2563eb;
+}
+
+.topbar nav {
+  display: flex;
+  gap: 16px;
+}
+
+.topbar nav a {
+  text-decoration: none;
+  color: #334155;
+  font-weight: 500;
+}
+
+.hero {
+  margin-top: 60px;
+  text-align: center;
+}
+
+.tag {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+h1 {
+  margin: 16px auto 12px;
+  max-width: 760px;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  line-height: 1.15;
+}
+
+.subtitle {
+  max-width: 720px;
+  margin: 0 auto;
+  color: #475569;
+  font-size: 1.1rem;
+}
+
+.cta-row {
+  margin-top: 24px;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.api-pill {
+  margin-top: 16px;
+  color: #0f766e;
+  font-weight: 500;
+}
+
+.btn-primary,
+.btn-secondary,
+.btn-outline {
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-primary {
+  background: #2563eb;
+  border: 1px solid #2563eb;
+  color: #fff;
+}
+
+.btn-secondary {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+}
+
+.btn-outline {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+
+.grid-section {
+  margin-top: 52px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.card {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 18px;
+  background: #fff;
+}
+
+.card h3 {
+  margin: 0 0 8px;
+}
+
+.card p {
+  margin: 0;
+  color: #475569;
+}
+
+.split-section {
+  margin-top: 52px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 22px;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: 1.2fr 1fr;
+}
+
+.split-section p,
+.split-section li {
+  color: #475569;
+}
+
+.contact-cta {
+  margin-top: 52px;
+  text-align: center;
+  padding: 32px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #eff6ff, #f0f9ff);
+}
+
+.footer {
+  margin: 40px 0 12px;
+  text-align: center;
+  color: #64748b;
+}
+
+@media (max-width: 860px) {
+  .topbar {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .split-section {
+    grid-template-columns: 1fr;
+  }
+}
