@@ -2,7 +2,6 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import Sidebar from './components/Sidebar'
 import Topbar from './components/Topbar'
-import Footer from './components/Footer'
 import LandingPage from './pages/LandingPage'
 import BlogPage from './pages/BlogPage'
 import LoginPage from './pages/LoginPage'
@@ -12,8 +11,8 @@ import ResetPasswordPage from './pages/ResetPasswordPage'
 import OnboardingPage from './pages/OnboardingPage'
 import SiteAuditPage from './pages/SiteAuditPage'
 import GoogleAdsPage from './pages/GoogleAdsPage'
-import GoogleBusinessProfilePage from './pages/GoogleBusinessProfilePage'
 import IndexingStatusPage from './pages/IndexingStatusPage'
+import IntegrationsPage from './pages/IntegrationsPage'
 import ComingSoonPage from './pages/ComingSoonPage'
 import SimpleDashboard from './pages/SimpleDashboard'
 import DashboardPage from './pages/DashboardPage'
@@ -28,6 +27,8 @@ import WordPressPage from './pages/WordPressPage'
 import PagePreviewPage from './pages/PagePreviewPage'
 import SocialPage from './pages/SocialPage'
 import LeadsPage from './pages/LeadsPage'
+import LeadEnginePage from './pages/LeadEnginePage'
+import InstantQuotePage from './pages/InstantQuotePage'
 // Marketplace module
 import MarketplacePage from './pages/MarketplacePage'
 import MyRequestsPage from './pages/MyRequestsPage'
@@ -39,7 +40,14 @@ import AdminPage from './pages/AdminPage'
 function useAuth() {
   const [authed, setAuthed] = useState(() => localStorage.getItem('seo_auth') === 'true')
   const login = () => { localStorage.setItem('seo_auth', 'true'); setAuthed(true) }
-  const logout = () => { localStorage.removeItem('seo_auth'); setAuthed(false) }
+  const logout = () => {
+    localStorage.removeItem('seo_auth')
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('mp_token')
+    localStorage.removeItem('mp_user')
+    setAuthed(false)
+  }
   return { authed, login, logout }
 }
 
@@ -55,10 +63,9 @@ function DashboardLayout({ children, onLogout }) {
       <div className="main-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <Topbar onLogout={onLogout} onMenuClick={() => setNavOpen(v => !v)} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
-          <div style={{ flex: 1, padding: 24 }}>
+          <div className="dashboard-content-pad" style={{ flex: 1 }}>
             {children}
           </div>
-          <Footer />
         </div>
       </div>
     </div>
@@ -84,13 +91,15 @@ export default function App() {
       {/* Premium Dashboard - Full screen, no sidebar */}
       <Route path="/premium" element={<PremiumDashboard />} />
       
-      {/* Landing page is the root */}
+      {/* Root shows the marketing homepage to signed-out visitors, and sends
+          already-signed-in users straight into the tool. */}
       <Route path="/" element={
         authed ? <Navigate to="/content" replace /> : <LandingPage />
       } />
 
-      {/* Always-available revamp preview route (useful while logged in) */}
+      {/* Marketing landing page — also reachable directly at these aliases */}
       <Route path="/revamp-preview" element={<LandingPage />} />
+      <Route path="/landing" element={<LandingPage />} />
 
       {/* Public blog — live published SEO content */}
       <Route path="/blog" element={<BlogPage />} />
@@ -183,19 +192,25 @@ export default function App() {
           <DashboardLayout onLogout={logout}><LeadsPage /></DashboardLayout>
         </RequireAuth>
       } />
+      <Route path="/lead-engine" element={
+        <RequireAuth authed={authed}>
+          <DashboardLayout onLogout={logout}><LeadEnginePage /></DashboardLayout>
+        </RequireAuth>
+      } />
+      <Route path="/instant-quote" element={<InstantQuotePage />} />
       <Route path="/google-ads" element={
         <RequireAuth authed={authed}>
           <DashboardLayout onLogout={logout}><GoogleAdsPage /></DashboardLayout>
         </RequireAuth>
       } />
-      <Route path="/gbp" element={
-        <RequireAuth authed={authed}>
-          <DashboardLayout onLogout={logout}><GoogleBusinessProfilePage /></DashboardLayout>
-        </RequireAuth>
-      } />
       <Route path="/indexing" element={
         <RequireAuth authed={authed}>
           <DashboardLayout onLogout={logout}><IndexingStatusPage /></DashboardLayout>
+        </RequireAuth>
+      } />
+      <Route path="/integrations" element={
+        <RequireAuth authed={authed}>
+          <DashboardLayout onLogout={logout}><IntegrationsPage /></DashboardLayout>
         </RequireAuth>
       } />
 

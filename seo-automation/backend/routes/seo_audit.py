@@ -2,10 +2,10 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from models.schemas import AuditResult
-from providers.mock_site_audit import MockSiteAuditProvider
+from providers.real_site_audit import RealSiteAuditProvider
 
 router = APIRouter()
-_provider = MockSiteAuditProvider()
+_provider = RealSiteAuditProvider()
 
 
 class AuditRequest(BaseModel):

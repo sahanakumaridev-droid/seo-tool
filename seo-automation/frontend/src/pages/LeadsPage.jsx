@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Users, Plus, RefreshCw, Trash2, ExternalLink, Filter, Radar, MapPin } from 'lucide-react'
-import { getLeads, createLead, updateLeadStatus, deleteLead, getLeadStats, syncBarkLeads, syncThumbtackLeads, prospectLeads } from '../api'
+import { Users, Plus, Trash2, ExternalLink, Filter, Radar, MapPin } from 'lucide-react'
+import { getLeads, createLead, updateLeadStatus, deleteLead, getLeadStats, prospectLeads } from '../api'
 
 const STATUS_COLORS = {
   new:        'text-sky-400 bg-sky-400/10 border-sky-400/20',
@@ -10,10 +10,10 @@ const STATUS_COLORS = {
 }
 
 const SOURCE_COLORS = {
-  bark:        'text-orange-400 bg-orange-400/10',
-  thumbtack:   'text-blue-400 bg-blue-400/10',
-  manual:      'text-slate-400 bg-slate-400/10',
-  prospecting: 'text-emerald-400 bg-emerald-400/10',
+  manual:          'text-slate-400 bg-slate-400/10',
+  prospecting:     'text-emerald-400 bg-emerald-400/10',
+  website:         'text-cyan-400 bg-cyan-400/10',
+  'instant-quote': 'text-violet-400 bg-violet-400/10',
 }
 
 const STATUSES = ['new', 'contacted', 'qualified', 'closed']
@@ -116,9 +116,8 @@ function AddLeadModal({ onClose, onAdded }) {
           <select value={form.source} onChange={e => setForm(f => ({ ...f, source: e.target.value }))}
             className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500/50">
             <option value="manual">Manual</option>
-            <option value="bark">Bark.com</option>
-            <option value="thumbtack">Thumbtack</option>
             <option value="website">Website</option>
+            <option value="instant-quote">Instant Quote</option>
           </select>
         </div>
         <div>
@@ -145,7 +144,6 @@ export default function LeadsPage() {
   const [filterStatus, setFilterStatus] = useState('')
   const [filterSource, setFilterSource] = useState('')
   const [loading, setLoading] = useState(true)
-  const [syncing, setSyncing] = useState('')
   const [showAdd, setShowAdd] = useState(false)
 
   const loadLeads = async () => {
@@ -181,20 +179,6 @@ export default function LeadsPage() {
     } catch (e) { console.error(e) }
   }
 
-  const handleSync = async (source) => {
-    setSyncing(source)
-    try {
-      const fn = source === 'bark' ? syncBarkLeads : syncThumbtackLeads
-      const res = await fn()
-      alert(`Synced ${res.data.synced} leads from ${source}`)
-      loadLeads()
-    } catch (e) {
-      alert(e.response?.data?.detail || e.message)
-    } finally {
-      setSyncing('')
-    }
-  }
-
   return (
     <div className="space-y-6 fade-in">
       <div className="flex items-center justify-between">
@@ -202,20 +186,10 @@ export default function LeadsPage() {
           <h1 className="text-xl font-bold text-white">Lead Generation</h1>
           <p className="text-sm text-slate-500 mt-0.5">Prospect new businesses, capture inbound leads, and manage your pipeline</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => handleSync('bark')} disabled={syncing === 'bark'}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs bg-orange-500/10 border border-orange-500/20 text-orange-400 hover:bg-orange-500/15 transition-colors disabled:opacity-50">
-            <RefreshCw size={11} className={syncing === 'bark' ? 'animate-spin' : ''} /> Sync Bark
-          </button>
-          <button onClick={() => handleSync('thumbtack')} disabled={syncing === 'thumbtack'}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/15 transition-colors disabled:opacity-50">
-            <RefreshCw size={11} className={syncing === 'thumbtack' ? 'animate-spin' : ''} /> Sync Thumbtack
-          </button>
-          <button onClick={() => setShowAdd(true)}
-            className="btn-primary flex items-center gap-1.5 px-4 py-2 rounded-lg text-white text-sm font-semibold">
-            <Plus size={14} /> Add Lead
-          </button>
-        </div>
+        <button onClick={() => setShowAdd(true)}
+          className="btn-primary flex items-center gap-1.5 px-4 py-2 rounded-lg text-white text-sm font-semibold">
+          <Plus size={14} /> Add Lead
+        </button>
       </div>
 
       {/* Stats */}
@@ -247,7 +221,7 @@ export default function LeadsPage() {
         <select value={filterSource} onChange={e => setFilterSource(e.target.value)}
           className="bg-white/4 border border-white/8 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500/50">
           <option value="">All Sources</option>
-          {['prospecting', 'bark', 'thumbtack', 'manual', 'website'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+          {['prospecting', 'manual', 'website', 'instant-quote'].map(s => <option key={s} value={s}>{s}</option>)}
         </select>
         <span className="text-xs text-slate-500">{leads.length} leads</span>
       </div>
@@ -259,9 +233,10 @@ export default function LeadsPage() {
         ) : leads.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-slate-500">
             <Users size={32} className="mb-3 opacity-30" />
-            <p className="text-sm">No leads yet. Add manually or sync from Bark/Thumbtack.</p>
+            <p className="text-sm">No leads yet. Add manually, prospect, or use Instant Quote.</p>
           </div>
         ) : (
+          <div style={{ overflowX: 'auto' }}>
           <table className="data-table">
             <thead>
               <tr>
@@ -320,6 +295,7 @@ export default function LeadsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

@@ -11,6 +11,10 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from routes import locations, content, pages, keywords, wordpress
 from routes import social, leads, jobs, images, seo_audit, google_ads, gbp
+try:
+    from routes import google_live
+except ImportError:  # older deploys may lack this module
+    google_live = None
 from db import init_db
 import db_marketplace  # registers marketplace ORM models with Base
 from logging_config import setup_logging, logger
@@ -127,12 +131,17 @@ app.include_router(images.router,    prefix="/api/images",    tags=["Images"])
 app.include_router(seo_audit.router, prefix="/api/seo-audit", tags=["Site Audit"])
 app.include_router(google_ads.router, prefix="/api/google-ads", tags=["Google Ads"])
 app.include_router(gbp.router,        prefix="/api/gbp",        tags=["Google Business Profile"])
+if google_live is not None:
+    app.include_router(google_live.router, prefix="/api/google",     tags=["Google Live Automation"])
 
 from routes import indexing
 app.include_router(indexing.router,  prefix="/api/indexing",  tags=["Google Indexing"])
 
 from routes import seo_indexing
 app.include_router(seo_indexing.router, prefix="/api/seo-indexing", tags=["Google Search Automation"])
+
+from routes import rankings
+app.include_router(rankings.router, prefix="/api/rankings", tags=["Rankings"])
 
 # Instagram auto-posting
 from routes import instagram
@@ -188,8 +197,20 @@ async def robots_txt(request: Request):
     """Permissive robots.txt for this app's own /p/{slug} pages, pointing
     crawlers at the sitemap. (The real WordPress site has its own, generated
     by its SEO plugin — this only covers pages hosted on this domain.)"""
-    base = str(request.base_url).rstrip("/")
+    from routes.pages import _public_base
+    base = _public_base(request)
     return f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n"
+
+
+@app.get("/google{token}.html", response_class=PlainTextResponse, tags=["Public Pages"])
+async def google_site_verification_file(token: str):
+    """Serve Search Console HTML-file verification when configured."""
+    fname = (settings.GSC_VERIFICATION_FILENAME or "").strip()
+    body = (settings.GSC_VERIFICATION_FILE_BODY or "").strip()
+    expected = f"google{token}.html"
+    if not fname or not body or fname != expected:
+        return PlainTextResponse("Not found", status_code=404)
+    return PlainTextResponse(body, media_type="text/html")
 
 
 @app.get("/sitemap.xml", tags=["Public Pages"])

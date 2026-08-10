@@ -1,5 +1,5 @@
 /**
- * MarketplacePage — Browse open service requests (Bark/Thumbtack style)
+ * MarketplacePage — Browse open service requests.
  * Professionals can see leads and submit quotes.
  * Clients can post new requests.
  */

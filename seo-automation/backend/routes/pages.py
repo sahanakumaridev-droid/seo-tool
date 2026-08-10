@@ -22,13 +22,114 @@ def _public_base(request: Request) -> str:
     return str(request.base_url).rstrip("/")
 
 
+def _ads_ready_url(url: str) -> bool:
+    """Google Ads requires a public domain with a real TLD (not localhost/IP)."""
+    try:
+        from urllib.parse import urlparse
+        import re
+        host = (urlparse(url if "://" in url else f"https://{url}").hostname or "").strip()
+        if not host or host in {"localhost"} or host.replace(".", "").isdigit():
+            return False
+        if re.match(r"^(127\.|10\.|192\.168\.|0\.)", host):
+            return False
+        return bool(re.match(r"^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$", host, re.I))
+    except Exception:
+        return False
+
+
+@router.get("/landing-pages", response_model=dict)
+async def list_landing_pages_for_ads(
+    request: Request,
+    skip: int = 0,
+    limit: int = 50,
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Published SEO landing pages ready to use as Google Ads final URLs.
+    Prefer WordPress live URLs and /p/{slug} pages with a public PUBLIC_BASE_URL.
+    """
+    base = _public_base(request)
+    limit = max(1, min(limit, 100))
+    skip = max(0, skip)
+
+    pages = []
+    page_result = await session.execute(
+        select(PageRecord).order_by(PageRecord.created_at.desc()).limit(200)
+    )
+    for r in page_result.scalars().all():
+        block = r.seo_block if isinstance(r.seo_block, dict) else {}
+        title = (block.get("title") or block.get("h1") or r.business_type or "Untitled").strip()
+        public_url = f"{base}/p/{r.slug}"
+        keywords = []
+        kw = block.get("keywords") or {}
+        if isinstance(kw, dict):
+            if kw.get("primary"):
+                keywords.append(kw["primary"])
+            keywords.extend([x for x in (kw.get("secondary") or []) if x][:6])
+        pages.append({
+            "id": f"page-{r.id}",
+            "source": "seo",
+            "title": title,
+            "slug": r.slug,
+            "public_url": public_url,
+            "business_type": r.business_type or block.get("business_type") or "",
+            "city": r.city or "",
+            "state": r.state or "",
+            "keywords": keywords,
+            "ads_ready": _ads_ready_url(public_url),
+            "published_at": (r.updated_at or r.created_at).isoformat() if (r.updated_at or r.created_at) else None,
+        })
+
+    try:
+        wp_result = await session.execute(
+            select(PublishedUrlRecord)
+            .where(PublishedUrlRecord.status != "error")
+            .order_by(PublishedUrlRecord.created_at.desc())
+            .limit(100)
+        )
+        for u in wp_result.scalars().all():
+            if not u.url:
+                continue
+            pages.append({
+                "id": f"wp-{u.id}",
+                "source": "wordpress",
+                "title": (u.title or u.url).strip(),
+                "slug": "",
+                "public_url": u.url,
+                "business_type": "",
+                "city": "",
+                "state": "",
+                "keywords": [],
+                "ads_ready": _ads_ready_url(u.url),
+                "published_at": u.created_at.isoformat() if u.created_at else None,
+            })
+    except Exception:
+        pass
+
+    ready = [p for p in pages if p.get("ads_ready")]
+    not_ready = [p for p in pages if not p.get("ads_ready")]
+    ready.sort(key=lambda p: p.get("published_at") or "", reverse=True)
+    not_ready.sort(key=lambda p: p.get("published_at") or "", reverse=True)
+    ordered = ready + not_ready
+    total = len(ordered)
+    return {
+        "pages": ordered[skip: skip + limit],
+        "total": total,
+        "public_base_url": base,
+        "ads_ready_count": len(ready),
+    }
+
+
 @router.post("/publish-web", response_model=dict)
 async def publish_to_web(
     block: SEOBlock,
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    """Save an already-generated page and expose it at a public /p/{slug} URL."""
+    """Save an already-generated page and expose it at a public /p/{slug} URL.
+    Also runs crawl/indexing tracking and optional paused Ads auto-create."""
+    from services.publish_pipeline import track_public_publish, maybe_auto_create_ads
+
     slug = block.slug or slugify(f"{block.business_type}-{block.city}-{block.state}")
     block.slug = slug
 
@@ -48,7 +149,21 @@ async def publish_to_web(
         ))
     await session.commit()
 
-    return {"slug": slug, "public_url": f"{_public_base(request)}/p/{slug}", "published": True}
+    public_url = f"{_public_base(request)}/p/{slug}"
+    indexing = await track_public_publish(url=public_url, block=block, session=session)
+    ads = await maybe_auto_create_ads(public_url=public_url, block=block)
+
+    return {
+        "slug": slug,
+        "public_url": public_url,
+        "published": True,
+        "indexing": indexing,
+        "ads": ads,
+        "automation": {
+            "ads_auto_create": bool(settings.GOOGLE_ADS_AUTO_CREATE_ON_PUBLISH),
+            "ads_auto_enable": bool(settings.GOOGLE_ADS_AUTO_ENABLE),
+        },
+    }
 
 
 @router.post("/publish-web/bulk", response_model=dict)
@@ -58,6 +173,8 @@ async def publish_to_web_bulk(
     session: AsyncSession = Depends(get_session),
 ):
     """Publish many generated pages to public /p/{slug} URLs in one call."""
+    from services.publish_pipeline import track_public_publish, maybe_auto_create_ads
+
     base = _public_base(request)
     published = []
     for block in blocks:
@@ -75,10 +192,23 @@ async def publish_to_web_bulk(
                 city=block.city, state=block.state or "", slug=slug,
                 seo_block=block.model_dump(),
             ))
-        published.append({"slug": slug, "city": block.city, "state": block.state,
-                          "title": block.title, "public_url": f"{base}/p/{slug}"})
+        public_url = f"{base}/p/{slug}"
+        indexing = await track_public_publish(url=public_url, block=block, session=session)
+        ads = await maybe_auto_create_ads(public_url=public_url, block=block)
+        published.append({
+            "slug": slug, "city": block.city, "state": block.state,
+            "title": block.title, "public_url": public_url,
+            "indexing": indexing, "ads": ads,
+        })
     await session.commit()
-    return {"published": published, "count": len(published)}
+    return {
+        "published": published,
+        "count": len(published),
+        "automation": {
+            "ads_auto_create": bool(settings.GOOGLE_ADS_AUTO_CREATE_ON_PUBLISH),
+            "ads_auto_enable": bool(settings.GOOGLE_ADS_AUTO_ENABLE),
+        },
+    }
 
 @router.post("/save", response_model=dict)
 async def save_page(

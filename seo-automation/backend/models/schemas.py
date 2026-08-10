@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime
 
 class GenerateRequest(BaseModel):
@@ -8,7 +8,8 @@ class GenerateRequest(BaseModel):
     num_cities: int = Field(default=10, ge=1, le=100)
     target_keywords: List[str] = Field(default=[], example=["web design san diego"])
     industry: str = Field(default="", example="Contractors")
-    use_ai: bool = Field(default=False, description="Use GPT-4 for content generation")
+    use_ai: bool = Field(default=False, description="Use an LLM for content generation")
+    llm_provider: Optional[str] = Field(default=None, description="auto | groq | gemini | openai — overrides server default for this request")
 
 class KeywordSet(BaseModel):
     primary: str
@@ -59,6 +60,7 @@ class SEOBlock(BaseModel):
     secondary_keywords: List[str] = Field(default=[])
     in_content_images: List[ImageAsset] = Field(default=[])
     source_url: str = ""               # the analyzed website this article was grounded on
+    content_type: Literal["service", "blog"] = "service"  # pillar/service page vs. supporting blog post — drives WordPress category
 
 # ── Website Analysis Models ──────────────────────────────────────
 class SitePage(BaseModel):
@@ -90,6 +92,7 @@ class ArticleRequest(BaseModel):
     num_articles: int = Field(default=1, ge=1, le=10, description="Articles per city (angle variety)")
     industry: str = Field(default="")
     use_ai: bool = Field(default=True, description="Use an LLM when available; template fallback otherwise")
+    llm_provider: Optional[str] = Field(default=None, description="auto | groq | gemini | openai — overrides server default for this request")
 
 class WebsiteAnalysisRequest(BaseModel):
     website_url: str = Field(..., example="https://example.com")
@@ -180,6 +183,25 @@ class GoogleAdsCampaignRequest(BaseModel):
     headlines: List[str] = Field(..., min_length=3, max_length=15, description="3-15 headlines, each <= 30 chars")
     descriptions: List[str] = Field(..., min_length=2, max_length=4, description="2-4 descriptions, each <= 90 chars")
     keywords: List[str] = Field(..., min_length=1, description="Keywords to target (broad match)")
+    enable: bool = Field(
+        default=False,
+        description="If true, create campaign ENABLED (can spend). Default false = PAUSED.",
+    )
+
+class GoogleAdsSuggestRequest(BaseModel):
+    business_name: str = ""
+    category: str = ""
+    city: str = ""
+
+class GoogleAdsLaunchRequest(BaseModel):
+    """One-shot: AI copy + create campaign for an already-published public URL."""
+    final_url: str
+    business_name: str = ""
+    category: str = ""
+    city: str = ""
+    daily_budget: float = Field(default=25.0, gt=0)
+    enable: bool = False
+    keywords: List[str] = []
 
 class GoogleAdsCampaignResult(BaseModel):
     success: bool
@@ -188,6 +210,7 @@ class GoogleAdsCampaignResult(BaseModel):
     ad_group_resource_name: Optional[str] = None
     manage_url: Optional[str] = None
     error: Optional[str] = None
+    demo: bool = False
 
 # ── Google Business Profile (free local posts) ────────────────────
 class GBPPostRequest(BaseModel):
@@ -200,11 +223,18 @@ class GBPPostResult(BaseModel):
     success: bool
     post_name: Optional[str] = None
     error: Optional[str] = None
+    demo: bool = False
+
+class GBPSuggestRequest(BaseModel):
+    business_name: str = ""
+    city: str = ""
+    service: str = ""
+    tone: str = "friendly"
 
 # ── Lead Models ──────────────────────────────────────────────────
 class Lead(BaseModel):
     id: Optional[int] = None
-    source: str  # bark | thumbtack | manual | prospecting
+    source: str  # manual | prospecting | website | instant-quote | webhook
     name: str = ""            # customer / contact person name
     business_name: str = ""
     contact_name: str = ""
@@ -286,3 +316,21 @@ class KeywordResearchResult(BaseModel):
     language: str
     primary: KeywordMetric
     related: List[KeywordMetric]
+
+# ── Rank Tracking ────────────────────────────────────────────────
+class RankingPoint(BaseModel):
+    date: str
+    position: int
+
+class RankingMetric(BaseModel):
+    keyword: str
+    position: int
+    previous_position: int
+    volume: int
+    url: str
+    history: List[RankingPoint]
+
+class RankingResult(BaseModel):
+    business_type: str
+    location: str
+    keywords: List[RankingMetric]

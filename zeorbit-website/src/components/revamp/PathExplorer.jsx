@@ -3,7 +3,7 @@ import { ArrowRight, ChevronRight } from 'lucide-react'
 import { BUILD_PATHS } from '../../data/revampContent'
 
 export default function PathExplorer({ onExploreAI, onStartProject }) {
-  const [activeKey, setActiveKey] = useState('grow')
+  const [activeKey, setActiveKey] = useState('website')
 
   const active = useMemo(
     () => BUILD_PATHS.find((p) => p.key === activeKey) || BUILD_PATHS[0],

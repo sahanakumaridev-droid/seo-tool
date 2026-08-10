@@ -1,19 +1,22 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Zap, MapPin, Globe, Eye, X, RefreshCw, Save, CheckCircle,
-         FileJson, Tag, Plus, Upload, ChevronDown, ChevronUp } from 'lucide-react'
+         FileJson, Tag, Plus, Upload, ChevronDown, ChevronUp, Megaphone } from 'lucide-react'
 import { generateBulk, exportJson, exportWordpress, generateSingle,
-         savePage, publishToWordPress, publishBulkToWordPress, startBulkGenerateJob, getJob, publishAllToWeb, zeorbitBlogUrl } from '../api'
+         savePage, publishToWordPress, publishBulkToWordPress, startBulkGenerateJob, getJob, publishAllToWeb, zeorbitBlogUrl,
+         getNearbyCities } from '../api'
 
-const BUSINESS_TYPES = ['Web Design', 'SEO Agency', 'Plumbing', 'HVAC', 'Roofing',
-  'Landscaping', 'Cleaning', 'Electrical', 'Painting', 'Pest Control', 'Moving']
+const BUSINESS_TYPES = [
+  'Web Design', 'Website Redesign', 'Small Business Web Design', 'WordPress Development',
+  'eCommerce Development', 'Mobile App Development', 'iOS App Development', 'Android App Development',
+  'App MVP Development', 'Nonprofit Website Design', 'SEO Agency',
+  'Plumbing', 'HVAC', 'Roofing', 'Landscaping', 'Cleaning', 'Electrical', 'Painting', 'Pest Control', 'Moving',
+]
 const INDUSTRIES = ['Contractors', 'Healthcare', 'Retail', 'Restaurants',
   'Professional Services', 'Real Estate', 'Legal', 'Finance', 'Education', 'Other']
-const SD_CITIES_PREVIEW = ['San Diego','La Jolla','Chula Vista','El Cajon','Escondido',
-  'Oceanside','Carlsbad','Vista','San Marcos','Santee','Poway','La Mesa',
-  'National City','Coronado','Encinitas']
 const KW_SUGGESTIONS = ['web design san diego', 'affordable web design', 'small business website',
-  'website designer near me', 'wordpress website san diego', 'custom website design']
+  'website designer near me', 'wordpress website san diego', 'custom website design',
+  'website redesign', 'mobile app development san diego', 'ecommerce website developer']
 const SEO_PLUGINS = [
   { value: 'rankmath', label: 'RankMath' },
   { value: 'aioseo', label: 'All in One SEO' },
@@ -131,7 +134,7 @@ function PreviewModal({ block, businessType, targetKeywords = [], wpConfig, onCl
               </div>
               <MetaRow label="Body Content" value={block.content} multiline />
               <MetaRow label="Call to Action" value={block.cta} />
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <ScoreBar label="Readability" value={Math.round(block.readability_score || 75)} color="#1D4ED8" />
                 <ScoreBar label="Keyword Density" value={Math.min(100, Math.round((block.keyword_density || 1.5) * 20))} color="#2563EB" />
                 <ScoreBar label="Meta Complete" value={100} color="#10b981" />
@@ -285,7 +288,7 @@ function WordPressPanel({ wpConfig, setWpConfig }) {
             <a href="https://wordpress.org/documentation/article/application-passwords/" target="_blank" rel="noreferrer"
               className="text-indigo-400 underline">Application Password</a> (not your login password).
           </p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">WordPress URL</label>
               <input type="url" value={wpConfig.wp_url}
@@ -366,6 +369,7 @@ export default function ContentPage() {
     try { return JSON.parse(sessionStorage.getItem('seo_keywords') || '[]') } catch { return [] }
   })
   const [useAi, setUseAi] = useState(false)
+  const [llmProvider, setLlmProvider] = useState('')
   const [useAsync, setUseAsync] = useState(false)
   const [asyncJobId, setAsyncJobId] = useState('')
   const [jobProgress, setJobProgress] = useState(null)  // { completed, failed, total, status }
@@ -377,6 +381,8 @@ export default function ContentPage() {
   const [publishResults, setPublishResults] = useState({})
   const [toast, setToast] = useState(null)
   const resultsRef = useRef(null)
+  const [nearbyCities, setNearbyCities] = useState([])
+  const [nearbyError, setNearbyError] = useState('')
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type })
@@ -386,6 +392,49 @@ export default function ContentPage() {
   // Keep results + keywords alive when navigating to a page preview and back
   useEffect(() => { sessionStorage.setItem('seo_pages', JSON.stringify(pages)) }, [pages])
   useEffect(() => { sessionStorage.setItem('seo_keywords', JSON.stringify(targetKeywords)) }, [targetKeywords])
+
+  // Prefill from Lead Engine "Generate in SEO Content"
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('seo_lead_funnel')
+      if (!raw) return
+      const funnel = JSON.parse(raw)
+      localStorage.removeItem('seo_lead_funnel')
+      if (funnel.business_type) {
+        updateForm(prev => ({ ...prev, business_type: funnel.business_type }))
+      }
+      if (Array.isArray(funnel.keywords) && funnel.keywords.length) {
+        setTargetKeywords(prev => {
+          const merged = [...prev]
+          funnel.keywords.forEach(k => { if (k && !merged.includes(k)) merged.push(k) })
+          return merged
+        })
+      }
+      if (funnel.headline) showToast(`Funnel loaded: ${funnel.headline.slice(0, 60)}…`)
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Location Expansion preview — reflect the real nearby cities for whatever
+  // base_location is currently typed, instead of a hardcoded city list.
+  useEffect(() => {
+    const loc = form.base_location.trim()
+    if (!loc) { setNearbyCities([]); setNearbyError(''); return }
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      try {
+        const res = await getNearbyCities(loc, form.num_cities)
+        if (cancelled) return
+        setNearbyCities(res.data || [])
+        setNearbyError('')
+      } catch (e) {
+        if (cancelled) return
+        setNearbyCities([])
+        setNearbyError(e.response?.data?.detail || 'Could not find that location.')
+      }
+    }, 500)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [form.base_location, form.num_cities])
 
   // Poll an async job until it finishes, then drop the generated pages into
   // the results table (same review/publish flow as sync generation).
@@ -436,6 +485,7 @@ export default function ContentPage() {
         num_cities: Number(form.num_cities),
         target_keywords: targetKeywords,
         use_ai: useAi,
+        llm_provider: llmProvider || null,
       }
       if (useAsync) {
         const res = await startBulkGenerateJob(payload)
@@ -617,6 +667,14 @@ export default function ContentPage() {
                 onChange={e => updateForm(f => ({ ...f, base_location: e.target.value }))}
                 placeholder="e.g. San Diego, CA"
                 className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50" />
+              {form.base_location.trim() && !form.base_location.includes(',') && (
+                <div className="mt-1.5 text-[10px] text-amber-400">
+                  Add the state (e.g. "{form.base_location.trim()}, TX") to avoid ambiguous same-named cities.
+                </div>
+              )}
+              {nearbyError && (
+                <div className="mt-1.5 text-[10px] text-red-400">{nearbyError}</div>
+              )}
             </div>
             <div>
               <div className="flex justify-between items-center mb-2">
@@ -640,6 +698,16 @@ export default function ContentPage() {
                   className={`w-9 h-5 rounded-full transition-colors relative flex-shrink-0 ${useAi ? 'bg-indigo-500' : 'bg-white/10'}`}>
                   <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${useAi ? 'left-4' : 'left-0.5'}`} />
                 </button>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-white/3 border border-white/6">
+                <div className="text-xs font-semibold text-slate-300">AI Model</div>
+                <select value={llmProvider} onChange={e => setLlmProvider(e.target.value)} disabled={!useAi}
+                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none disabled:opacity-50">
+                  <option value="">Auto</option>
+                  <option value="openai">GPT-4</option>
+                  <option value="gemini">Gemini</option>
+                  <option value="groq">Groq</option>
+                </select>
               </div>
               <div className="flex items-center justify-between p-2.5 rounded-lg bg-white/3 border border-white/6">
                 <div>
@@ -689,13 +757,18 @@ export default function ContentPage() {
             <Globe size={11} /> Location Expansion — {form.num_cities} cities
           </h4>
           <div className="flex flex-wrap gap-1.5">
-            {SD_CITIES_PREVIEW.slice(0, form.num_cities).map(c => (
-              <span key={c} className="text-xs px-2 py-1 rounded bg-white/5 border border-white/8 text-slate-400">{c}</span>
-            ))}
-            {form.num_cities > 15 && (
-              <span className="text-xs px-2 py-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
-                +{form.num_cities - 15} more cities
+            {nearbyCities.slice(0, 15).map(c => (
+              <span key={`${c.name}-${c.state}`} className="text-xs px-2 py-1 rounded bg-white/5 border border-white/8 text-slate-400">
+                {c.name}{c.state ? `, ${c.state}` : ''}
               </span>
+            ))}
+            {nearbyCities.length > 15 && (
+              <span className="text-xs px-2 py-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                +{nearbyCities.length - 15} more cities
+              </span>
+            )}
+            {!nearbyCities.length && !nearbyError && form.base_location.trim() && (
+              <span className="text-xs text-slate-500">Looking up nearby cities…</span>
             )}
           </div>
         </div>
@@ -763,6 +836,23 @@ export default function ContentPage() {
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <button onClick={() => navigator.clipboard?.writeText(l.public_url)}
                     className="px-2.5 py-1.5 rounded-lg text-xs" style={{ background: 'var(--bg-overlay)', border: '1px solid var(--border-bright)', color: 'var(--text-2)' }}>Copy</button>
+                  <button
+                    onClick={() => navigate('/google-ads', {
+                      state: {
+                        finalUrl: l.public_url,
+                        public_url: l.public_url,
+                        category: form.business_type,
+                        city: l.city || '',
+                        businessName: form.business_type,
+                        title: l.title,
+                        keywords: targetKeywords,
+                      },
+                    })}
+                    className="px-2.5 py-1.5 rounded-lg text-xs inline-flex items-center gap-1"
+                    style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.35)', color: '#a5b4fc' }}
+                  >
+                    <Megaphone size={11} /> Google Ads
+                  </button>
                   <a href={l.public_url} target="_blank" rel="noreferrer"
                     className="px-2.5 py-1.5 rounded-lg text-xs btn-primary" style={{ color: '#fff' }}>Open</a>
                 </div>
@@ -784,6 +874,7 @@ export default function ContentPage() {
               onChange={e => setFilter(e.target.value)}
               className="bg-white/4 border border-white/8 rounded-lg px-3 py-1.5 text-sm text-slate-300 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50 w-48" />
           </div>
+          <div style={{ overflowX: 'auto' }}>
           <table className="data-table">
             <thead>
               <tr>
@@ -837,6 +928,7 @@ export default function ContentPage() {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

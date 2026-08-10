@@ -31,7 +31,7 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(0)
   const [analyzing, setAnalyzing] = useState(false)
   const [form, setForm] = useState({
-    website: '', business_name: '', country: 'United States', business_type: '', goal: '',
+    website: '', business_name: '', country: 'United States', city: '', business_type: '', goal: '',
   })
 
   const totalSteps = 5
@@ -54,6 +54,7 @@ export default function OnboardingPage() {
       business_name: form.business_name,
       country: form.country,
       business_type: form.business_type,
+      base_location: form.city,
       goal: form.goal,
       audit,
     }
@@ -95,8 +96,14 @@ export default function OnboardingPage() {
 
   if (step === 2) {
     return (
-      <StepShell step={2} total={totalSteps} title="Where's your business based?" subtitle="We default to the United States for local search data."
-        onBack={() => setStep(1)} onNext={() => setStep(3)}>
+      <StepShell step={2} total={totalSteps} title="Where's your business based?" subtitle="Enter your city and state so we can accurately baseline local search data and nearby locations."
+        onBack={() => setStep(1)} onNext={() => setStep(3)} nextDisabled={!form.city.trim()}>
+        <FieldLabel>City, State</FieldLabel>
+        <input
+          type="text" value={form.city} onChange={e => set({ city: e.target.value })}
+          placeholder="e.g. San Diego, CA" autoFocus
+          style={{ width: '100%', padding: '11px 14px', marginBottom: 16 }}
+        />
         <FieldLabel>Country</FieldLabel>
         <select value={form.country} onChange={e => set({ country: e.target.value })} style={{ width: '100%', padding: '11px 14px' }}>
           {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}

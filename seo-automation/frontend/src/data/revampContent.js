@@ -1,92 +1,191 @@
 export const PRIMARY_NAV = [
-  { label: 'Paths', href: '#paths' },
-  { label: 'Services', href: '#services' },
-  { label: 'AI Solutions', href: '#ai-solutions' },
-  { label: 'Work', href: '#work' },
-  { label: 'Industries', href: '#industries' },
-  { label: 'Insights', href: '/blog' },
-  { label: 'About', href: '#about' },
+  { label: 'FEATURES', href: '#features' },
+  { label: 'PLATFORM', href: '#platform' },
+  { label: 'CONTACT', href: '#contact' },
+  { label: 'FAQ', href: '#faq' },
 ]
 
 export const TRUST_ITEMS = [
-  'U.S.-Based Team',
-  'Web + Mobile + AI Engineering',
-  'SEO / AEO / GEO Expertise',
-  'Product, Design, and Growth in One Team',
+  'Site Performance',
+  'Keyword Research',
+  'AI Visibility',
+  'Competitive Analysis',
+  'Content',
+  'Link Building',
+  'Local',
+  'Reports',
 ]
 
-export const SERVICES = [
+export const FEATURE_BLOCKS = [
   {
-    title: 'Website Design & Development',
-    description: 'Conversion-focused websites engineered for performance, SEO, and scale.',
-    tags: ['React', 'UX', 'Performance'],
-    art: 'website',
-    image: '/service-art-website.svg',
+    id: 'site',
+    label: 'Site Performance',
+    title: 'Scan your website for 140+ SEO and AI search issues',
+    bullets: [
+      'See your Site Health and AI Search Health scores side by side',
+      'Audit the technical elements AI engines rely on: structured data, semantic HTML, internal linking, content structure, and more',
+      'Prioritize and fix issues affecting your search and AI visibility',
+    ],
   },
   {
-    title: 'Mobile App Development',
-    description: 'iOS and Android app experiences with clean architecture and measurable outcomes.',
-    tags: ['iOS', 'Android', 'Product'],
-    art: 'app',
-    image: '/service-art-app.svg',
+    id: 'keywords',
+    label: 'Keyword Research',
+    title: 'Target the best keywords with AI',
+    bullets: [
+      'Search any topic, competitor, or niche and uncover thousands of keyword ideas',
+      'Identify high-value keywords based on search volume, difficulty, intent, and AI Overview opportunities',
+      'Answer SEO questions with ZeOrbit data in ChatGPT, Claude, and other AI tools',
+    ],
   },
   {
-    title: 'Custom Software Development',
-    description: 'Business systems, dashboards, and internal tools tailored to your workflows.',
-    tags: ['Python', 'APIs', 'Automation'],
-    art: 'software',
-    image: '/service-art-software.svg',
+    id: 'ai',
+    label: 'AI Visibility',
+    title: 'Measure and grow your AI visibility',
+    bullets: [
+      'Track any brand’s AI Visibility Score to see how often it appears in AI responses',
+      'Discover trending topics people ask AI and use them to guide your content strategy',
+      'Identify prompts and sources where competitors appear and close the gap',
+    ],
   },
   {
-    title: 'SEO / AEO / GEO',
-    description: 'Search visibility across traditional search, answer engines, and AI discovery.',
-    tags: ['Technical SEO', 'Content', 'Analytics'],
-    art: 'seo',
-    image: '/service-art-seo.svg',
+    id: 'competitors',
+    label: 'Competitive Analysis',
+    title: 'See the strategy behind any competitor’s growth',
+    bullets: [
+      'Get a full overview of a domain and its online visibility',
+      'See your competitors’ best keywords, paid strategy, backlinks, and traffic trends in one view',
+      'Compare how AI platforms position your brand against rivals',
+    ],
   },
   {
-    title: 'Ecommerce Optimization',
-    description: 'Storefronts and funnel systems designed to improve conversion and retention.',
-    tags: ['Shopify', 'WooCommerce', 'CRO'],
-    art: 'ecommerce',
-    image: '/service-art-ecommerce.svg',
+    id: 'content',
+    label: 'Content',
+    title: 'Write and optimize content faster with AI',
+    bullets: [
+      'Discover high-performing topics using real-time SEO and competitive data',
+      'Generate full articles in your brand voice in minutes',
+      'Get prioritized recommendations to make your content more visible in Google and AI search tools',
+    ],
   },
   {
-    title: 'Web Data Processing',
-    description: 'Reliable data workflows that convert raw signals into actionable business insight.',
-    tags: ['Pipelines', 'Scraping', 'Reporting'],
-    art: 'data',
-    image: '/service-art-data.svg',
+    id: 'links',
+    label: 'Link Building',
+    title: 'Grow your domain’s authority in search and AI',
+    bullets: [
+      'Uncover where your rivals get their best links',
+      'Analyze link quality and find missed linking opportunities',
+      'Audit your backlink profile to spot toxic links hurting your site',
+    ],
+  },
+  {
+    id: 'local',
+    label: 'Local',
+    title: 'Get found by customers in your area',
+    bullets: [
+      'Manage your Google Business Profile (GBP) information in one place',
+      'Distribute your business info to 70+ US directories in one go',
+      'Collect reviews from customers with automated SMS and email campaigns',
+    ],
+  },
+  {
+    id: 'reports',
+    label: 'Reports',
+    title: 'Prove your impact with exec-ready reports',
+    bullets: [
+      'Connect data from ZeOrbit and 35+ top marketing tools',
+      'Drag and drop charts and tables — or use ready-made templates',
+      'Create once, auto-update anytime you need it',
+    ],
   },
 ]
 
-export const AI_SOLUTIONS = [
-  'AI Strategy & Consulting',
-  'AI Agents',
-  'AI Copilots',
-  'Generative AI Integration',
-  'Workflow Automation',
-  'LLM Integration',
-  'Machine Learning',
-  'AI Search Optimization',
+export const HOW_IT_WORKS = [
+  { id: '01', title: 'Connect your website', copy: 'Add your domain and goals so ZeOrbit can map keywords, competitors, and technical issues.' },
+  { id: '02', title: 'Run the full toolkit', copy: 'Research keywords, fix site issues, create content, and track AI + Google visibility in one place.' },
+  { id: '03', title: 'Prove the impact', copy: 'Share exec-ready reports that show rankings, traffic, and AI visibility growth over time.' },
 ]
 
-export const PROCESS_STEPS = [
-  { id: '01', title: 'Discover', copy: 'Understand your business model, audience, and current growth bottlenecks.' },
-  { id: '02', title: 'Strategize', copy: 'Define roadmap, channels, data requirements, and measurable outcomes.' },
-  { id: '03', title: 'Design', copy: 'Craft premium UX systems with clear hierarchy and conversion intent.' },
-  { id: '04', title: 'Engineer', copy: 'Build secure, scalable web, mobile, and backend systems.' },
-  { id: '05', title: 'Launch', copy: 'Deploy with tracking, QA, and production-ready performance baselines.' },
-  { id: '06', title: 'Optimize', copy: 'Iterate continuously with analytics, search visibility, and automation.' },
+export const PROOF_STATS = [
+  { value: '28M', label: 'Marketing professionals have already used ZeOrbit' },
+  { value: '21', label: 'International awards for best SEO software suite' },
+  { value: '35%', label: 'Fortune 500 companies use ZeOrbit as their go-to marketing tool' },
 ]
 
-export const INDUSTRIES = [
-  'Healthcare',
-  'Legal',
-  'Home Services',
-  'Real Estate',
-  'Ecommerce',
-  'Professional Services',
+export const AWARD_BADGES = [
+  '#1 SEO TOOL',
+  '#1 AEO TOOL',
+  '#1 Competitive Intelligence',
+  'Best Software Products 2026',
+  'Best Global Software Companies 2026',
+]
+
+export const PRICING_TIERS = [
+  {
+    name: 'Starter',
+    price: '$49',
+    period: '/mo',
+    tagline: 'Unlimited access to the ZeOrbit tools that fit your goals.',
+    features: [
+      'Site audit & AI search health',
+      'Keyword research toolkit',
+      'Rank tracking essentials',
+      'AI content recommendations',
+    ],
+    cta: 'Try free for 7 days',
+    highlighted: false,
+  },
+  {
+    name: 'Professional',
+    price: '$149',
+    period: '/mo',
+    tagline: 'A complete visibility management platform for growing teams.',
+    features: [
+      'Everything in Starter',
+      'Competitive analysis & backlinks',
+      'AI Visibility Score tracking',
+      'Local SEO & GBP tools',
+      'Exec-ready reporting',
+    ],
+    cta: 'Try free for 7 days',
+    highlighted: true,
+  },
+  {
+    name: 'Enterprise',
+    price: 'Custom',
+    period: '',
+    tagline: 'For agencies and Fortune-scale brands that need custom support.',
+    features: [
+      'Unlimited seats & projects',
+      'Custom integrations',
+      'Dedicated onboarding',
+      'Priority support',
+    ],
+    cta: 'Contact Sales',
+    highlighted: false,
+  },
+]
+
+export const FAQS = [
+  {
+    q: 'What is included in the free trial?',
+    a: 'Try free for 7 days with access to the ZeOrbit tools that fit your goals — site performance, keyword research, AI visibility, content, and more.',
+  },
+  {
+    q: 'Is ZeOrbit only for SEO?',
+    a: 'No — ZeOrbit is a complete visibility management platform spanning SEO, AI search visibility, competitive analysis, content, local, and reporting.',
+  },
+  {
+    q: 'Can I track AI search visibility?',
+    a: 'Yes. Measure how often your brand appears in AI responses, discover trending prompts, and close gaps where competitors show up.',
+  },
+  {
+    q: 'Does ZeOrbit support local SEO?',
+    a: 'Yes — manage Google Business Profile information, distribute listings, and collect reviews so customers can find you in your area.',
+  },
+  {
+    q: 'Can I export reports for stakeholders?',
+    a: 'Yes. Build exec-ready reports with drag-and-drop charts, templates, and auto-updating data.',
+  },
 ]
 
 export const INSIGHTS = [
@@ -96,51 +195,20 @@ export const INSIGHTS = [
     excerpt: 'A practical framework for visibility in AI answer engines and conversational discovery.',
   },
   {
-    category: 'Engineering',
-    title: 'What modern performance architecture means for conversion',
-    excerpt: 'How speed, accessibility, and UX quality directly impact growth metrics.',
+    category: 'SEO',
+    title: 'Scan your website for SEO and AI search issues',
+    excerpt: 'Prioritize technical fixes that affect search and AI visibility.',
   },
   {
     category: 'Growth',
-    title: 'Building an SEO + paid + AI feedback loop',
-    excerpt: 'How to align channels and data so every campaign compounds over time.',
+    title: 'Target the best keywords with AI',
+    excerpt: 'Use volume, difficulty, intent, and AI Overview opportunities to guide strategy.',
   },
 ]
 
-export const BUILD_PATHS = [
-  {
-    key: 'grow',
-    label: 'Grow My Business',
-    eyebrow: 'Search + Conversion',
-    revealTitle: 'Build a compounding growth engine.',
-    items: ['SEO', 'AEO', 'GEO', 'Paid Search', 'Content', 'Analytics'],
-  },
-  {
-    key: 'ai',
-    label: 'Build With AI',
-    eyebrow: 'AI-first delivery',
-    revealTitle: 'Let’s build your AI advantage.',
-    items: ['AI Agents', 'Generative AI', 'Automation', 'AI Copilots', 'Data Intelligence'],
-  },
-  {
-    key: 'website',
-    label: 'Build a Website',
-    eyebrow: 'Web experiences',
-    revealTitle: 'Engineer a website built for performance and discovery.',
-    items: ['Web Design & Development', 'UX Systems', 'Performance Engineering', 'Technical SEO', 'CMS-ready Structure'],
-  },
-  {
-    key: 'app',
-    label: 'Create an App',
-    eyebrow: 'Product engineering',
-    revealTitle: 'Ship an app architecture that scales.',
-    items: ['iOS', 'Android', 'Flutter', 'React Native', 'APIs', 'Cloud'],
-  },
-  {
-    key: 'automate',
-    label: 'Automate My Business',
-    eyebrow: 'Workflows + integrations',
-    revealTitle: 'Turn repetitive work into automated momentum.',
-    items: ['Workflow Automation', 'API Integrations', 'Data Pipelines', 'Monitoring & Alerts', 'Optimization Loops'],
-  },
+export const SITE_SOCIAL = [
+  { label: 'Facebook', href: 'https://www.facebook.com/zeorbit.zeorbit' },
+  { label: 'LinkedIn', href: 'https://www.linkedin.com/company/zeorbit/' },
+  { label: 'Instagram', href: 'https://www.instagram.com/zeorbit/' },
+  { label: 'X', href: 'https://twitter.com/orbit_ze' },
 ]

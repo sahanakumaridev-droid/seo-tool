@@ -3,7 +3,7 @@ from models.schemas import BulkGenerateResponse, GenerateRequest, BulkPublishReq
 from services.job_service import create_job, get_job, run_bulk_job, cleanup_old_jobs
 from services.content_service import generate_seo_block
 from services.wordpress_service import publish_to_wordpress
-from services.location_service import get_nearby_cities
+from services.location_service import get_nearby_cities, LocationNotResolvedError
 
 router = APIRouter()
 
@@ -11,7 +11,10 @@ router = APIRouter()
 @router.post("/generate")
 async def start_bulk_generate_job(req: GenerateRequest, background_tasks: BackgroundTasks):
     """Start an async bulk content generation job. Returns job_id for polling."""
-    cities = await get_nearby_cities(req.base_location, req.num_cities)
+    try:
+        cities = await get_nearby_cities(req.base_location, req.num_cities)
+    except LocationNotResolvedError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not cities:
         raise HTTPException(status_code=400, detail="No cities found for location")
 
@@ -28,6 +31,7 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
             target_keywords=req.target_keywords,
             industry=req.industry,
             use_ai=req.use_ai,
+            llm_provider=req.llm_provider,
         )
         return block.model_dump()
 

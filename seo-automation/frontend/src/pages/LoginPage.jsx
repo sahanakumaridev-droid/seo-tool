@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { useNavigate, Link, Navigate } from 'react-router-dom'
 import { Eye, EyeOff, ArrowRight } from 'lucide-react'
 import AuthLayout from '../components/auth/AuthLayout'
+import { loginUser } from '../api'
 
 export default function LoginPage({ onLogin }) {
   const navigate = useNavigate()
-  // Snapshot once at mount — see RegisterPage.jsx for why this isn't reactive.
   const [alreadyAuthed] = useState(() => localStorage.getItem('seo_auth') === 'true')
   const [form, setForm] = useState({ email: '', password: '' })
   const [showPw, setShowPw] = useState(false)
@@ -18,15 +18,17 @@ export default function LoginPage({ onLogin }) {
     e.preventDefault()
     setError('')
     setLoading(true)
-    await new Promise(r => setTimeout(r, 600))
-    if (form.password.length >= 4) {
+    try {
+      await loginUser(form.email.trim(), form.password)
       onLogin()
       const hasProject = !!localStorage.getItem('seo_project')
       navigate(hasProject ? '/content' : '/onboarding')
-    } else {
-      setError('Invalid email or password.')
+    } catch (err) {
+      const detail = err.response?.data?.detail
+      setError(typeof detail === 'string' ? detail : 'Invalid email or password. Register first if you are new.')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return (
@@ -43,7 +45,7 @@ export default function LoginPage({ onLogin }) {
         <div>
           <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-2)', marginBottom: 6 }}>Email</label>
           <input
-            type="text" required value={form.email}
+            type="email" required value={form.email}
             onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
             placeholder="you@company.com" autoComplete="email"
             style={{ width: '100%', padding: '11px 14px' }}
@@ -76,22 +78,6 @@ export default function LoginPage({ onLogin }) {
           {loading ? 'Signing in…' : <>Sign In <ArrowRight size={16} /></>}
         </button>
       </form>
-
-      {/* Demo access — this build has no real backend user accounts yet;
-          any email/username + password (4+ chars) signs in. */}
-      <div style={{ marginTop: 20, padding: '12px 14px', borderRadius: 10, background: 'var(--brand-soft)', border: '1px solid rgba(255,90,78,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--brand-dark)' }}>Demo access</div>
-          <div style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
-            <span style={{ fontFamily: 'monospace', background: '#fff', padding: '1px 6px', borderRadius: 4 }}>admin</span>
-            {' / '}
-            <span style={{ fontFamily: 'monospace', background: '#fff', padding: '1px 6px', borderRadius: 4 }}>admin</span>
-          </div>
-        </div>
-        <button type="button" onClick={() => setForm({ email: 'admin', password: 'admin' })} className="btn btn-secondary" style={{ fontSize: 12, padding: '7px 12px' }}>
-          Autofill
-        </button>
-      </div>
     </AuthLayout>
   )
 }

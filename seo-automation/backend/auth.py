@@ -5,14 +5,12 @@ Implements secure token generation, validation, and user context
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from pydantic import BaseModel
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from config import settings
+import bcrypt
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # Token settings
@@ -42,14 +40,22 @@ class TokenResponse(BaseModel):
     expires_in: int
 
 
+def _password_bytes(password: str) -> bytes:
+    # bcrypt hard-limit is 72 bytes
+    return password.encode("utf-8")[:72]
+
+
 def hash_password(password: str) -> str:
-    """Hash a password using bcrypt."""
-    return pwd_context.hash(password)
+    """Hash a password using bcrypt (direct; avoids passlib/py3.14 bugs)."""
+    return bcrypt.hashpw(_password_bytes(password), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return bcrypt.checkpw(_password_bytes(plain_password), hashed_password.encode("utf-8"))
+    except Exception:
+        return False
 
 
 def create_access_token(user_id: str, email: str, expires_delta: Optional[timedelta] = None) -> str:

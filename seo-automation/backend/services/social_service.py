@@ -402,12 +402,30 @@ async def post_to_gbp(req: SocialPostRequest) -> SocialPostResult:
 
 
 async def post_gbp_update(req: GBPPostRequest) -> GBPPostResult:
-    """Publish a standalone, freeform Google Business Profile post — the free
-    alternative to a paid Google Ads campaign for local visibility."""
-    success, result = await _create_gbp_local_post(
-        summary=req.message, cta_type=req.cta_type, cta_url=req.cta_url, image_url=req.image_url,
+    """Publish a GBP local post via Google's free Business Profile API.
+    Falls back to DEMO_MODE simulation only when OAuth isn't configured."""
+    from providers.demo_google import use_demo_fallback, demo_gbp_post_name
+
+    if gbp_configured():
+        success, result = await _create_gbp_local_post(
+            summary=req.message, cta_type=req.cta_type, cta_url=req.cta_url, image_url=req.image_url,
+        )
+        return GBPPostResult(success=success, post_name=result if success else None, error=None if success else result)
+
+    if use_demo_fallback(live_configured=False):
+        return GBPPostResult(
+            success=True,
+            post_name=demo_gbp_post_name(req.message),
+            demo=True,
+        )
+
+    return GBPPostResult(
+        success=False,
+        error=(
+            "Google Business Profile isn't connected. Set GBP_REFRESH_TOKEN, "
+            "GBP_ACCOUNT_ID, GBP_LOCATION_ID (API is free). AI draft still works with GROQ_API_KEY or GEMINI_API_KEY."
+        ),
     )
-    return GBPPostResult(success=success, post_name=result if success else None, error=None if success else result)
 
 
 async def share_to_social(req: SocialPostRequest) -> List[SocialPostResult]:

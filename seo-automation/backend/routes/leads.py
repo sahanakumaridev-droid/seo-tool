@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete as sa_delete
 from db import get_session, LeadRecord
 from models.schemas import LeadCreate, ProspectRequest
-from services.leads_service import fetch_bark_leads, fetch_thumbtack_leads, parse_webhook_lead
+from services.leads_service import parse_webhook_lead
 from services.prospecting_service import discover_businesses
 from typing import List, Optional
 
@@ -117,23 +117,9 @@ async def prospect_leads(req: ProspectRequest, session: AsyncSession = Depends(g
     return {"discovered": added, "source": "prospecting", "leads": found}
 
 
-@router.post("/sync/bark")
-async def sync_bark_leads(session: AsyncSession = Depends(get_session)):
-    """Pull latest leads from Bark.com."""
-    added = await _persist_many(session, await fetch_bark_leads())
-    return {"synced": added, "source": "bark"}
-
-
-@router.post("/sync/thumbtack")
-async def sync_thumbtack_leads(session: AsyncSession = Depends(get_session)):
-    """Pull latest leads from Thumbtack."""
-    added = await _persist_many(session, await fetch_thumbtack_leads())
-    return {"synced": added, "source": "thumbtack"}
-
-
 @router.post("/webhook/{source}")
 async def lead_webhook(source: str, request: Request, session: AsyncSession = Depends(get_session)):
-    """Receive a webhook from Bark, Thumbtack, or any platform and persist it."""
+    """Receive a webhook from any platform and persist it."""
     try:
         payload = await request.json()
     except Exception:

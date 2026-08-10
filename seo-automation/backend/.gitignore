@@ -2,3 +2,9 @@
 __pycache__/
 *.pyc
 *.db
+oauth_*.txt
+*-credentials.json
+*service-account*.json
+
+# Google service-account keys
+secrets/

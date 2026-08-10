@@ -20,8 +20,8 @@ export default function RevampHeader() {
         </nav>
 
         <div className="rv-header-actions">
-          <a className="rv-link-button" href="#contact">Contact</a>
-          <button type="button" className="btn btn-primary">Start a Project</button>
+          <a className="rv-link-button" href="/login">LOG IN</a>
+          <a className="btn btn-primary" href="/register">TRY FREE FOR 7 DAYS</a>
           <button
             type="button"
             className="rv-mobile-toggle"
@@ -38,7 +38,8 @@ export default function RevampHeader() {
           {PRIMARY_NAV.map((item) => (
             <a key={item.label} href={item.href} onClick={() => setOpen(false)}>{item.label}</a>
           ))}
-          <button type="button" className="btn btn-primary">Start a Project</button>
+          <a href="/login" onClick={() => setOpen(false)}>LOG IN</a>
+          <a className="btn btn-primary" href="/register" onClick={() => setOpen(false)}>TRY FREE FOR 7 DAYS</a>
         </nav>
       ) : null}
     </header>

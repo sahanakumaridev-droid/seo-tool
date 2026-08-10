@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
-import { ExternalLink, TrendingUp, TrendingDown } from 'lucide-react'
+import { ExternalLink, TrendingUp, TrendingDown, X, Loader2, Sparkles } from 'lucide-react'
 import { COMPETITOR_DATA } from '../data/mockData'
+import { analyzeCompetitor, discoverCompetitors } from '../api'
+import useProjectInfo from '../hooks/useProjectInfo'
 
 const radarData = [
   { metric: 'Traffic', you: 72, avg: 58 },
@@ -12,20 +14,161 @@ const radarData = [
   { metric: 'Local SEO', you: 88, avg: 48 },
 ]
 
+function AddCompetitorModal({ businessType, city, initialUrl = '', onClose }) {
+  const [url, setUrl] = useState(initialUrl)
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState(null)
+  const [error, setError] = useState('')
+
+  const run = async (targetUrl) => {
+    const u = (targetUrl ?? url).trim()
+    if (!u) return
+    setLoading(true); setError(''); setResult(null)
+    try {
+      const res = await analyzeCompetitor(u, businessType || 'business', city || '')
+      if (res.data?.error) setError(res.data.error)
+      else setResult(res.data)
+    } catch (e) {
+      setError(e.response?.data?.detail || e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Auto-run when opened from a "Suggested Competitor" one-click Analyze.
+  useEffect(() => {
+    if (initialUrl.trim()) run(initialUrl)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const renderSection = (label, value) => {
+    if (!value) return null
+    return (
+      <div className="mb-3">
+        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">{label}</div>
+        <div className="text-sm text-slate-200 whitespace-pre-line">
+          {Array.isArray(value) ? value.join(', ') : typeof value === 'object' ? JSON.stringify(value) : value}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div className="relative w-full max-w-lg card rounded-2xl p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-bold text-white">Add Competitor</h2>
+          <button onClick={onClose} className="p-1 rounded hover:bg-white/8 text-slate-400"><X size={16} /></button>
+        </div>
+        <div className="flex gap-2 mb-4">
+          <input
+            value={url} onChange={e => setUrl(e.target.value)}
+            placeholder="competitor-website.com"
+            className="flex-1 bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50"
+          />
+          <button onClick={() => run()} disabled={loading || !url.trim()}
+            className="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold disabled:opacity-50 flex items-center gap-1.5">
+            {loading ? <Loader2 size={14} className="animate-spin" /> : null} Analyze
+          </button>
+        </div>
+        {error && <div className="text-xs text-red-400 mb-2">⚠ {error}</div>}
+        {result && (
+          <div className="max-h-96 overflow-y-auto border-t border-white/8 pt-3">
+            {renderSection('Messaging', result.messaging)}
+            {renderSection('Target Audience', result.target_audience)}
+            {renderSection('SEO Strategy', result.seo_strategy)}
+            {renderSection('Content Gaps', result.content_gaps)}
+            {renderSection('Unique Selling Points', result.unique_selling_points)}
+            {renderSection('Recommendations', result.recommendations)}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function CompetitorsPage() {
   const [selected, setSelected] = useState(null)
+  const [showAdd, setShowAdd] = useState(false)
+  const [prefillUrl, setPrefillUrl] = useState('')
+  const project = useProjectInfo()
+
+  const [suggestions, setSuggestions] = useState([])
+  const [suggestLoading, setSuggestLoading] = useState(false)
+  const [suggestError, setSuggestError] = useState('')
+
+  useEffect(() => {
+    if (!project.website) return
+    setSuggestLoading(true)
+    setSuggestError('')
+    discoverCompetitors(project.website, project.business_type || 'business', project.base_location || '')
+      .then(res => {
+        if (res.data?.error) setSuggestError(res.data.error)
+        else setSuggestions(res.data?.competitors || [])
+      })
+      .catch(e => setSuggestError(e.response?.data?.detail || e.message))
+      .finally(() => setSuggestLoading(false))
+  }, [project.website, project.business_type, project.base_location])
+
+  const openAnalyze = (domain) => {
+    setPrefillUrl(domain || '')
+    setShowAdd(true)
+  }
 
   return (
     <div className="space-y-5 fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-white">Competitor Analysis</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Tracking {COMPETITOR_DATA.length} competitors · Plumbing · San Diego</p>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Tracking {COMPETITOR_DATA.length} competitors · {project.business_type || 'your business'}{project.base_location ? ` · ${project.base_location}` : ''}
+          </p>
         </div>
-        <button className="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold">
+        <button onClick={() => openAnalyze('')} className="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold">
           + Add Competitor
         </button>
       </div>
+
+      {showAdd && (
+        <AddCompetitorModal
+          businessType={project.business_type}
+          city={project.base_location}
+          initialUrl={prefillUrl}
+          onClose={() => setShowAdd(false)}
+        />
+      )}
+
+      {/* Suggested competitors — auto-identified from the Profile Website */}
+      {project.website && (
+        <div className="card p-4">
+          <h3 className="text-sm font-semibold text-white mb-1 flex items-center gap-1.5">
+            <Sparkles size={13} className="text-indigo-400" /> Suggested Competitors
+          </h3>
+          <p className="text-xs text-slate-500 mb-3">
+            Auto-identified from {project.website} — click Analyze for a full AI breakdown of any of them.
+          </p>
+          {suggestLoading && <div className="text-xs text-slate-500 py-2">Looking for likely competitors…</div>}
+          {suggestError && <div className="text-xs text-red-400 py-2">⚠ {suggestError}</div>}
+          {!suggestLoading && !suggestError && suggestions.length === 0 && (
+            <div className="text-xs text-slate-500 py-2">No suggestions yet.</div>
+          )}
+          <div className="space-y-2">
+            {suggestions.map(s => (
+              <div key={s.domain} className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-white/3 border border-white/6">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-slate-200 truncate">{s.domain}</div>
+                  <div className="text-[11px] text-slate-500 truncate">{s.rationale}</div>
+                </div>
+                <button onClick={() => openAnalyze(s.domain)}
+                  className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/20 transition-colors">
+                  Analyze
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Competitor cards */}
       <div className="grid lg:grid-cols-5 gap-3">
@@ -63,8 +206,8 @@ export default function CompetitorsPage() {
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Radar comparison */}
         <div className="card p-5">
-          <h3 className="text-sm font-semibold text-white mb-1">Competitive Position</h3>
-          <p className="text-xs text-slate-500 mb-4">You vs. market average across key SEO factors</p>
+          <h3 className="text-sm font-semibold text-white mb-1">Competitive Position <span className="text-slate-600 font-normal">(illustrative)</span></h3>
+          <p className="text-xs text-slate-500 mb-4">You vs. market average across key SEO factors — use "+ Add Competitor" above for real AI-driven analysis</p>
           <ResponsiveContainer width="100%" height={240}>
             <RadarChart data={radarData}>
               <PolarGrid stroke="rgba(255,255,255,0.06)" />
@@ -110,6 +253,7 @@ export default function CompetitorsPage() {
         <div className="px-5 py-4 border-b border-white/5">
           <h3 className="text-sm font-semibold text-white">Competitor Overview</h3>
         </div>
+        <div style={{ overflowX: 'auto' }}>
         <table className="data-table">
           <thead>
             <tr>
@@ -165,6 +309,7 @@ export default function CompetitorsPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   )

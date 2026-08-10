@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react'
-import { ScanSearch, RefreshCw, ExternalLink, CheckCircle2, AlertTriangle, Clock, XCircle, HelpCircle } from 'lucide-react'
-import { getSeoIndexingStatus, refreshSeoIndexing } from '../api'
+import { ScanSearch, RefreshCw, ExternalLink, CheckCircle2, AlertTriangle, Clock, XCircle, HelpCircle, Rocket } from 'lucide-react'
+import { getSeoIndexingStatus, getSeoIndexingSetup, pushAllSeoIndexing, refreshSeoIndexing, inspectSeoIndexingUrl } from '../api'
 
 const STATUS_META = {
-  published:     { label: 'Published',        color: 'var(--text-3)',  bg: 'var(--bg-raised)',   icon: Clock },
-  sitemap_added:  { label: 'Sitemap Added',    color: 'var(--brand)',   bg: 'var(--brand-soft)',  icon: CheckCircle2 },
-  discovered:     { label: 'Google Discovered',color: 'var(--amber)',   bg: 'var(--amber-soft)',  icon: HelpCircle },
-  indexed:        { label: 'Indexed',          color: 'var(--green)',  bg: 'var(--green-soft)',  icon: CheckCircle2 },
-  not_indexed:    { label: 'Not Indexed',      color: 'var(--amber)',  bg: 'var(--amber-soft)',  icon: AlertTriangle },
-  error:          { label: 'Error',            color: 'var(--red)',    bg: 'var(--red-soft)',    icon: XCircle },
+  published:              { label: 'Crawl-ready',          color: 'var(--text-3)',  bg: 'var(--bg-raised)',   icon: Clock },
+  published_awaiting_gsc: { label: 'Awaiting GSC',         color: 'var(--amber)',   bg: 'var(--amber-soft)',  icon: AlertTriangle },
+  sitemap_added:          { label: 'Sitemap / Ready',      color: 'var(--brand)',   bg: 'var(--brand-soft)',  icon: CheckCircle2 },
+  sitemap_submitted:      { label: 'Sitemap submitted',    color: 'var(--brand)',   bg: 'var(--brand-soft)',  icon: CheckCircle2 },
+  discovered:             { label: 'Google Discovered',    color: 'var(--amber)',   bg: 'var(--amber-soft)',  icon: HelpCircle },
+  indexed:                { label: 'Indexed',              color: 'var(--green)',   bg: 'var(--green-soft)',  icon: CheckCircle2 },
+  not_indexed:            { label: 'Not Indexed',          color: 'var(--amber)',   bg: 'var(--amber-soft)',  icon: AlertTriangle },
+  error:                  { label: 'Error',                color: 'var(--red)',     bg: 'var(--red-soft)',    icon: XCircle },
 }
 
 function StatusBadge({ status }) {
@@ -27,15 +29,29 @@ function StatusBadge({ status }) {
 export default function IndexingStatusPage() {
   const [rows, setRows] = useState([])
   const [gscConfigured, setGscConfigured] = useState(false)
+  const [mode, setMode] = useState('crawl')
+  const [demo, setDemo] = useState(false)
+  const [setup, setSetup] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [pushing, setPushing] = useState(false)
+  const [pushNote, setPushNote] = useState('')
+  const [inspectUrl, setInspectUrl] = useState('')
+  const [inspecting, setInspecting] = useState(false)
+  const [inspectError, setInspectError] = useState('')
 
   const load = async () => {
     setLoading(true)
     try {
-      const res = await getSeoIndexingStatus()
+      const [res, setupRes] = await Promise.all([
+        getSeoIndexingStatus(),
+        getSeoIndexingSetup().catch(() => null),
+      ])
       setRows(res.data.urls || [])
-      setGscConfigured(res.data.gsc_configured)
+      setGscConfigured(!!res.data.gsc_configured)
+      setDemo(!!res.data.demo)
+      setMode(res.data.mode || (res.data.demo ? 'demo' : res.data.gsc_configured ? 'gsc' : 'crawl'))
+      if (setupRes?.data) setSetup(setupRes.data)
     } catch (e) {
       console.error(e)
     } finally {
@@ -48,8 +64,14 @@ export default function IndexingStatusPage() {
   const handleRefresh = async () => {
     setRefreshing(true)
     try {
-      await refreshSeoIndexing()
-      await load()
+      const res = await refreshSeoIndexing()
+      if (res.data?.urls?.length) {
+        setRows(res.data.urls)
+        setDemo(!!res.data.demo)
+        setMode(res.data.mode || mode)
+      } else {
+        await load()
+      }
     } catch (e) {
       console.error(e)
     } finally {
@@ -57,33 +79,164 @@ export default function IndexingStatusPage() {
     }
   }
 
+  const handlePushAll = async () => {
+    setPushing(true)
+    setPushNote('')
+    try {
+      const res = await pushAllSeoIndexing()
+      setRows(res.data.urls || [])
+      setMode(res.data.mode || mode)
+      setGscConfigured(!!res.data.gsc_configured)
+      const sm = res.data.sitemap || {}
+      setPushNote(
+        res.data.gsc_configured
+          ? `Tracked ${res.data.pages_tracked_new || 0} new pages. Sitemap submit: ${sm.ok ? 'OK' : (sm.detail || 'failed')}.`
+          : (res.data.next || 'Search Console not connected yet — finish setup below.')
+      )
+      const setupRes = await getSeoIndexingSetup().catch(() => null)
+      if (setupRes?.data) setSetup(setupRes.data)
+    } catch (e) {
+      setPushNote(e.response?.data?.detail || 'Push failed.')
+    } finally {
+      setPushing(false)
+    }
+  }
+
+  const handleInspect = async (e) => {
+    e.preventDefault()
+    setInspectError('')
+    setInspecting(true)
+    try {
+      const res = await inspectSeoIndexingUrl({ url: inspectUrl.trim() })
+      if (res.data?.url) {
+        setRows(prev => {
+          const next = prev.filter(r => r.url !== res.data.url.url)
+          return [res.data.url, ...next]
+        })
+        setMode(res.data.mode || mode)
+        setInspectUrl('')
+      }
+    } catch (err) {
+      setInspectError(err.response?.data?.detail || 'Could not inspect URL.')
+    } finally {
+      setInspecting(false)
+    }
+  }
+
   return (
     <div className="space-y-6 fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="font-display" style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-1)' }}>Google Indexing</h1>
+          <h1 className="font-display" style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-1)' }}>Google Search</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--text-3)' }}>
-            Free, official Google Search automation for every published blog — sitemap + Search Console, no ads, no paid tools.
+            Get published pages into Google — sitemap, Search Console, then wait for indexing.
           </p>
         </div>
-        <button onClick={handleRefresh} disabled={refreshing}
-          className="btn btn-primary flex items-center gap-2" style={{ opacity: refreshing ? 0.6 : 1 }}>
-          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> {refreshing ? 'Refreshing...' : 'Refresh Status'}
-        </button>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={handlePushAll} disabled={pushing} className="btn btn-primary flex items-center gap-2">
+            <Rocket size={14} /> {pushing ? 'Pushing…' : 'Push all to Google'}
+          </button>
+          <button onClick={handleRefresh} disabled={refreshing}
+            className="btn btn-secondary flex items-center gap-2" style={{ opacity: refreshing ? 0.6 : 1 }}>
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> {refreshing ? 'Refreshing...' : 'Refresh Status'}
+          </button>
+        </div>
       </div>
 
-      {!gscConfigured && (
-        <div className="card p-4" style={{ borderColor: 'var(--amber)' }}>
-          <div className="flex items-start gap-3">
-            <AlertTriangle size={16} style={{ color: 'var(--amber)', flexShrink: 0, marginTop: 2 }} />
-            <p style={{ fontSize: 12.5, color: 'var(--text-3)', margin: 0, lineHeight: 1.6 }}>
-              Search Console isn't configured yet — set <code>GSC_SITE_URL</code>, <code>WP_SITEMAP_URL</code> and{' '}
-              <code>GOOGLE_INDEXING_KEY_FILE</code> to enable real indexing-status checks. Crawlability checks
-              (HTTP status, robots.txt, noindex, canonical) still run on every publish either way.
+      {pushNote && (
+        <div className={`alert ${gscConfigured ? 'alert-success' : 'alert-warning'}`}>
+          {gscConfigured ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
+          <div>{pushNote}</div>
+        </div>
+      )}
+
+      {setup && (
+        <div className="card p-5">
+          <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 6px', color: 'var(--text-1)' }}>
+            Setup checklist {setup.ready ? '— live' : '— finish to appear in Google Search'}
+          </h2>
+          <p style={{ fontSize: 12.5, color: 'var(--text-3)', margin: '0 0 14px' }}>
+            Organic Google results need Search Console. Run <code>{setup.setup_cmd}</code> once, then click Push all.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {(setup.steps || []).map(step => (
+              <div key={step.id} style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10,
+                padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)',
+              }}>
+                <span style={{
+                  width: 22, height: 22, borderRadius: 999, flexShrink: 0, marginTop: 1,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  background: step.done ? 'var(--green-soft)' : 'var(--bg-raised)',
+                  color: step.done ? 'var(--green)' : 'var(--text-4)', fontSize: 12, fontWeight: 700,
+                }}>
+                  {step.done ? '✓' : '·'}
+                </span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>{step.label}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2, wordBreak: 'break-all' }}>
+                    {step.href ? (
+                      <a href={step.href} target="_blank" rel="noreferrer" style={{ color: 'var(--brand)' }}>
+                        {step.detail} <ExternalLink size={10} style={{ display: 'inline' }} />
+                      </a>
+                    ) : step.detail}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {setup.sitemap_url && (
+            <p style={{ fontSize: 12.5, color: 'var(--text-4)', margin: '12px 0 0' }}>
+              Sitemap:{' '}
+              <a href={setup.sitemap_url} target="_blank" rel="noreferrer" style={{ color: 'var(--brand)' }}>
+                {setup.sitemap_url}
+              </a>
             </p>
+          )}
+        </div>
+      )}
+
+      {mode === 'gsc' && (
+        <div className="alert alert-success">
+          <CheckCircle2 size={15} />
+          <div><strong>Live Search Console.</strong> Sitemap + URL Inspection are connected. Ranking still takes time.</div>
+        </div>
+      )}
+      {mode === 'crawl' && !demo && (
+        <div className="alert alert-warning">
+          <AlertTriangle size={15} />
+          <div>
+            <strong>Pages are published, but Google Search Console is not connected yet.</strong>{' '}
+            Finish the checklist above (service account JSON). Until then Google may not discover new pages quickly.
           </div>
         </div>
       )}
+      {demo && (
+        <div className="alert alert-warning">
+          <AlertTriangle size={15} />
+          <div><strong>Demo sample data.</strong> Set <code>DEMO_MODE=false</code> and push real URLs.</div>
+        </div>
+      )}
+
+      <form onSubmit={handleInspect} className="card p-4 flex gap-3 items-end" style={{ flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--text-2)', marginBottom: 6 }}>
+            Inspect any public URL
+          </label>
+          <input
+            type="url"
+            required
+            value={inspectUrl}
+            onChange={e => setInspectUrl(e.target.value)}
+            placeholder="https://seo.159.198.79.219.nip.io/p/web-design-san-diego"
+            style={{ width: '100%', padding: '10px 12px' }}
+          />
+        </div>
+        <button type="submit" disabled={inspecting || !inspectUrl.trim()} className="btn btn-secondary">
+          <ScanSearch size={14} /> {inspecting ? 'Checking…' : 'Inspect'}
+        </button>
+        {inspectError && <div className="alert alert-error" style={{ width: '100%', margin: 0 }}>⚠ {inspectError}</div>}
+      </form>
 
       <div className="card">
         {loading ? (
@@ -91,7 +244,7 @@ export default function IndexingStatusPage() {
         ) : rows.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16" style={{ color: 'var(--text-4)' }}>
             <ScanSearch size={32} className="mb-3" style={{ opacity: 0.3 }} />
-            <p className="text-sm">No published blogs tracked yet — publish one via WordPress to see it here.</p>
+            <p className="text-sm">No URLs yet — click <strong>Push all to Google</strong> or publish via Articles.</p>
           </div>
         ) : (
           <table className="data-table">
@@ -113,7 +266,7 @@ export default function IndexingStatusPage() {
                     <div style={{ fontWeight: 600, color: 'var(--text-1)' }}>{row.title || '—'}</div>
                     <a href={row.url} target="_blank" rel="noreferrer"
                       style={{ fontSize: 11.5, color: 'var(--brand)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      <ExternalLink size={9} />{row.url.replace(/^https?:\/\//, '').slice(0, 50)}
+                      <ExternalLink size={9} />{String(row.url || '').replace(/^https?:\/\//, '').slice(0, 50)}
                     </a>
                     {row.error_message && (
                       <div style={{ fontSize: 11, color: 'var(--red)', marginTop: 3 }}>{row.error_message}</div>
@@ -124,7 +277,7 @@ export default function IndexingStatusPage() {
                   </td>
                   <td><StatusBadge status={row.status} /></td>
                   <td style={{ color: 'var(--text-3)' }}>{row.http_status ?? '—'}</td>
-                  <td>{row.robots_allowed === null ? '—' : row.robots_allowed ? '✓' : '✕'}</td>
+                  <td>{row.robots_allowed == null ? '—' : row.robots_allowed ? '✓' : '✕'}</td>
                   <td>{row.has_noindex ? '⚠' : '✓'}</td>
                   <td>{row.canonical_ok ? '✓' : '—'}</td>
                   <td style={{ color: 'var(--text-4)', fontSize: 12 }}>

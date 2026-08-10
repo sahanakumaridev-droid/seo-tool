@@ -1,26 +1,27 @@
 import { useMemo, useState } from 'react'
+import { CheckCircle2, Loader2 } from 'lucide-react'
 
 const SERVICE_OPTIONS = [
-  { value: 'Website Design & Development', label: 'Website' },
-  { value: 'Mobile App Development', label: 'Mobile App' },
-  { value: 'SEO / AEO / GEO', label: 'SEO / AEO / GEO' },
-  { value: 'Generative AI Integration', label: 'AI Integration' },
-  { value: 'Custom Software Development', label: 'Custom Software' },
-  { value: 'Workflow Automation', label: 'Automation' },
-  { value: 'Web Data Processing', label: 'Data Processing' },
-  { value: 'Ecommerce Optimization', label: 'Ecommerce' },
-]
-
-const BUDGET_OPTIONS = [
-  { value: '', label: 'Select budget (optional)' },
-  { value: '<$5k', label: 'Under $5k' },
-  { value: '$5k-$15k', label: '$5k-$15k' },
-  { value: '$15k-$50k', label: '$15k-$50k' },
-  { value: '$50k+', label: '$50k+' },
+  { value: 'Site Performance', label: 'Site Performance' },
+  { value: 'Keyword Research', label: 'Keyword Research' },
+  { value: 'AI Visibility', label: 'AI Visibility' },
+  { value: 'Competitive Analysis', label: 'Competitive Analysis' },
+  { value: 'Content', label: 'Content' },
+  { value: 'Link Building', label: 'Link Building' },
+  { value: 'Local', label: 'Local' },
+  { value: 'Reports', label: 'Reports' },
+  { value: 'Enterprise', label: 'Enterprise / Custom' },
 ]
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+}
+
+function normalizeWebsite(value) {
+  const v = value.trim()
+  if (!v) return ''
+  if (/^https?:\/\//i.test(v)) return v
+  return `https://${v}`
 }
 
 export default function ContactForm() {
@@ -29,7 +30,7 @@ export default function ContactForm() {
     email: '',
     phone: '',
     company: '',
-    budget: '',
+    website: '',
     service: SERVICE_OPTIONS[0]?.value ?? '',
     message: '',
   })
@@ -37,30 +38,24 @@ export default function ContactForm() {
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState({ type: 'idle', message: '' })
 
-  const payload = useMemo(() => {
-    const trimmed = {
-      name: form.name.trim(),
-      email: form.email.trim(),
-      phone: form.phone.trim(),
-      business_name: form.company.trim(),
-      service: form.service,
-      budget: form.budget,
-      message: form.message.trim(),
-    }
+  const payload = useMemo(() => ({
+    source: 'landing_page',
+    name: form.name.trim(),
+    email: form.email.trim(),
+    phone: form.phone.trim(),
+    business_name: form.company.trim(),
+    website: normalizeWebsite(form.website),
+    service: form.service,
+    message: form.message.trim(),
+  }), [form])
 
-    return {
-      source: 'landing_page',
-      ...trimmed,
-    }
-  }, [form])
-
-  const canSubmit = useMemo(() => {
-    if (!payload.name) return false
-    if (!payload.email || !isValidEmail(payload.email)) return false
-    if (!payload.business_name) return false
-    if (!payload.message) return false
-    return true
-  }, [payload])
+  const canSubmit = Boolean(
+    payload.name
+    && payload.email
+    && isValidEmail(payload.email)
+    && payload.business_name
+    && payload.message
+  )
 
   async function onSubmit(e) {
     e.preventDefault()
@@ -69,8 +64,7 @@ export default function ContactForm() {
     setLoading(true)
     setStatus({ type: 'idle', message: '' })
     try {
-      const apiBase = (import.meta.env.VITE_API_URL || '').trim()
-      const endpoint = apiBase ? `${apiBase.replace(/\/$/, '')}/api/leads/` : '/api/leads/'
+      const endpoint = '/api/leads/'
 
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -79,45 +73,72 @@ export default function ContactForm() {
       })
 
       if (!res.ok) {
-        const text = await res.text().catch(() => '')
-        throw new Error(text || `Request failed with ${res.status}`)
+        let detail = `Request failed (${res.status})`
+        try {
+          const data = await res.json()
+          if (data?.detail) detail = typeof data.detail === 'string' ? data.detail : detail
+        } catch {
+          /* ignore */
+        }
+        throw new Error(detail)
       }
 
-      await res.json().catch(() => ({}))
-      setStatus({ type: 'success', message: "Thanks — we’ll reach out shortly." })
+      setStatus({
+        type: 'success',
+        message: 'Request received. Our team will email you within one business day.',
+      })
       setForm({
         name: '',
         email: '',
         phone: '',
         company: '',
-        budget: '',
+        website: '',
         service: SERVICE_OPTIONS[0]?.value ?? '',
         message: '',
       })
     } catch (err) {
       setStatus({
         type: 'error',
-        message: err?.message ? `Could not submit: ${err.message}` : 'Could not submit. Please try again.',
+        message: err?.message
+          ? `Could not send: ${err.message}. Email info@zeorbit.com if this keeps happening.`
+          : 'Could not send. Please try again or email info@zeorbit.com.',
       })
     } finally {
       setLoading(false)
     }
   }
 
+  if (status.type === 'success') {
+    return (
+      <div className="rv-contact-card rv-contact-success" role="status">
+        <CheckCircle2 size={36} />
+        <h3>You’re on the list</h3>
+        <p>{status.message}</p>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => setStatus({ type: 'idle', message: '' })}
+        >
+          Send another request
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="rv-contact-card" role="region" aria-label="Contact ZeOrbit">
       <div className="rv-contact-head">
-        <p className="rv-contact-eyebrow">Talk to ZeOrbit</p>
-        <h3>Tell us what you need</h3>
+        <p className="rv-contact-eyebrow">Talk to sales</p>
+        <h3>Tell us about your SEO goals</h3>
         <p className="rv-contact-sub">
-          We’ll route your request to the right team and follow up with next steps.
+          Submit here — we keep you on this page and reply by email within one business day.
         </p>
       </div>
 
-      <form className="rv-contact-form" onSubmit={onSubmit}>
+      <form className="rv-contact-form" onSubmit={onSubmit} noValidate>
         <div className="rv-form-grid">
           <label className="rv-label">
-            Name
+            Name *
             <input
               className="rv-input"
               value={form.name}
@@ -128,7 +149,7 @@ export default function ContactForm() {
           </label>
 
           <label className="rv-label">
-            Email
+            Work email *
             <input
               className="rv-input"
               value={form.email}
@@ -140,18 +161,7 @@ export default function ContactForm() {
           </label>
 
           <label className="rv-label">
-            Phone (optional)
-            <input
-              className="rv-input"
-              value={form.phone}
-              onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-              autoComplete="tel"
-              inputMode="tel"
-            />
-          </label>
-
-          <label className="rv-label">
-            Company
+            Company *
             <input
               className="rv-input"
               value={form.company}
@@ -162,18 +172,25 @@ export default function ContactForm() {
           </label>
 
           <label className="rv-label">
-            Budget range (optional)
-            <select
-              className="rv-input rv-select"
-              value={form.budget}
-              onChange={(e) => setForm((p) => ({ ...p, budget: e.target.value }))}
-            >
-              {BUDGET_OPTIONS.map((o) => (
-                <option key={o.value || 'empty'} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            Website
+            <input
+              className="rv-input"
+              value={form.website}
+              onChange={(e) => setForm((p) => ({ ...p, website: e.target.value }))}
+              autoComplete="url"
+              placeholder="yourbusiness.com"
+            />
+          </label>
+
+          <label className="rv-label">
+            Phone
+            <input
+              className="rv-input"
+              value={form.phone}
+              onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+              autoComplete="tel"
+              inputMode="tel"
+            />
           </label>
 
           <label className="rv-label">
@@ -184,44 +201,43 @@ export default function ContactForm() {
               onChange={(e) => setForm((p) => ({ ...p, service: e.target.value }))}
             >
               {SERVICE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
+                <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
           </label>
         </div>
 
         <label className="rv-label">
-          Project description
+          Project details *
           <textarea
             className="rv-textarea"
             value={form.message}
             onChange={(e) => setForm((p) => ({ ...p, message: e.target.value }))}
             required
-            rows={5}
+            rows={4}
+            placeholder="Cities you serve, competitors, current rankings, WordPress URL…"
           />
         </label>
 
-        {status.type !== 'idle' ? (
-          <div
-            className={`rv-status ${status.type === 'success' ? 'success' : 'error'}`}
-            role={status.type === 'success' ? 'status' : 'alert'}
-          >
-            {status.message}
-          </div>
+        {status.type === 'error' ? (
+          <div className="rv-status error" role="alert">{status.message}</div>
         ) : null}
 
         <div className="rv-contact-actions">
           <button type="submit" className="btn btn-primary" disabled={!canSubmit || loading}>
-            {loading ? 'Sending…' : 'Send Request'}
+            {loading ? (
+              <>
+                <Loader2 size={16} className="rv-spin-icon" /> Sending…
+              </>
+            ) : (
+              'Send request'
+            )}
           </button>
           <p className="rv-contact-privacy">
-            By submitting, you agree to be contacted about your request. No spam.
+            Stays on this page. We’ll only use your details to reply about ZeOrbit.
           </p>
         </div>
       </form>
     </div>
   )
 }
-

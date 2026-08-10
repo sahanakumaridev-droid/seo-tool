@@ -1,0 +1,75 @@
+{\rtf1\ansi
+ZeOrbit SEO Automation — Google Ads API Tool Design Document\
+=============================================================\
+\
+Company: ZeOrbit\
+Contact: sahanakumaridev@gmail.com\
+Primary product URL: https://seo.159.198.79.219.nip.io\
+Company website: https://zeorbit.com\
+Google Ads Manager (MCC): 237-991-8178\
+\
+1. Purpose\
+----------\
+ZeOrbit is an SEO and local marketing platform for agencies and small businesses.\
+The Google Ads API integration lets authenticated ZeOrbit users create and manage\
+Search campaigns that send traffic to their published SEO landing pages, without\
+requiring them to build campaigns manually in the Google Ads UI for every page.\
+\
+2. Intended audience\
+--------------------\
+- Internal ZeOrbit operators / employees\
+- Agency clients using ZeOrbit (external authenticated users of our SaaS)\
+\
+3. Business model\
+-----------------\
+SaaS / agency tooling: customers use ZeOrbit to generate local SEO pages, track\
+indexing, and optionally launch Google Search campaigns that point to those pages.\
+Ad spend is paid by the customer’s own Google Ads billing account. ZeOrbit does\
+not resell clicks; it automates campaign setup and status control via the API.\
+\
+4. Tool architecture (high level)\
+---------------------------------\
+Frontend: React web app (ZeOrbit SEO dashboard)\
+Backend: Python FastAPI service\
+Auth: User login required before Ads actions\
+Google Ads API usage (planned production):\
+  - Create Search campaigns, ad groups, Responsive Search Ads, keywords\
+  - Read campaign status\
+  - Enable / pause campaigns from the ZeOrbit UI\
+  - Optional automation when an SEO page is published to a public URL\
+\
+Production MCC: 237-991-8178 (ZeOrbit Ads Manager)\
+Current development used a Test Manager only because the developer token is\
+still on Test Account access.\
+\
+5. Compliance / policy controls\
+-------------------------------\
+- Only authenticated ZeOrbit users can trigger Ads API calls\
+- Campaign final URLs must be publicly reachable pages (valid domain URLs)\
+- Users control budget and enable/pause from the product UI\
+- We do not bypass Google ad review or policy checks\
+- Credentials (OAuth refresh token, developer token) are stored server-side in\
+  environment configuration, not exposed to browsers\
+\
+6. User flow\
+------------\
+1. User publishes an SEO landing page in ZeOrbit (public /p/\{slug\} URL)\
+2. User opens Google Ads module in ZeOrbit\
+3. User selects landing page, reviews AI-assisted ad copy, sets daily budget\
+4. ZeOrbit creates the Search campaign via Google Ads API\
+5. User can Approve/Enable or Pause the campaign inside ZeOrbit\
+6. Ads serve only after Google review + account billing eligibility\
+\
+7. Why Basic Access is required\
+-------------------------------\
+Test Account access cannot operate the production ZeOrbit Ads Manager or serve\
+real Sponsored results on google.com. Basic Access is required so ZeOrbit can\
+manage production customer accounts under MCC 237-991-8178 for our users.\
+\
+8. Contact\
+----------\
+API contact email: sahanakumaridev@gmail.com\
+Company: ZeOrbit\
+Docs / app: https://seo.159.198.79.219.nip.io\
+
+}

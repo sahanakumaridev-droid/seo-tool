@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
-import { ArrowLeft, RefreshCw, Save, CheckCircle, Upload, Globe, ExternalLink } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Save, CheckCircle, Upload, Globe, ExternalLink, Megaphone } from 'lucide-react'
 import { generateSingle, savePage, publishToWordPress, publishToWeb, zeorbitBlogUrl } from '../api'
 
 function ScoreRing({ value, color }) {
@@ -17,11 +17,44 @@ function ScoreRing({ value, color }) {
   )
 }
 
-function MetaRow({ label, value, multiline }) {
+function MetaRow({ label, value, multiline, onChange, hint }) {
+  const fieldStyle = {
+    width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'vertical',
+    fontSize: 14, lineHeight: 1.6, color: 'var(--text-primary)', fontFamily: 'inherit', padding: 0,
+  }
   return (
     <div className="rounded-xl p-4" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
-      <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>{label}</div>
-      <p className={`text-sm leading-relaxed ${multiline ? 'whitespace-pre-line' : ''}`} style={{ color: 'var(--text-primary)' }}>{value}</p>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{label}</div>
+        {hint && <div className="text-xs" style={{ color: 'var(--text-4)' }}>{hint}</div>}
+      </div>
+      {multiline ? (
+        <textarea rows={label === 'Body Content' ? 12 : 3} value={value || ''} onChange={e => onChange(e.target.value)} style={fieldStyle} />
+      ) : (
+        <input type="text" value={value || ''} onChange={e => onChange(e.target.value)} style={fieldStyle} />
+      )}
+    </div>
+  )
+}
+
+function EditableList({ label, items = [], color, onChange }) {
+  const update = (i, val) => onChange(items.map((it, idx) => idx === i ? val : it))
+  const remove = (i) => onChange(items.filter((_, idx) => idx !== i))
+  const add = () => onChange([...items, ''])
+  return (
+    <div className="rounded-xl p-4" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
+      <div className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>{label}</div>
+      <div className="space-y-2">
+        {items.map((h, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <span className="text-xs font-bold flex-shrink-0" style={{ color }}>{label.startsWith('H2') ? 'H2' : 'H3'}</span>
+            <input type="text" value={h} onChange={e => update(i, e.target.value)}
+              className="flex-1 text-sm" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', color: 'var(--text-primary)' }} />
+            <button onClick={() => remove(i)} className="text-xs px-2 py-1 rounded" style={{ color: 'var(--red)' }}>Remove</button>
+          </div>
+        ))}
+      </div>
+      <button onClick={add} className="text-xs mt-2 font-semibold" style={{ color: 'var(--brand)' }}>+ Add heading</button>
     </div>
   )
 }
@@ -185,14 +218,37 @@ export default function PagePreviewPage() {
             {webPublishing ? 'Publishing to ZeOrbit…' : webUrl ? 'Re-publish to ZeOrbit' : 'Publish to ZeOrbit'}
           </button>
           {webUrl ? (
-            <button
-              type="button"
-              onClick={() => window.open(zeorbitBlogUrl(), '_blank', 'noopener')}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium"
-              style={{ background: 'var(--green-soft)', border: '1px solid rgba(23,128,61,0.3)', color: 'var(--green)' }}
-            >
-              <ExternalLink size={13} /> View ZeOrbit Blog
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => window.open(zeorbitBlogUrl(), '_blank', 'noopener')}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium"
+                style={{ background: 'var(--green-soft)', border: '1px solid rgba(23,128,61,0.3)', color: 'var(--green)' }}
+              >
+                <ExternalLink size={13} /> View ZeOrbit Blog
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/google-ads', {
+                  state: {
+                    finalUrl: webUrl,
+                    public_url: webUrl,
+                    category: businessType,
+                    city: block.city || '',
+                    businessName: businessType,
+                    title: block.title || block.h1,
+                    keywords: [
+                      block.keywords?.primary,
+                      ...(block.keywords?.secondary || []),
+                    ].filter(Boolean),
+                  },
+                })}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold"
+                style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.35)', color: '#a5b4fc' }}
+              >
+                <Megaphone size={13} /> Create Google Ad
+              </button>
+            </>
           ) : null}
         </div>
       </div>
@@ -230,7 +286,7 @@ export default function PagePreviewPage() {
       )}
 
       {/* Score cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: 'SEO Score', value: score, color: scoreColor },
           { label: 'Keyword Density', value: Math.round(block.keyword_density || 0), color: 'var(--brand)' },
@@ -260,32 +316,22 @@ export default function PagePreviewPage() {
         <div className="p-6 space-y-4">
           {tab === 'content' && (
             <>
-              <MetaRow label="SEO Title" value={block.title} />
-              <MetaRow label="Meta Description" value={block.meta_description} />
-              <MetaRow label="URL Slug" value={block.slug} />
-              <MetaRow label="H1" value={block.h1} />
-              <div className="rounded-xl p-4" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
-                <div className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>H2 Headings — Question Based</div>
-                <ul className="space-y-2">
-                  {block.h2s?.map((h, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      <span className="text-xs font-bold mt-0.5 flex-shrink-0" style={{ color: 'var(--brand)' }}>H2</span>{h}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="rounded-xl p-4" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
-                <div className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>H3 Headings</div>
-                <ul className="space-y-2">
-                  {block.h3s?.map((h, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      <span className="text-xs font-bold mt-0.5 flex-shrink-0" style={{ color: 'var(--brand-violet)' }}>H3</span>{h}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <MetaRow label="Body Content" value={block.content} multiline />
-              <MetaRow label="Call to Action" value={block.cta} />
+              <MetaRow label="SEO Title" value={block.title} hint={`${(block.title || '').length}/60`}
+                onChange={v => setBlock(prev => ({ ...prev, title: v }))} />
+              <MetaRow label="Meta Description" value={block.meta_description} multiline hint={`${(block.meta_description || '').length}/160`}
+                onChange={v => setBlock(prev => ({ ...prev, meta_description: v }))} />
+              <MetaRow label="URL Slug" value={block.slug}
+                onChange={v => setBlock(prev => ({ ...prev, slug: v.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') }))} />
+              <MetaRow label="H1" value={block.h1}
+                onChange={v => setBlock(prev => ({ ...prev, h1: v }))} />
+              <EditableList label="H2 Headings — Question Based" items={block.h2s || []} color="var(--brand)"
+                onChange={v => setBlock(prev => ({ ...prev, h2s: v }))} />
+              <EditableList label="H3 Headings" items={block.h3s || []} color="var(--brand-violet)"
+                onChange={v => setBlock(prev => ({ ...prev, h3s: v }))} />
+              <MetaRow label="Body Content" value={block.content} multiline
+                onChange={v => setBlock(prev => ({ ...prev, content: v }))} />
+              <MetaRow label="Call to Action" value={block.cta} multiline
+                onChange={v => setBlock(prev => ({ ...prev, cta: v }))} />
             </>
           )}
 
@@ -364,9 +410,13 @@ export default function PagePreviewPage() {
           {tab === 'faqs' && (
             <div className="space-y-3">
               {block.faqs?.map((faq, i) => (
-                <div key={i} className="rounded-xl p-4" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
-                  <p className="text-sm font-semibold mb-2" style={{ color: 'var(--brand)' }}>{faq.question}</p>
-                  <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{faq.answer}</p>
+                <div key={i} className="rounded-xl p-4 space-y-2" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
+                  <input type="text" value={faq.question}
+                    onChange={e => setBlock(prev => ({ ...prev, faqs: prev.faqs.map((f, idx) => idx === i ? { ...f, question: e.target.value } : f) }))}
+                    className="w-full text-sm font-semibold" style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--brand)', fontFamily: 'inherit' }} />
+                  <textarea rows={2} value={faq.answer}
+                    onChange={e => setBlock(prev => ({ ...prev, faqs: prev.faqs.map((f, idx) => idx === i ? { ...f, answer: e.target.value } : f) }))}
+                    className="w-full text-sm leading-relaxed" style={{ background: 'transparent', border: 'none', outline: 'none', resize: 'vertical', color: 'var(--text-secondary)', fontFamily: 'inherit' }} />
                 </div>
               ))}
             </div>

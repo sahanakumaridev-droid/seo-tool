@@ -3,6 +3,45 @@ import axios from 'axios'
 const BASE = import.meta.env.VITE_API_URL || '/api'
 const api = axios.create({ baseURL: BASE })
 
+// Attach JWT when present (marketplace / SEO login)
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('access_token') || localStorage.getItem('mp_token')
+  if (token) {
+    config.headers = config.headers || {}
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
+function storeAuthTokens(data) {
+  if (data?.access_token) {
+    localStorage.setItem('access_token', data.access_token)
+    localStorage.setItem('mp_token', data.access_token)
+  }
+  if (data?.refresh_token) localStorage.setItem('refresh_token', data.refresh_token)
+  if (data?.user) localStorage.setItem('mp_user', JSON.stringify(data.user))
+}
+
+export function clearAuthTokens() {
+  localStorage.removeItem('access_token')
+  localStorage.removeItem('refresh_token')
+  localStorage.removeItem('mp_token')
+  localStorage.removeItem('mp_user')
+  localStorage.removeItem('seo_auth')
+}
+
+export const loginUser = async (email, password) => {
+  const res = await api.post('/users/login', { email, password })
+  storeAuthTokens(res.data)
+  return res
+}
+
+export const registerUser = async ({ name, email, password, role = 'client' }) => {
+  const res = await api.post('/users/register', { name, email, password, role })
+  storeAuthTokens(res.data)
+  return res
+}
+
 // ── Content ──────────────────────────────────────────────────────
 export const generateBulk = (data) =>
   api.post('/content/generate', data)
@@ -38,6 +77,17 @@ export const researchKeywords = (keyword, location = 'US') =>
 export const runSiteAudit = (url) =>
   api.post('/seo-audit/run', { url })
 
+// ── Rankings ─────────────────────────────────────────────────────
+export const getRankings = (businessType, baseLocation, website) =>
+  api.get('/rankings', { params: { business_type: businessType, base_location: baseLocation, website } })
+
+// ── Competitor Analysis ────────────────────────────────────────────
+export const analyzeCompetitor = (competitorUrl, businessType, city) =>
+  api.post('/semantic/competitor-analysis', { competitor_url: competitorUrl, business_type: businessType, city })
+
+export const discoverCompetitors = (website, businessType, city) =>
+  api.post('/semantic/discover-competitors', { website, business_type: businessType, city })
+
 // ── Pages ────────────────────────────────────────────────────────
 export const savePage = (businessType, city, state = 'CA') =>
   api.post('/pages/save', null, { params: { business_type: businessType, city, state } })
@@ -48,6 +98,10 @@ export const listPages = (skip = 0, limit = 20) =>
 /** Public blog feed: published /p/{slug} pages + tracked live WordPress URLs */
 export const listBlogPosts = (skip = 0, limit = 24) =>
   api.get('/pages/blog', { params: { skip, limit } })
+
+/** Published SEO/WordPress URLs for Google Ads final URL picker */
+export const listLandingPagesForAds = (skip = 0, limit = 50) =>
+  api.get('/pages/landing-pages', { params: { skip, limit } })
 
 export const deletePage = (slug) =>
   api.delete(`/pages/${slug}`)
@@ -95,22 +149,39 @@ export const getSocialPlatforms = () =>
 export const getGoogleAdsStatus = () =>
   api.get('/google-ads/status')
 
+export const getGoogleLiveStatus = () =>
+  api.get('/google/live-status')
+
 export const createGoogleAdsCampaign = (data) =>
   api.post('/google-ads/create-campaign', data)
 
-// ── Google Business Profile (free) ────────────────────────────────
-export const getGbpStatus = () =>
-  api.get('/gbp/status')
+export const launchGoogleAdsCampaign = (data) =>
+  api.post('/google-ads/launch', data)
 
-export const createGbpPost = (data) =>
-  api.post('/gbp/post', data)
+export const listGoogleAdsCampaigns = (limit = 50) =>
+  api.get('/google-ads/campaigns', { params: { limit } })
+
+export const setGoogleAdsCampaignStatus = (campaign_id, enable = true) =>
+  api.post('/google-ads/campaigns/status', { campaign_id, enable })
+
+export const suggestGoogleAdsCopy = (data) =>
+  api.post('/google-ads/suggest', data)
 
 // ── Google Search Automation (sitemap + Search Console) ───────────
 export const getSeoIndexingStatus = () =>
   api.get('/seo-indexing/status')
 
+export const getSeoIndexingSetup = () =>
+  api.get('/seo-indexing/setup')
+
+export const pushAllSeoIndexing = () =>
+  api.post('/seo-indexing/push-all')
+
 export const refreshSeoIndexing = (id) =>
   api.post('/seo-indexing/refresh', null, { params: id ? { id } : {} })
+
+export const inspectSeoIndexingUrl = (data) =>
+  api.post('/seo-indexing/inspect', data)
 
 // ── Leads ────────────────────────────────────────────────────────
 export const getLeads = (params = {}) =>
@@ -127,12 +198,6 @@ export const deleteLead = (leadId) =>
 
 export const getLeadStats = () =>
   api.get('/leads/stats')
-
-export const syncBarkLeads = () =>
-  api.post('/leads/sync/bark')
-
-export const syncThumbtackLeads = () =>
-  api.post('/leads/sync/thumbtack')
 
 export const prospectLeads = (data) =>
   api.post('/leads/prospect', data)

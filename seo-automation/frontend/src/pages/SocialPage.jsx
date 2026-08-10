@@ -8,7 +8,7 @@ import axios from 'axios'
 const PLATFORMS = {
   facebook: {
     label: 'Facebook',
-    profileUrl: 'https://www.facebook.com/zeorbit.zeorbit',
+    profileUrl: 'https://www.facebook.com/zeorbit.web.designers.mobileapp.developers',
     pageUrl: 'https://www.facebook.com/zeorbit.web.designers.mobileapp.developers',
     shareUrl: (u, t) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(u)}&quote=${encodeURIComponent(t)}`,
     bg: '#1877f2',
@@ -105,20 +105,6 @@ const PLATFORMS = {
       </svg>
     ),
   },
-  gbp: {
-    label: 'Google Business',
-    profileUrl: 'https://business.google.com/',
-    shareUrl: (u, t) => `https://business.google.com/`,
-    bg: '#4285f4',
-    color: '#4285f4',
-    tagline: 'Google Business Profile',
-    handle: 'ZeOrbit',
-    logo: (
-      <svg viewBox="0 0 24 24" width="26" height="26" fill="white">
-        <path d="M12 11v2.4h5.6c-.2 1.4-1.6 4.2-5.6 4.2-3.4 0-6.1-2.8-6.1-6.2S8.6 5.2 12 5.2c1.9 0 3.2.8 3.9 1.5l2.6-2.5C16.9 2.1 14.6 1 12 1 6.5 1 2 5.5 2 11s4.5 10 10 10c5.8 0 9.6-4.1 9.6-9.8 0-.7-.1-1.2-.2-1.7H12z"/>
-      </svg>
-    ),
-  },
 }
 function buildCaption(block, platform) {
   if (!block) return ''
@@ -195,7 +181,7 @@ function PlatformCard({ id, platform, onShare, hasPage }) {
 
 /* ── Main Component ──────────────────────────────────────────── */
 export default function SocialPage() {
-  const [apiStatus, setApiStatus] = useState({ facebook: false, twitter: false, linkedin: false, instagram: false, pinterest: false, threads: false, gbp: false })
+  const [apiStatus, setApiStatus] = useState({ facebook: false, twitter: false, linkedin: false, instagram: false, pinterest: false, threads: false })
   const [pages, setPages] = useState([])
   const [selected, setSelected] = useState(null)
   const [imageUrl, setImageUrl] = useState('')
@@ -386,7 +372,7 @@ export default function SocialPage() {
             <div className="text-sm font-semibold text-white mb-1">API Auto-Share</div>
             <p className="text-xs text-slate-500 mb-3">Posts automatically using stored API tokens</p>
             <div className="grid grid-cols-2 gap-1.5 mb-3">
-              {['facebook','twitter','linkedin','instagram','pinterest','threads','gbp'].map(id => {
+              {['facebook','twitter','linkedin','instagram','pinterest','threads'].map(id => {
                 const p = PLATFORMS[id]
                 const active = selectedPlatforms.includes(id)
                 return (

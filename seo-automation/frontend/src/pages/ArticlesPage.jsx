@@ -278,6 +278,16 @@ export default function ArticlesPage() {
                 className="w-full accent-indigo-500" />
               <p className="text-[10px] text-slate-600 mt-1">One localized post per city (target + nearest {form.num_cities - 1} cities)</p>
             </div>
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-white/3 border border-white/6">
+              <div className="text-xs font-semibold text-slate-300">🤖 AI Model</div>
+              <select value={form.llm_provider || ''} onChange={e => update({ llm_provider: e.target.value || null })}
+                className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none">
+                <option value="">Auto</option>
+                <option value="openai">GPT-4</option>
+                <option value="gemini">Gemini</option>
+                <option value="groq">Groq</option>
+              </select>
+            </div>
             {error && <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 text-xs">{error}</div>}
             <button type="submit" disabled={loading}
               className="btn-primary w-full py-2.5 rounded-lg text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">

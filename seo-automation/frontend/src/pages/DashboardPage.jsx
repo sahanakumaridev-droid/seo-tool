@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -6,6 +5,7 @@ import {
 import { AlertTriangle, ChevronRight } from 'lucide-react'
 import { DASHBOARD_KPIS, SEO_OPPORTUNITIES, ORGANIC_PERFORMANCE } from '../data/mockData'
 import ScoreRing from '../components/ScoreRing'
+import useProjectInfo from '../hooks/useProjectInfo'
 
 const ChartTip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
@@ -20,17 +20,6 @@ const ChartTip = ({ active, payload, label }) => {
 const TONE_DOT = { red: 'var(--red)', amber: 'var(--amber)', green: 'var(--green)' }
 const byKey = (key) => DASHBOARD_KPIS.find(k => k.key === key)
 
-function useProject() {
-  const read = () => { try { return JSON.parse(localStorage.getItem('seo_project') || '{}') } catch { return {} } }
-  const [project, setProject] = useState(read)
-  useEffect(() => {
-    const handler = () => setProject(read())
-    window.addEventListener('seo_project_updated', handler)
-    return () => window.removeEventListener('seo_project_updated', handler)
-  }, [])
-  return project
-}
-
 function greeting() {
   const h = new Date().getHours()
   if (h < 12) return 'Good morning'
@@ -40,7 +29,7 @@ function greeting() {
 
 export default function DashboardPage() {
   const navigate = useNavigate()
-  const project = useProject()
+  const project = useProjectInfo()
 
   const website = project.website || 'example.com'
   const seoHealth = project.audit?.overall_score ?? byKey('seoHealth').value

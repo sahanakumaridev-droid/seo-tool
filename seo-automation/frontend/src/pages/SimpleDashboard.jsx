@@ -71,7 +71,7 @@ export default function SimpleDashboard() {
   const handleShareToSocial = (platform, pageIndex = null) => {
     // ZeOrbit social media accounts
     const SOCIAL_ACCOUNTS = {
-      facebook: 'https://www.facebook.com/zeorbit.zeorbit',
+      facebook: 'https://www.facebook.com/zeorbit.web.designers.mobileapp.developers',
       facebookPage: 'https://www.facebook.com/zeorbit.web.designers.mobileapp.developers',
       twitter: 'https://twitter.com/orbit_ze',
       linkedin: 'https://www.linkedin.com/company/zeorbit/',

@@ -174,6 +174,49 @@ def build_image_metadata(
     }
 
 
+# High-coverage, near-guaranteed-to-return-real-results search terms for the
+# common local-service business categories this tool targets. Matched by
+# substring against the article's own query so a niche/specific phrase that
+# returns zero results on Openverse still resolves to a genuinely on-topic
+# photo instead of the fully-random picsum.photos placeholder.
+_CATEGORY_FALLBACK_QUERIES = [
+    (("web design", "website", "web developer"), "web designer working on laptop"),
+    (("plumb",), "plumber repairing pipe"),
+    (("hvac", "heating", "air condition"), "hvac technician repair"),
+    (("roof",), "roofer working on roof"),
+    (("electric",), "electrician at work"),
+    (("law", "attorney", "legal"), "lawyer in office"),
+    (("dental", "dentist"), "dentist with patient"),
+    (("real estate", "realtor"), "real estate agent house"),
+    (("restaurant", "cafe", "food"), "restaurant chef kitchen"),
+    (("salon", "hair", "beauty", "spa"), "hair salon stylist"),
+    (("auto", "car repair", "mechanic"), "mechanic repairing car"),
+    (("account", "bookkeep", "tax"), "accountant office desk"),
+    (("gym", "fitness", "personal train"), "gym fitness training"),
+    (("clean",), "professional cleaning service"),
+    (("landscap", "lawn"), "landscaper gardening"),
+    (("market", "advertis", "seo", "digital"), "marketing team meeting"),
+    (("photograph",), "photographer with camera"),
+    (("insurance",), "insurance agent meeting client"),
+    (("moving", "mover"), "movers loading truck"),
+    (("pest",), "pest control technician"),
+    (("paint",), "painter painting wall"),
+    (("floor", "carpet"), "flooring installation"),
+    (("pet", "vet", "animal"), "veterinarian with pet"),
+    (("medical", "clinic", "health", "doctor"), "doctor with patient"),
+    (("software", "app development", "custom software"), "software developer coding"),
+    (("construction", "contractor", "remodel", "renovation"), "construction contractor at work"),
+]
+
+
+def _category_fallback_query(text: str) -> str:
+    t = (text or "").lower()
+    for keys, fallback_query in _CATEGORY_FALLBACK_QUERIES:
+        if any(k in t for k in keys):
+            return fallback_query
+    return "professional business team meeting"
+
+
 async def _hosted_image_url(query: str, seed: str) -> str:
     """Return a hosted image URL for preview. Prefers Unsplash/Pexels; falls back to picsum seed."""
     # Reuse the fetch helpers only to discover a URL is not exposed by them (they return bytes),
@@ -209,10 +252,18 @@ async def _hosted_image_url(query: str, seed: str) -> str:
         except Exception as e:
             print(f"[Image] Pexels search error: {e}")
     # Free, no-key, KEYWORD-RELEVANT source: Openverse (WordPress's own CC image API).
-    # Try the full query, then progressively simpler queries so we still get a RELEVANT image.
+    # Try the full query, then progressively simpler queries, then a high-coverage
+    # category term (e.g. "plumber repairing pipe") so a niche/specific phrase that
+    # returns zero results still lands on something topically correct rather than
+    # falling through to the fully-random picsum.photos placeholder below.
     words = [w for w in re.findall(r"[a-zA-Z]+", query.lower())
-             if w not in {"the", "in", "of", "and", "a", "professional", "at", "work"}]
-    candidates = [query, " ".join(words[:2]), (words[0] if words else "business")]
+             if w not in _IMAGE_QUERY_STOPWORDS and w != "professional" and w != "work"]
+    candidates = [
+        query,
+        " ".join(words[:2]),
+        (words[0] if words else "business"),
+        _category_fallback_query(query),
+    ]
     tried = set()
     try:
         async with httpx.AsyncClient(timeout=12) as client:
@@ -236,11 +287,47 @@ async def _hosted_image_url(query: str, seed: str) -> str:
     return f"https://picsum.photos/seed/{_slug(seed) or 'seo'}/1200/675"
 
 
+# Rotated per image index so the featured + in-content images for one article
+# search for visibly different things instead of all hitting the same query.
+_IMAGE_QUERY_MODIFIERS = ["", "team at work", "customer service", "storefront"]
+
+# Marketing/filler words that make a great blog H1 but a terrible image-search
+# query — stripping them (and dropping the city, which stock libraries almost
+# never tag by specific town) is what actually gets Openverse a real match
+# instead of falling through to the random picsum.photos placeholder.
+_IMAGE_QUERY_STOPWORDS = {
+    "the", "in", "of", "and", "a", "an", "for", "to", "at", "on", "by", "with",
+    "near", "me", "best", "top", "affordable", "proven", "trusted", "licensed",
+    "guide", "complete", "services", "service", "your", "you", "we", "our",
+    "call", "free", "estimate", "quote", "rates", "fast", "turnaround",
+    "options", "mistakes", "avoid", "how", "much", "does", "cost", "why",
+    "chooses", "company", "1", "licensed", "experts", "trusted", "local",
+    "businesses", "business", "results", "get", "today", "consultation",
+}
+
+
+def _clean_image_query(text: str, max_words: int = 3, exclude: Optional[set] = None) -> str:
+    """Reduce a blog title/keyword to a short, stock-photo-searchable topic.
+
+    `exclude` additionally strips any words pulled from the article's own
+    location — keywords are built as "{business type} {city}" (see
+    keyword_service.py), so the city rides along inside focus_keyword itself
+    and a generic English stopword list alone won't catch it.
+    """
+    skip = _IMAGE_QUERY_STOPWORDS | (exclude or set())
+    words = [
+        w for w in re.findall(r"[a-zA-Z]+", (text or "").lower())
+        if w not in skip and len(w) > 2
+    ]
+    return " ".join(words[:max_words])
+
+
 async def generate_article_images(
     focus_keyword: str,
     location: str,
     business_name: str = "",
     count: int = 3,
+    angle_title: str = "",
 ) -> List[ImageAsset]:
     """Generate 1 featured + (count-1) in-content images with full SEO metadata.
 
@@ -249,13 +336,25 @@ async def generate_article_images(
     """
     count = max(1, min(count, 3))
     assets: List[ImageAsset] = []
-    # Clean, image-search-friendly query: just the keyword (city name without state code).
-    city_only = location.split(",")[0].strip()
-    base_query = f"{focus_keyword} {city_only}".strip()
+    # Search on a clean topic only — no city (stock libraries don't tag photos
+    # by specific town, so including it just kills the match rate — and
+    # focus_keyword is built upstream as "{business type} {city}", so the
+    # city has to be stripped explicitly rather than relying on a generic
+    # stopword list) and no marketing filler from the article title.
+    location_words = {
+        w for w in re.findall(r"[a-zA-Z]+", (location or "").lower()) if len(w) > 2
+    }
+    topic = (
+        _clean_image_query(focus_keyword, exclude=location_words)
+        or _clean_image_query(angle_title, exclude=location_words)
+        or "business"
+    )
 
     for i in range(count):
         is_featured = i == 0
-        url = await _hosted_image_url(base_query, seed=f"{base_query}-{i}")
+        modifier = _IMAGE_QUERY_MODIFIERS[i % len(_IMAGE_QUERY_MODIFIERS)]
+        query = f"{topic} {modifier}".strip()
+        url = await _hosted_image_url(query, seed=f"{query}-{i}")
         meta = build_image_metadata(focus_keyword, location, business_name, i, is_featured)
         assets.append(ImageAsset(
             url=url,

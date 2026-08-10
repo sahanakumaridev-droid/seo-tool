@@ -6,9 +6,36 @@ Includes streaming, caching, and fallback strategies
 import asyncio
 import logging
 from typing import Optional, AsyncGenerator, Dict, Any
+
+import httpx
+from bs4 import BeautifulSoup
+
 from config import settings
+from services.llm_service import chat_json
 
 logger = logging.getLogger(__name__)
+
+_MAX_PAGE_EXCERPT = 3000
+
+
+async def _fetch_page_excerpt(url: str) -> str:
+    """Best-effort fetch of a competitor's homepage text, so the analysis is
+    grounded in real content instead of the LLM guessing from the URL alone.
+    Returns '' on any failure — callers should degrade gracefully."""
+    target = url if url.startswith(("http://", "https://")) else f"https://{url}"
+    try:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+            resp = await client.get(target)
+        if resp.status_code != 200:
+            return ""
+        soup = BeautifulSoup(resp.text, "html.parser")
+        for tag in soup(["script", "style", "nav", "footer"]):
+            tag.decompose()
+        text = soup.get_text(" ", strip=True)
+        return text[:_MAX_PAGE_EXCERPT]
+    except Exception as e:
+        logger.warning(f"Competitor page fetch failed for {url}: {e}")
+        return ""
 
 
 class AdvancedAIService:
@@ -140,10 +167,18 @@ class AdvancedAIService:
         business_type: str,
         city: str
     ) -> Dict[str, Any]:
-        """AI-powered competitor analysis."""
+        """AI-powered competitor analysis, grounded in the competitor's
+        actual homepage content (not just a guess from the URL text)."""
+        excerpt = await _fetch_page_excerpt(competitor_url)
+        page_context = (
+            f"Here is the actual visible text from their homepage:\n\"\"\"\n{excerpt}\n\"\"\"\n"
+            if excerpt else
+            "(Their homepage could not be fetched — base this on the URL and business context alone, "
+            "and note in your analysis that the page content wasn't accessible.)\n"
+        )
         prompt = f"""
-        Analyze the competitor website at {competitor_url} for a {business_type} business in {city}.
-        
+        Analyze the competitor at {competitor_url} for a {business_type} business in {city}.
+        {page_context}
         Provide:
         1. Key messaging and value propositions
         2. Target audience analysis
@@ -151,25 +186,46 @@ class AdvancedAIService:
         4. Content strategy and gaps
         5. Unique selling points
         6. Recommendations for differentiation
-        
-        Format as JSON.
+
+        Respond as a JSON object with keys: messaging, target_audience, seo_strategy, content_gaps, unique_selling_points, recommendations.
         """
-        
-        try:
-            response = ""
-            async for chunk in self.generate_content_with_streaming(
-                prompt,
-                model="gpt-4",
-                max_tokens=2000
-            ):
-                response += chunk
-            
-            import json
-            return json.loads(response)
-        except Exception as e:
-            logger.error(f"Competitor analysis failed: {e}")
-            return {"error": str(e)}
-    
+
+        data = await chat_json(prompt, temperature=0.6, max_tokens=2000)
+        if not data:
+            return {"error": "AI analysis unavailable — no LLM provider configured or the request failed."}
+        return data
+
+    async def discover_competitors(
+        self,
+        website: str,
+        business_type: str,
+        city: str
+    ) -> Dict[str, Any]:
+        """AI-powered competitor discovery, grounded in the user's own homepage
+        content, so suggestions are relevant to what the business actually
+        offers rather than a generic guess from business_type alone."""
+        excerpt = await _fetch_page_excerpt(website)
+        page_context = (
+            f"Here is the actual visible text from their homepage:\n\"\"\"\n{excerpt}\n\"\"\"\n"
+            if excerpt else
+            "(Their homepage could not be fetched — base this on the business type and location alone.)\n"
+        )
+        prompt = f"""
+        A {business_type} business in {city} has the website {website}.
+        {page_context}
+        Suggest 5 real, likely competitor businesses/websites that compete with them for
+        local search visibility (same business type, same or nearby city). For each, give
+        your best guess at their domain and a one-sentence rationale for why they're a
+        likely competitor. Do not suggest {website} itself.
+
+        Respond as a JSON object: {{"competitors": [{{"domain": "...", "rationale": "..."}}]}}
+        """
+
+        data = await chat_json(prompt, temperature=0.6, max_tokens=1200)
+        if not data or not data.get("competitors"):
+            return {"error": "AI competitor discovery unavailable — no LLM provider configured or the request failed.", "competitors": []}
+        return data
+
     async def generate_seo_recommendations(
         self,
         current_content: str,

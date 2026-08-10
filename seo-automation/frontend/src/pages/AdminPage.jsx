@@ -4,9 +4,10 @@
 import { useState, useEffect } from 'react'
 import {
   Users, Briefcase, MessageSquare, Zap, CheckCircle,
-  Shield, TrendingUp, Loader2, RefreshCw
+  Shield, TrendingUp, RefreshCw
 } from 'lucide-react'
 import axios from 'axios'
+import BrandLoader from '../components/BrandLoader'
 
 const BASE = import.meta.env.VITE_API_URL || '/api'
 const api  = axios.create({ baseURL: BASE })
@@ -64,11 +65,7 @@ export default function AdminPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 size={24} className="animate-spin" style={{ color: 'var(--brand)' }} />
-      </div>
-    )
+    return <BrandLoader label="Loading admin…" />
   }
 
   return (

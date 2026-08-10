@@ -640,26 +640,37 @@ async def generate_seo_block(
     target_keywords: list = [],
     industry: str = "",
     use_ai: bool = False,
+    llm_provider: Optional[str] = None,
 ) -> SEOBlock:
     if use_ai:
         try:
-            block = await _generate_ai_block(business_type, city, state, target_keywords, industry)
+            block = await _generate_ai_block(business_type, city, state, target_keywords, industry, llm_provider)
         except Exception as e:
-            print(f"[AI] GPT-4 failed, falling back to templates: {e}")
+            print(f"[AI] LLM generation failed, falling back to templates: {e}")
             block = await _generate_template_block(business_type, city, state, target_keywords, industry)
     else:
         block = await _generate_template_block(business_type, city, state, target_keywords, industry)
     
-    # Auto-generate business-specific featured image using Pexels API
+    # Auto-generate a featured image plus in-content images (so the article
+    # body has images distributed through it, not just at the top — mirrors
+    # what the Articles pipeline already does via generate_article_images()).
     try:
-        image_url = await _get_business_image(business_type, city)
-        block.featured_image_url = image_url
-        print(f"[Image] Set image URL for {business_type} in {city}: {image_url}")
+        from services.image_service import generate_article_images
+        focus_keyword = block.keywords.primary if block.keywords and block.keywords.primary else f"{business_type} {city}"
+        images = await generate_article_images(
+            focus_keyword, f"{city}, {state}".strip(", "), "", count=3,
+        )
+        block.in_content_images = images
+        if images:
+            block.featured_image_url = images[0].url
+        else:
+            block.featured_image_url = await _get_business_image(business_type, city)
+        print(f"[Image] Set {len(images)} image(s) for {business_type} in {city}")
     except Exception as e:
         print(f"[Image] Failed to set image: {e}")
         # Final fallback
         block.featured_image_url = f"https://picsum.photos/seed/{business_type.lower()}-{city.lower()}/1200/600"
-    
+
     return block
 
 
@@ -669,12 +680,12 @@ async def _generate_ai_block(
     state: str,
     target_keywords: list = [],
     industry: str = "",
+    llm_provider: Optional[str] = None,
 ) -> SEOBlock:
-    """Generate SEO content using GPT-4 for higher quality, unique content."""
-    from openai import AsyncOpenAI
-    from config import settings
+    """Generate SEO content using an LLM (GPT-4, Gemini, or Groq — whichever
+    is configured/selected) for higher quality, unique content."""
+    from services.llm_service import chat_json
 
-    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
     keywords = await generate_keywords(business_type, city, state)
     primary_kw = keywords.primary
     secondary_kws = ", ".join(keywords.secondary[:5])
@@ -720,15 +731,9 @@ Requirements:
 - Each FAQ answer should be 2-3 sentences minimum
 - Return ONLY valid JSON, no markdown"""
 
-    response = await client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.7,
-        max_tokens=3000,
-        response_format={"type": "json_object"},
-    )
-
-    data = json.loads(response.choices[0].message.content)
+    data = await chat_json(prompt, temperature=0.7, max_tokens=3000, provider=llm_provider)
+    if not data:
+        raise RuntimeError("LLM generation failed or returned no data")
     bt = business_type.title()
     slug = _slugify(f"{business_type.lower()}-{city}")
 
@@ -762,6 +767,7 @@ Requirements:
         schema_markup=schema,
         readability_score=seo_score,
         keyword_density=density,
+        content_type="service",
     )
 
 
@@ -841,6 +847,7 @@ async def _generate_template_block(
         schema_markup=schema,
         readability_score=seo_score,
         keyword_density=density,
+        content_type="service",
     )
 
 
@@ -926,7 +933,7 @@ def _article_block_from_fields(
         cta=data.get("cta", ""), keywords=kw,
         schema_markup=schema, readability_score=seo_score, keyword_density=density,
         focus_keyword=primary_keyword, secondary_keywords=(kw.secondary[:6] if kw else []),
-        source_url=profile.url if profile else "",
+        source_url=profile.url if profile else "", content_type="blog",
     )
 
 
@@ -960,6 +967,7 @@ async def _generate_article(
     state: str,
     profile: WebsiteProfile,
     industry: str,
+    llm_provider: Optional[str] = None,
 ) -> SEOBlock:
     """Generate one full article for a specific city, grounded in the website profile.
 
@@ -1013,7 +1021,7 @@ Return ONLY valid JSON with EXACTLY this structure:
   "cta": "Strong call-to-action (2-3 sentences)"
 }}
 Provide at least 5 FAQs. Return ONLY valid JSON, no markdown."""
-        data = await chat_json(prompt, temperature=0.75, max_tokens=3500)
+        data = await chat_json(prompt, temperature=0.75, max_tokens=3500, provider=llm_provider)
 
     if not data or not data.get("content"):
         data = _template_article_fields(primary_keyword, city, state, angle)
@@ -1047,17 +1055,20 @@ async def generate_articles(req: ArticleRequest, profile: WebsiteProfile) -> Lis
             try:
                 block = await _generate_article(
                     angle, req.primary_keyword, city.name, city.state, profile, req.industry,
+                    getattr(req, "llm_provider", None),
                 )
                 try:
                     images = await generate_article_images(
                         req.primary_keyword, f"{city.name}, {city.state}".strip(", "),
                         profile.business_name if profile else "", count=3,
+                        angle_title=angle.get("title", ""),
                     )
                     block.in_content_images = images
                     if images:
                         block.featured_image_url = images[0].url
                 except Exception as e:
                     print(f"[Articles] image generation failed: {e}")
+                    block.featured_image_url = f"https://picsum.photos/seed/{req.primary_keyword.lower()}-{city.name.lower()}/1200/600"
                 blocks.append(block)
             except Exception as e:
                 print(f"[Articles] generation failed for {city.name}: {e}")

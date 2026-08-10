@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Search, Download, TrendingUp, Loader2 } from 'lucide-react'
 import { KEYWORD_DATA, INTENT_DIST, difficultyLabel, intentColor } from '../data/mockData'
 import { researchKeywords } from '../api'
+import useProjectInfo from '../hooks/useProjectInfo'
 
 const INTENTS = ['All', 'Transactional', 'Commercial', 'Informational', 'Navigational']
 const DIFFICULTY_FILTERS = [
@@ -13,6 +14,7 @@ const DIFFICULTY_FILTERS = [
 ]
 
 export default function KeywordsPage() {
+  const project = useProjectInfo()
   const [searchTerm, setSearchTerm] = useState('')
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState('')
@@ -39,7 +41,7 @@ export default function KeywordsPage() {
     setSearching(true)
     setSearchError('')
     try {
-      const res = await researchKeywords(searchTerm.trim(), 'US')
+      const res = await researchKeywords(searchTerm.trim(), project.base_location || 'US')
       setSearchResults(res.data)
       setActiveTab('table')
     } catch {
@@ -68,7 +70,11 @@ export default function KeywordsPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="font-display" style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-1)' }}>Keyword Research</h1>
-          <p className="text-sm mt-0.5" style={{ color: 'var(--text-3)' }}>{dataset.length} keywords {searchResults ? `for "${searchResults.primary.keyword}"` : 'tracked · San Diego Plumbing (demo)'}</p>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--text-3)' }}>
+            {dataset.length} keywords {searchResults ? `for "${searchResults.primary.keyword}"` : 'tracked'}
+            {project.website && <> · <span style={{ color: 'var(--text-2)' }}>{project.website}</span></>}
+            {project.base_location && ` · ${project.base_location}`}
+          </p>
         </div>
         <button className="btn btn-secondary" style={{ fontSize: 13 }}>
           <Download size={13} /> Export CSV
@@ -252,6 +258,7 @@ export default function KeywordsPage() {
             <h3 className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>Keyword Gap Analysis</h3>
             <span className="text-xs" style={{ color: 'var(--text-4)' }}>— keywords competitors rank for that you don't</span>
           </div>
+          <div style={{ overflowX: 'auto' }}>
           <table className="data-table">
             <thead>
               <tr><th>Keyword</th><th>Competitor</th><th>Their Position</th><th>Volume</th><th>Opportunity</th></tr>
@@ -279,6 +286,7 @@ export default function KeywordsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

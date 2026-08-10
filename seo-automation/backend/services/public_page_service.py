@@ -51,25 +51,37 @@ _YT_PATH = "M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.5A3 3 
 _PIN_PATH = "M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.957 1.406-5.957s-.359-.72-.359-1.781c0-1.663.967-2.911 2.171-2.911 1.023 0 1.518.769 1.518 1.688 0 1.029-.653 2.567-.992 3.992-.285 1.193.6 2.165 1.777 2.165 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738.099.12.112.225.083.345-.09.375-.293 1.199-.334 1.363-.053.225-.172.271-.4.165-1.495-.69-2.436-2.878-2.436-4.646 0-3.776 2.748-7.246 7.92-7.246 4.158 0 7.392 2.967 7.392 6.923 0 4.135-2.607 7.462-6.233 7.462-1.214 0-2.354-.629-2.746-1.378l-.748 2.845c-.271 1.043-1.002 2.353-1.492 3.153 1.125.345 2.319.535 3.554.535 6.607 0 11.985-5.365 11.985-11.987C23.97 5.39 18.592.026 11.985.026L12.017 0z"
 _APPLE_PATH = "M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.572-2.27 1.206-2.98.804-.94 2.142-1.64 3.248-1.68.03.13.05.28.05.43zm4.565 15.71c-.03.07-.463 1.58-1.518 3.12-.945 1.34-1.94 2.71-3.43 2.71-1.517 0-1.9-.88-3.63-.88-1.698 0-2.302.91-3.67.91-1.377 0-2.332-1.26-3.428-2.8-1.287-1.82-2.323-4.63-2.323-7.28 0-4.28 2.797-6.55 5.552-6.55 1.448 0 2.675.95 3.6.95.865 0 2.222-1.01 3.902-1.01.613 0 2.886.06 4.374 2.19-.13.09-2.383 1.39-2.383 4.26 0 3.4 3.984 4.55 4.024 4.55l.001.01z"
 
+# Real ZeOrbit profile URLs — single source of truth, reused by both lists below.
+_URL_FACEBOOK = "https://www.facebook.com/zeorbit.web.designers.mobileapp.developers"
+_URL_X = "https://twitter.com/orbit_ze"
+_URL_LINKEDIN = "https://www.linkedin.com/company/zeorbit/"
+_URL_INSTAGRAM = "https://www.instagram.com/zeorbit/"
+_URL_YOUTUBE = "https://www.youtube.com/@ZeOrbit-Firm/"
+_URL_PINTEREST = "https://www.pinterest.com/zeorbitsd/"
+_URL_APPLE_MAPS = "https://maps.apple/p/VA-_LREgJ5PzDV"
+_URL_GOOGLE_MAPS = "https://maps.app.goo.gl/teVefHUc3yycwkcA7"
+_URL_YELP = "https://www.yelp.com/biz/zeorbit-san-diego-2"
+
 _SOCIALS = [
-    (f"https://facebook.com/zeorbit", _FB_PATH, "#1877F2"),
-    (f"https://twitter.com/orbit_ze", _X_PATH, "#000000"),
-    (f"https://linkedin.com/company/zeorbit", _LI_PATH, "#0A66C2"),
-    (f"https://instagram.com/zeorbit", _IG_PATH, "#C6288E"),
-    (f"https://youtube.com/@zeorbit", _YT_PATH, "#FF0000"),
+    (_URL_FACEBOOK, _FB_PATH, "#1877F2"),
+    (_URL_X, _X_PATH, "#000000"),
+    (_URL_LINKEDIN, _LI_PATH, "#0A66C2"),
+    (_URL_INSTAGRAM, _IG_PATH, "#C6288E"),
+    (_URL_YOUTUBE, _YT_PATH, "#FF0000"),
+    (_URL_PINTEREST, _PIN_PATH, "#E60023"),
 ]
 
 # Icon-only "Find us on" row (below-footer credit strip) — brand-colored circles.
 _MAP_ICONS = [
-    ("Apple Maps", "https://maps.apple.com/?q=ZeOrbit", "#3A3A3C", _APPLE_PATH),
-    ("Google", "https://g.page/r/zeorbit", "#4285F4", None),
-    ("Yelp", "https://yelp.com/biz/zeorbit", "#D32323", None),
-    ("Instagram", "https://instagram.com/zeorbit", "#C6288E", _IG_PATH),
-    ("LinkedIn", "https://linkedin.com/company/zeorbit", "#0A66C2", _LI_PATH),
-    ("Facebook", "https://facebook.com/zeorbit", "#1877F2", _FB_PATH),
-    ("X", "https://twitter.com/orbit_ze", "#000000", _X_PATH),
-    ("YouTube", "https://youtube.com/@zeorbit", "#FF0000", _YT_PATH),
-    ("Pinterest", "https://pinterest.com/zeorbit", "#E60023", _PIN_PATH),
+    ("Apple Maps", _URL_APPLE_MAPS, "#3A3A3C", _APPLE_PATH),
+    ("Google", _URL_GOOGLE_MAPS, "#4285F4", None),
+    ("Yelp", _URL_YELP, "#D32323", None),
+    ("Instagram", _URL_INSTAGRAM, "#C6288E", _IG_PATH),
+    ("LinkedIn", _URL_LINKEDIN, "#0A66C2", _LI_PATH),
+    ("Facebook", _URL_FACEBOOK, "#1877F2", _FB_PATH),
+    ("X", _URL_X, "#000000", _X_PATH),
+    ("YouTube", _URL_YOUTUBE, "#FF0000", _YT_PATH),
+    ("Pinterest", _URL_PINTEREST, "#E60023", _PIN_PATH),
 ]
 
 
@@ -85,7 +97,6 @@ def _social_bar() -> str:
             f'<a class="mail tel" href="tel:{PHONE}">✆ {PHONE_DISPLAY}</a>'
             f'</div>'
             f'<div class="socials">{icons}</div></div>')
-
 
 def _gtm_snippets() -> tuple[str, str]:
     """Return (head, body) Google Tag Manager snippets, or ('','') when no
@@ -145,65 +156,119 @@ def _adsense_in_article_unit() -> str:
 
 
 def _footer() -> str:
-    icons = "".join(
-        f'<a href="{url}" target="_blank" rel="noreferrer" aria-label="social" style="background:{c}">'
-        f'<svg width="13" height="13" viewBox="0 0 24 24" fill="#fff"><path d="{d}"/></svg></a>'
-        for url, d, c in _SOCIALS
+    """Premium multi-section footer: CTA → trust → nav grid → legal bar."""
+    socials = "".join(
+        f'<a class="ft-social" href="{url}" target="_blank" rel="noreferrer" aria-label="social">'
+        f'<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="{d}"/></svg></a>'
+        for url, d, _c in _SOCIALS[:4]  # keep compact: FB, X, LI, IG
     )
-    offer_links = "".join(f'<li><a href="{url}" target="_blank" rel="noreferrer">{label}</a></li>' for label, url in _FOOTER_OFFER_LINKS)
-    special_links = "".join(f'<li><a href="{url}" target="_blank" rel="noreferrer">{label}</a></li>' for label, url in _FOOTER_SPECIAL_LINKS)
-    offices = "".join(f'<div>{o}</div>' for o in OTHER_OFFICES)
 
-    return f"""<footer>
-    {_below_footer()}
-    <div class="foot-main">
-      <div class="foot-col foot-brand">
-        <a class="brand" href="{WEBSITE}" target="_blank" rel="noreferrer"><img src="/static/zeorbit-logo.png" alt="ZeOrbit" /></a>
-        <p>ZeOrbit is a creative multi-award-winning web design firm in San Diego, California, serving clients
-        nationwide. We've made a reputation for creating customized user-friendly websites and apps.</p>
-        <div class="foot-socials">{icons}</div>
-        <div class="dmca-badge"><span>DMCA</span><span>PROTECTED</span></div>
+    # Reuse existing ZeOrbit destinations — remapped into clearer nav groups.
+    services = [
+        ("Web Design", f"{WEBSITE}/web-development/"),
+        ("SEO Services", f"{WEBSITE}/seo-development/"),
+        ("Mobile Apps", f"{WEBSITE}/app-development/"),
+        ("WordPress Solutions", f"{WEBSITE}/wordpress-web-builder-solutions/"),
+        ("Ecommerce Stores", f"{WEBSITE}/ecommerce-store-management/"),
+        ("AI Consulting", f"{WEBSITE}/ai-consulting-strategy-development/"),
+    ]
+    resources = [
+        ("Blog", f"{WEBSITE}/blog/"),
+        ("Portfolio", f"{WEBSITE}/portfolio/"),
+        ("Locations", f"{WEBSITE}/locations/"),
+        ("App Timeline Guide", f"{WEBSITE}/app-development-timeline-duration-for-designing-developing-and-launching-your-app/"),
+        ("Hosting & Domains", f"{WEBSITE}/web-hosting-and-domain-services/"),
+    ]
+    company = [
+        ("About ZeOrbit", WEBSITE),
+        ("Contact", f"{WEBSITE}/contact/"),
+        ("Privacy Policy", f"{WEBSITE}/privacy-policy/"),
+        ("Terms of Service", f"{WEBSITE}/privacy-policy/"),
+    ]
+
+    def _links(items):
+        return "".join(
+            f'<li><a href="{url}" target="_blank" rel="noreferrer">{label}</a></li>'
+            for label, url in items
+        )
+
+    return f"""
+  <section class="prefoot" aria-label="Get started">
+    <div class="ft-shell prefoot-inner">
+      <div class="prefoot-copy">
+        <p class="prefoot-kicker">Next step</p>
+        <h2 class="prefoot-h">Want a clearer plan for your site?</h2>
+        <p class="prefoot-p">Talk with ZeOrbit about web design, SEO, and local visibility — no pressure, just a practical next step.</p>
       </div>
-      <div class="foot-col">
-        <div class="foot-h">What We Offer</div>
-        <ul>{offer_links}</ul>
-      </div>
-      <div class="foot-col">
-        <div class="foot-h">Special Links</div>
-        <ul>{special_links}</ul>
-      </div>
-      <div class="foot-col">
-        <div class="foot-h">Contact</div>
-        <div class="foot-contact-block">
-          <div class="foot-address">{ADDRESS}</div>
-          <a href="tel:{PHONE}">☎ {PHONE_DISPLAY}</a>
-          <a href="mailto:{EMAIL}">✉ {EMAIL}</a>
-        </div>
-        <div class="foot-h" style="margin-top:22px;">Other Office Locations</div>
-        <div class="foot-address">{offices}</div>
+      <div class="prefoot-actions">
+        <button type="button" class="prefoot-btn prefoot-btn-primary" id="ccOpenDialogFooter">Get a Free Quote</button>
+        <a class="prefoot-btn prefoot-btn-ghost" href="tel:{PHONE}">Call {PHONE_DISPLAY}</a>
       </div>
     </div>
-    <div class="foot-bottom">
-      <span>Copyright © 2026 ZeOrbit . All Rights Reserved.</span>
-      <div class="disclaimer-h">Disclaimer</div>
-      <p>All images and content are the property of their respective owners. All referenced content is sourced from its original creators.</p>
+  </section>
+
+  <footer class="site-footer">
+    <div class="ft-shell">
+      <div class="ft-trust" aria-label="What we help with">
+        <span class="ft-trust-label">Trusted by businesses looking to improve</span>
+        <ul class="ft-trust-list">
+          <li>SEO</li>
+          <li>Performance</li>
+          <li>Web Design</li>
+          <li>Digital Growth</li>
+        </ul>
+      </div>
+
+      <div class="ft-grid">
+        <div class="ft-brand">
+          <a class="ft-logo" href="{WEBSITE}" target="_blank" rel="noreferrer">
+            <img src="/static/zeorbit-logo-light.png" alt="ZeOrbit" />
+          </a>
+          <p class="ft-brand-p">Helping businesses improve their visibility, websites, and digital growth with smarter SEO tools and strategies.</p>
+          <div class="ft-socials">{socials}</div>
+          <div class="ft-contact-mini">
+            <a href="tel:{PHONE}">{PHONE_DISPLAY}</a>
+            <a href="mailto:{EMAIL}">{EMAIL}</a>
+            <span>{ADDRESS}</span>
+          </div>
+        </div>
+
+        <details class="ft-col" open>
+          <summary class="ft-h">Services</summary>
+          <ul>{_links(services)}</ul>
+        </details>
+
+        <details class="ft-col" open>
+          <summary class="ft-h">Resources</summary>
+          <ul>{_links(resources)}</ul>
+        </details>
+
+        <details class="ft-col" open>
+          <summary class="ft-h">Company</summary>
+          <ul>{_links(company)}</ul>
+        </details>
+      </div>
+    </div>
+
+    <div class="ft-bottom">
+      <div class="ft-shell ft-bottom-inner">
+        <div class="ft-copy">© 2026 ZeOrbit. All rights reserved.</div>
+        <nav class="ft-legal" aria-label="Legal">
+          <a href="{WEBSITE}/privacy-policy/" target="_blank" rel="noreferrer">Privacy Policy</a>
+          <a href="{WEBSITE}/privacy-policy/" target="_blank" rel="noreferrer">Terms of Service</a>
+          <a href="{WEBSITE}/privacy-policy/" target="_blank" rel="noreferrer">Cookie Policy</a>
+        </nav>
+      </div>
+      <div class="ft-shell ft-disclaimer">
+        <p>All images and content are the property of their respective owners. All referenced content is sourced from its original creators.</p>
+      </div>
     </div>
   </footer>"""
 
 
 def _below_footer() -> str:
-    map_icons = "".join(
-        (
-            f'<a href="{url}" target="_blank" rel="noreferrer" aria-label="{label}" style="background:{color}" title="{label}">'
-            + (f'<svg width="17" height="17" viewBox="0 0 24 24" fill="#fff"><path d="{path}"/></svg>' if path else label[0])
-            + '</a>'
-        )
-        for label, url, color, path in _MAP_ICONS
-    )
-    return f"""<div class="map-section">
-    <div class="map-h">Find Us on Google Map, Apple Map &amp; Social Media</div>
-    <div class="map-icons">{map_icons}</div>
-  </div>"""
+    """Deprecated strip — kept as no-op so older call sites remain safe."""
+    return ""
 
 
 def _esc(s: str) -> str:
@@ -214,6 +279,43 @@ def _read_time(block: SEOBlock) -> int:
     text = " ".join([block.content or "", " ".join(block.h2s or []),
                      " ".join(f"{f.question} {f.answer}" for f in (block.faqs or []))])
     return max(1, round(len(re.findall(r"\w+", text)) / 200))
+
+
+def _short_nav_label(text: str, limit: int = 22) -> str:
+    """Compact in-page nav label from a long H2."""
+    t = re.sub(r"<[^>]+>", "", text or "").strip()
+    t = re.sub(r"\s+", " ", t)
+    lower = t.lower()
+    if "cost" in lower or "price" in lower or "pricing" in lower:
+        return "Pricing"
+    if "benefit" in lower:
+        return "Benefits"
+    if "worth" in lower:
+        return "Worth It"
+    if "best" in lower:
+        return "Best Fit"
+    if "how long" in lower or "timeline" in lower or "take" in lower:
+        return "Timeline"
+    if "process" in lower or "how we" in lower:
+        return "Process"
+    if "faq" in lower or "frequently" in lower:
+        return "FAQ"
+    t = re.sub(
+        r"^(what are|what makes|what is|how much does|how long does|how do|is|are|why|when)\s+",
+        "",
+        t,
+        flags=re.I,
+    )
+    t = re.sub(r"^(the|a|an)\s+", "", t, flags=re.I).strip(" ?|")
+    # Prefer phrase before city/location comma for brevity
+    if " in " in t.lower():
+        t = re.split(r"\s+in\s+", t, maxsplit=1, flags=re.I)[0].strip()
+    if len(t) > limit:
+        cut = t[: limit - 1]
+        if " " in cut:
+            cut = cut.rsplit(" ", 1)[0]
+        t = cut + "…"
+    return t or "Section"
 
 
 def render_public_html(block: SEOBlock, public_url: str = "") -> str:
@@ -229,6 +331,16 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
         lis = "".join(f'<li><a href="#{hid}">{h}</a></li>' for hid, h in toc)
         toc_html = f'<nav class="toc"><div class="toc-title">In this article</div><ol>{lis}</ol></nav>'
 
+    # Center nav stays on this page — never send users to WordPress/zeorbit.com.
+    mid_links = [('<a href="#overview">Overview</a>')]
+    content_secs = [(hid, h) for hid, h in toc if "frequently asked" not in h.lower()]
+    for hid, h in content_secs[:3]:
+        mid_links.append(f'<a href="#{hid}">{_esc(_short_nav_label(h))}</a>')
+    if block.faqs:
+        mid_links.append('<a href="#faq-heading">FAQ</a>')
+    mid_links.append('<a href="#contact">Contact</a>')
+    nav_mid_html = "\n      ".join(mid_links)
+
     title = _esc(block.title or block.h1 or f"{block.business_type} in {block.city}")
     desc = _esc(block.meta_description or "")
     h1 = _esc(block.h1 or title)
@@ -243,6 +355,11 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
     gtm_head, gtm_body = _gtm_snippets()
     adsense_head = _adsense_head_snippet()
     ad_unit = _adsense_in_article_unit()
+    verify_token = (getattr(settings, "GSC_VERIFICATION_META", "") or "").strip()
+    verify_meta = (
+        f'<meta name="google-site-verification" content="{_esc(verify_token)}" />'
+        if verify_token else ""
+    )
 
     return f"""<!doctype html>
 <html lang="en">
@@ -253,18 +370,21 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>{title}</title>
 <meta name="description" content="{desc}" />
+{verify_meta}
 <meta property="og:type" content="article" />
 <meta property="og:title" content="{title}" />
 <meta property="og:description" content="{desc}" />
 {og_img}
 {canonical_tag}
 <meta name="robots" content="index,follow" />
+<link rel="icon" type="image/png" href="/static/zeorbit-logo.png" />
+<link rel="apple-touch-icon" href="/static/zeorbit-logo.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800;900&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet" />
 <style>
   :root {{
-    --brand:#2563EB; --brand-dark:#1D4ED8; --navy:#0E1A44;
+    --brand:#2563EB; --brand-dark:#1D4ED8; --navy:#0B1F3A; --signal:#38BDF8;
     --ink:#0B1220; --body:#2A2A2A; --muted:#5B6676; --faint:#8A94A6;
     --line:#E6E3DD; --bg:#FFFFFF; --soft:#F7F5F1;
     --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
@@ -274,9 +394,10 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
   * {{ box-sizing:border-box; }}
   html {{ scroll-behavior:smooth; }}
   body {{ margin:0; background:var(--bg); color:var(--body); font-family:var(--serif); font-size:19px; line-height:1.85; -webkit-font-smoothing:antialiased; }}
+  .sr-only {{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }}
 
   /* Black utility bar */
-  .topbar {{ display:flex; align-items:center; justify-content:space-between; background:#0A0A0A; color:#fff; padding:9px 30px; font-family:var(--sans); }}
+  .topbar {{ display:flex; align-items:center; justify-content:space-between; background:#0A0A0A; color:#fff; padding:10px 28px; font-family:var(--sans); }}
   .topbar-l {{ display:flex; align-items:center; gap:20px; flex-wrap:wrap; }}
   .topbar .mail {{ color:#fff; text-decoration:none; font-size:13px; opacity:.9; }}
   .topbar .mail:hover {{ opacity:1; }}
@@ -285,25 +406,49 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
   .topbar .socials a {{ display:inline-flex; opacity:.85; transition:opacity .15s; }}
   .topbar .socials a:hover {{ opacity:1; }}
 
-  /* Header */
-  .nav {{ position:sticky; top:0; z-index:10; display:flex; align-items:center; justify-content:space-between; gap:20px;
-          padding:16px 30px; background:rgba(255,255,255,0.95); backdrop-filter:blur(10px); border-bottom:1px solid var(--line); }}
-  .brand {{ display:flex; align-items:center; gap:11px; text-decoration:none; }}
-  .brand img {{ height:30px; width:auto; display:block; }}
-  .nav .cta {{ font-family:var(--sans); font-size:13px; font-weight:600; color:#fff; background:var(--navy); padding:11px 20px; border-radius:2px; text-decoration:none; text-transform:uppercase; letter-spacing:.05em; flex-shrink:0; }}
+  /* Header — logo | center links | call */
+  .nav {{ position:sticky; top:0; z-index:10; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:16px;
+          padding:14px 28px; background:rgba(255,255,255,0.96); backdrop-filter:blur(12px); border-bottom:1px solid var(--line); }}
+  .brand {{ display:inline-flex; align-items:center; text-decoration:none; justify-self:start; }}
+  .brand img {{ height:32px; width:auto; display:block; }}
+  .nav-mid {{ display:flex; align-items:center; justify-content:center; gap:4px 22px; flex-wrap:wrap; }}
+  .nav-mid a {{
+    font-family:var(--sans); font-size:13.5px; font-weight:600; color:var(--ink); text-decoration:none;
+    letter-spacing:.01em; padding:6px 2px; border-bottom:2px solid transparent; transition:color .15s, border-color .15s;
+  }}
+  .nav-mid a:hover {{ color:var(--brand); border-bottom-color:var(--brand); }}
+  .nav .cta {{ font-family:var(--sans); font-size:13px; font-weight:600; color:#fff; background:var(--navy); padding:12px 20px; border-radius:4px; text-decoration:none; letter-spacing:.02em; flex-shrink:0; transition:background .15s; justify-self:end; }}
+  .nav .cta:hover {{ background:#132a4d; }}
   .progress {{ position:fixed; top:0; left:0; height:3px; width:0; background:var(--brand); z-index:20; }}
 
-  article {{ max-width:740px; margin:0 auto; padding:52px 22px 40px; }}
+  @media (max-width:800px) {{
+    .nav {{ grid-template-columns:1fr auto; }}
+    .nav-mid {{ display:none; }}
+  }}
+  @media (max-width:640px) {{
+    .topbar {{ padding:8px 16px; }}
+    .nav {{ padding:12px 16px; gap:14px; }}
+    .brand img {{ height:26px; }}
+    .nav .cta {{ padding:10px 14px; font-size:12px; }}
+  }}
+
+  /* Content — full-width with even side padding */
+  article {{ max-width:none; width:100%; margin:0; padding:44px 28px 36px; box-sizing:border-box; }}
   .eyebrow {{ display:inline-block; font-family:var(--sans); font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.14em; color:var(--ink); border:1.5px solid var(--ink); padding:9px 22px; border-radius:999px; margin-bottom:26px; }}
   h1 {{ font-family:var(--display); font-size:clamp(34px,6vw,56px); line-height:1.08; font-weight:800; letter-spacing:-0.01em; color:var(--ink); margin:0 0 24px; }}
   .byline {{ display:flex; align-items:center; gap:12px; font-family:var(--sans); margin:0 0 32px; }}
   .byline .who {{ font-size:14px; font-weight:600; color:var(--ink); }}
   .byline .sub {{ font-size:13px; color:var(--faint); }}
-  /* Full-bleed hero — spans the full viewport width, sits above the
-     constrained article column rather than inside it. */
-  .hero-wrap {{ width:100%; max-height:min(60vh, 560px); overflow:hidden; position:relative; background:var(--soft); }}
-  .hero-wrap img {{ width:100%; height:100%; min-height:280px; object-fit:cover; display:block; }}
-  .hero-wrap::after {{ content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(0,0,0,0.30) 100%); }}
+  /* Banner — inset with page padding */
+  .hero-wrap {{
+    width:auto; margin:0 28px; max-height:min(48vh, 420px); overflow:hidden; position:relative;
+    background:var(--soft); border-radius:12px; border:1px solid var(--line);
+  }}
+  .hero-wrap img {{ width:100%; height:100%; min-height:220px; max-height:min(48vh, 420px); object-fit:cover; display:block; }}
+  .hero-wrap::after {{ content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,0) 50%, rgba(11,18,32,0.28) 100%); pointer-events:none; border-radius:inherit; }}
+  @media (max-width:640px) {{
+    .hero-wrap {{ margin:0 16px; border-radius:10px; }}
+  }}
 
   .quick {{ background:var(--soft); border-left:4px solid var(--navy); border-radius:4px; padding:18px 22px; margin:0 0 32px; }}
   .quick-l {{ font-family:var(--sans); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--navy); margin-bottom:6px; }}
@@ -318,48 +463,99 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
   p {{ margin:0 0 26px; color:var(--body); }}
   .seo-intro {{ font-size:22px; line-height:1.75; color:#1B2536; }}
   h2 {{ font-family:var(--display); font-size:33px; font-weight:700; letter-spacing:-0.01em; color:var(--ink); margin:52px 0 16px; scroll-margin-top:90px; }}
+  #overview, #contact, #faq-heading {{ scroll-margin-top:90px; }}
   h3 {{ font-family:var(--sans); font-size:20px; font-weight:700; color:var(--ink); margin:32px 0 10px; }}
   ul,ol {{ margin:0 0 26px; padding-left:24px; }} li {{ margin:10px 0; }}
   a {{ color:var(--brand); text-underline-offset:2px; }}
-  figure {{ margin:34px 0; }} figure img {{ width:100%; border-radius:6px; }}
-  figure figcaption {{ font-family:var(--sans); font-size:12.5px; color:var(--faint); text-align:center; margin-top:9px; }}
+  figure, .wp-block-image {{
+    margin:40px 0; padding:0; background:var(--soft); border:1px solid var(--line); border-radius:12px;
+    overflow:hidden;
+  }}
+  figure img, .wp-block-image img {{
+    width:100%; max-height:min(52vh, 480px); object-fit:cover; display:block; border-radius:0;
+  }}
+  figure figcaption, .wp-block-image figcaption {{
+    font-family:var(--sans); font-size:12.5px; color:var(--muted); text-align:left;
+    margin:0; padding:12px 16px 14px; line-height:1.5; border-top:1px solid var(--line); background:#fff;
+  }}
 
-  /* Trust badges — short benefit statements as a pill row, not bare headings */
-  .trust-badges {{ display:flex; flex-wrap:wrap; gap:10px; margin:0 0 40px; }}
-  .trust-badge {{ display:inline-flex; align-items:center; gap:8px; padding:10px 16px; border-radius:999px;
+  /* Trust badges */
+  .trust-section {{
+    margin:48px 0 8px; padding:28px 24px; border:1px solid var(--line); border-radius:12px; background:#fff;
+  }}
+  .trust-kicker {{
+    font-family:var(--sans); font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--muted); margin:0 0 16px;
+  }}
+  .trust-badges {{ display:flex; flex-wrap:wrap; gap:10px; margin:0; }}
+  .trust-badge {{ display:inline-flex; align-items:center; gap:8px; padding:11px 15px; border-radius:8px;
     background:var(--soft); border:1px solid var(--line); font-family:var(--sans); font-size:13.5px;
     font-weight:600; color:var(--navy); }}
   .trust-badge svg {{ color:var(--brand); flex-shrink:0; }}
 
-  .faq-section {{ margin-top:14px; }}
-  .faq-item {{ border-bottom:1px solid var(--line); padding:6px 2px; margin:0; background:transparent; }}
+  .faq-wrap {{
+    margin:48px 0 0; padding:32px 28px 18px; border-radius:14px; border:1px solid var(--line);
+    background:linear-gradient(180deg, #FBFBFA 0%, #FFFFFF 40%);
+  }}
+  .faq-wrap > h2 {{ margin-top:0; margin-bottom:8px; }}
+  .faq-lead {{
+    font-family:var(--sans); font-size:15px; color:var(--muted); margin:0 0 18px; line-height:1.55;
+  }}
+  .faq-section {{ margin:0; }}
+  .faq-item {{
+    border:1px solid var(--line); border-radius:10px; padding:0; margin:0 0 10px; background:#fff;
+    overflow:hidden;
+  }}
   .faq-item summary {{
     display:flex; align-items:center; justify-content:space-between; gap:16px;
-    padding:18px 2px; margin:0; font-size:19px; font-family:var(--display); font-weight:700;
-    color:var(--ink); cursor:pointer; list-style:none; user-select:none;
+    padding:16px 18px; margin:0; font-size:17px; font-family:var(--sans); font-weight:700;
+    color:var(--ink); cursor:pointer; list-style:none; user-select:none; line-height:1.35;
   }}
   .faq-item summary::-webkit-details-marker {{ display:none; }}
   .faq-item summary::after {{
-    content:''; flex-shrink:0; width:11px; height:11px; margin-right:6px;
+    content:''; flex-shrink:0; width:10px; height:10px; margin-right:2px;
     border-right:2px solid var(--muted); border-bottom:2px solid var(--muted);
     transform:rotate(45deg); transition:transform .2s ease; margin-top:-4px;
   }}
+  .faq-item[open] summary {{ border-bottom:1px solid var(--line); }}
   .faq-item[open] summary::after {{ transform:rotate(-135deg); margin-top:2px; }}
   .faq-item summary:hover {{ color:var(--brand); }}
-  .faq-item p {{ margin:0 0 22px; font-size:18px; color:var(--muted); }}
+  .faq-item p {{ margin:0; padding:14px 18px 18px; font-size:16px; line-height:1.7; color:var(--muted); font-family:var(--sans); }}
 
-  /* Pull quote — the CTA line, styled light so it doesn't compete with the
-     real conversion box (.contact-card) further down the page. */
-  .pull-quote {{ margin:52px 0 0; padding:8px 0 8px 26px; border-left:4px solid var(--brand); }}
-  .pull-quote p {{ font-family:var(--display); font-size:24px; font-weight:700; line-height:1.4; margin:0; color:var(--ink); }}
+  .end-note {{
+    margin:28px 0 0; font-family:var(--sans); font-size:15.5px; line-height:1.6; color:var(--muted);
+    padding:0; border:0;
+  }}
+  .pull-quote {{ display:none; }} /* legacy pages */
 
-  .contact-card {{ margin:52px 0 0; padding:40px 32px; background:var(--navy); color:#fff; border-radius:6px; text-align:center; scroll-margin-top:90px; }}
-  .contact-card .cc-l {{ font-family:var(--display); font-size:26px; font-weight:800; margin-bottom:8px; color:#fff; }}
-  .contact-card p {{ font-family:var(--sans); font-size:15px; color:rgba(255,255,255,0.8); margin:0 auto 24px; max-width:440px; }}
-  .cc-actions {{ display:flex; gap:14px; justify-content:center; flex-wrap:wrap; }}
-  .cc-btn {{ font-family:var(--sans); font-size:15px; font-weight:700; text-decoration:none; padding:14px 26px; border-radius:3px; background:#fff; color:var(--navy); letter-spacing:.02em; border:none; cursor:pointer; }}
-  .cc-btn.ghost {{ background:transparent; color:#fff; border:1.5px solid rgba(255,255,255,0.5); }}
-  .cc-btn:hover {{ opacity:.92; }}
+  .article-end {{
+    margin:40px 0 8px; display:grid; gap:16px;
+  }}
+  .contact-card {{
+    margin:0; padding:0; overflow:hidden; border-radius:14px; scroll-margin-top:90px;
+    background:var(--navy); color:#fff;
+    display:grid; grid-template-columns:1.4fr 1fr; gap:0;
+    border:1px solid rgba(11,31,58,0.2);
+  }}
+  .contact-card .cc-main {{ padding:34px 32px; }}
+  .contact-card .cc-side {{
+    padding:34px 28px; background:rgba(0,0,0,0.18); border-left:1px solid rgba(255,255,255,0.08);
+    display:flex; flex-direction:column; justify-content:center; gap:14px;
+  }}
+  .contact-card .cc-kicker {{
+    font-family:var(--sans); font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--signal); margin:0 0 10px;
+  }}
+  .contact-card .cc-l {{ font-family:var(--display); font-size:clamp(24px, 3vw, 30px); font-weight:800; margin:0 0 10px; color:#fff; line-height:1.2; }}
+  .contact-card p {{ font-family:var(--sans); font-size:15px; color:rgba(255,255,255,0.78); margin:0 0 22px; max-width:460px; line-height:1.6; }}
+  .cc-actions {{ display:flex; gap:12px; flex-wrap:wrap; }}
+  .cc-btn {{ font-family:var(--sans); font-size:14.5px; font-weight:700; text-decoration:none; padding:13px 20px; border-radius:6px; background:#fff; color:var(--navy); letter-spacing:.01em; border:none; cursor:pointer; display:inline-flex; align-items:center; }}
+  .cc-btn.ghost {{ background:transparent; color:#fff; border:1.5px solid rgba(255,255,255,0.35); }}
+  .cc-btn:hover {{ opacity:.94; }}
+  .cc-side-label {{ font-family:var(--sans); font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:rgba(255,255,255,0.45); margin:0; }}
+  .cc-side a {{ font-family:var(--sans); color:#fff; text-decoration:none; font-size:15px; font-weight:600; }}
+  .cc-side a:hover {{ color:var(--signal); }}
+  .cc-side .cc-meta {{ font-family:var(--sans); font-size:13.5px; color:rgba(255,255,255,0.62); line-height:1.55; margin:0; }}
 
   /* Lead-capture dialog, opened by the "Get a Free Quote" button */
   .lead-dialog {{ border:none; border-radius:8px; padding:32px; width:min(90vw, 380px); box-shadow:0 20px 60px rgba(0,0,0,0.25); }}
@@ -377,48 +573,163 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
   .cc-form-msg {{ font-family:var(--sans); font-size:13.5px; color:var(--ink); margin-top:14px; display:none; text-align:center; }}
   .cc-form-msg.show {{ display:block; }}
 
-  .bio {{ display:flex; gap:16px; align-items:flex-start; margin:44px 0 0; padding:24px; background:var(--soft); border-radius:6px; }}
-  .bio .name {{ font-family:var(--sans); font-weight:700; font-size:15px; color:var(--ink); }}
-  .bio .txt {{ font-family:var(--sans); font-size:13.5px; color:var(--muted); margin-top:5px; line-height:1.6; }}
+  .bio {{
+    display:flex; gap:14px; align-items:flex-start; margin:0; padding:18px 20px;
+    background:#fff; border:1px solid var(--line); border-radius:12px;
+  }}
+  .bio-mark {{ flex-shrink:0; margin-top:2px; height:22px; width:auto; display:block; }}
+  .bio .name {{ font-family:var(--sans); font-weight:700; font-size:14.5px; color:var(--ink); }}
+  .bio .txt {{ font-family:var(--sans); font-size:13.5px; color:var(--muted); margin-top:4px; line-height:1.55; }}
 
-  footer {{ border-top:1px solid var(--line); margin-top:22px; background:var(--bg); color:var(--body); font-family:var(--sans); }}
-  .foot-main {{ padding:48px 30px 28px; display:grid; grid-template-columns:1.9fr 0.85fr 0.85fr 1fr; gap:32px; align-items:start; }}
-  .foot-col img {{ height:40px; width:auto; display:block; margin-bottom:14px; }}
-  .foot-brand p {{ font-size:13.5px; line-height:1.75; color:var(--muted); margin:0 0 16px; }}
-  .foot-socials {{ display:flex; gap:9px; margin-bottom:16px; }}
-  .foot-socials a {{ width:29px; height:29px; border-radius:50%;
-    display:inline-flex; align-items:center; justify-content:center; transition:transform .15s; }}
-  .foot-socials a:hover {{ transform:translateY(-2px); }}
-  .dmca-badge {{ display:inline-flex; border-radius:3px; overflow:hidden; font-family:var(--sans); font-size:10px; font-weight:800; letter-spacing:.03em; }}
-  .dmca-badge span:first-child {{ background:#3BA9C9; color:#fff; padding:4px 7px; }}
-  .dmca-badge span:last-child {{ background:#111; color:#fff; padding:4px 7px; }}
-  .foot-h {{ font-family:var(--display); font-size:19px; font-weight:800; color:var(--navy); margin-bottom:16px; }}
-  .foot-col ul {{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:11px; }}
-  .foot-col ul li {{ position:relative; padding-left:14px; }}
-  .foot-col ul li::before {{ content:''; position:absolute; left:0; top:9px; width:5px; height:5px; border-radius:50%; background:var(--navy); }}
-  .foot-col ul a {{ font-family:var(--serif); font-size:15px; color:var(--body); text-decoration:none; }}
-  .foot-col ul a:hover {{ color:var(--brand); }}
-  .foot-contact-block {{ display:flex; flex-direction:column; gap:9px; margin-bottom:6px; }}
-  .foot-contact-block a {{ font-family:var(--serif); font-size:15px; color:var(--body); text-decoration:none; }}
-  .foot-contact-block a:hover {{ color:var(--brand); }}
-  .foot-address {{ font-family:var(--serif); font-size:14.5px; color:var(--muted); line-height:1.6; }}
-  .foot-bottom {{ padding:22px 30px; border-top:1px solid var(--line); text-align:center; font-size:13px; color:var(--faint); }}
-  .disclaimer-h {{ font-family:var(--display); font-size:17px; font-weight:800; color:var(--ink); margin:20px 0 8px; }}
-  .foot-bottom p {{ margin:0; font-size:11.5px; max-width:640px; margin-left:auto; margin-right:auto; }}
-  @media (max-width:800px) {{ .foot-main {{ grid-template-columns:1fr 1fr; }} }}
-  @media (max-width:500px) {{ .foot-main {{ grid-template-columns:1fr; }} }}
+  @media (max-width:800px) {{
+    .contact-card {{ grid-template-columns:1fr; }}
+    .contact-card .cc-side {{ border-left:0; border-top:1px solid rgba(255,255,255,0.08); padding-top:22px; }}
+    .faq-wrap {{ padding:24px 16px 12px; }}
+  }}
 
-  /* "Find us on" map/social row (below footer) */
-  .map-section {{ background:var(--bg); border-top:1px solid var(--line); padding:28px 30px 36px; text-align:center; }}
-  .map-h {{ font-family:var(--display); font-size:17px; font-weight:700; color:var(--ink); margin-bottom:18px; }}
-  .map-icons {{ display:flex; justify-content:center; gap:12px; flex-wrap:wrap; }}
-  .map-icons a {{ width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-    color:#fff; font-family:var(--sans); font-weight:800; font-size:15px; text-decoration:none; transition:transform .15s; }}
-  .map-icons a:hover {{ transform:translateY(-2px); }}
+  /* ── Premium footer system ───────────────────────────────────── */
+  .ft-shell {{ width:100%; max-width:none; margin:0; padding:0 28px; box-sizing:border-box; }}
+
+  .prefoot {{
+    margin-top:48px; padding:40px 0;
+    background:#0B1F3A;
+    color:#fff; border-top:1px solid rgba(255,255,255,0.06);
+  }}
+  .prefoot-inner {{
+    display:flex; align-items:center; justify-content:space-between; gap:28px;
+  }}
+  .prefoot-kicker {{
+    font-family:var(--sans); font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--signal); margin:0 0 8px;
+  }}
+  .prefoot-h {{
+    font-family:var(--sans); font-size:clamp(22px, 2.6vw, 28px); font-weight:800;
+    letter-spacing:-0.02em; line-height:1.2; margin:0 0 8px; color:#fff;
+  }}
+  .prefoot-p {{
+    font-family:var(--sans); font-size:14.5px; line-height:1.6; color:rgba(255,255,255,0.68);
+    margin:0; max-width:480px;
+  }}
+  .prefoot-actions {{ display:flex; gap:10px; flex-wrap:wrap; flex-shrink:0; }}
+  .prefoot-btn {{
+    font-family:var(--sans); font-size:13.5px; font-weight:700; text-decoration:none;
+    padding:12px 18px; border-radius:6px; border:1px solid transparent; cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center; letter-spacing:.01em;
+    transition:transform .15s, background .15s, border-color .15s, color .15s;
+  }}
+  .prefoot-btn-primary {{ background:#fff; color:#0B1F3A; }}
+  .prefoot-btn-primary:hover {{ transform:translateY(-1px); background:#F3F4F6; }}
+  .prefoot-btn-ghost {{ background:transparent; color:#fff; border-color:rgba(255,255,255,0.28); }}
+  .prefoot-btn-ghost:hover {{ border-color:rgba(255,255,255,0.55); background:rgba(255,255,255,0.06); }}
+
+  .site-footer {{
+    background: linear-gradient(180deg, #070B14 0%, #05070D 100%);
+    color:rgba(255,255,255,0.78); font-family:var(--sans);
+    border-top:1px solid rgba(255,255,255,0.05);
+  }}
+
+  .ft-trust {{
+    display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap;
+    padding:22px 0; border-bottom:1px solid rgba(255,255,255,0.08);
+  }}
+  .ft-trust-label {{
+    font-size:12px; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+    color:rgba(255,255,255,0.45);
+  }}
+  .ft-trust-list {{ list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:8px; }}
+  .ft-trust-list li {{
+    font-size:12.5px; font-weight:600; color:rgba(255,255,255,0.82);
+    padding:7px 12px; border:1px solid rgba(255,255,255,0.12); border-radius:999px;
+    background:rgba(255,255,255,0.03);
+  }}
+
+  .ft-grid {{
+    display:grid; grid-template-columns:1.5fr 1fr 1fr 1fr; gap:36px 28px;
+    padding:42px 0 36px;
+  }}
+  .ft-logo {{
+    display:inline-flex; align-items:center; margin-bottom:18px;
+  }}
+  .ft-logo img {{
+    height:36px; width:auto; display:block;
+  }}
+  .ft-brand-p {{
+    font-size:14px; line-height:1.7; color:rgba(255,255,255,0.62); margin:0 0 18px; max-width:320px;
+  }}
+  .ft-socials {{ display:flex; gap:10px; margin-bottom:18px; }}
+  .ft-social {{
+    width:34px; height:34px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center;
+    color:rgba(255,255,255,0.85); border:1px solid rgba(255,255,255,0.14); background:rgba(255,255,255,0.03);
+    transition:background .15s, border-color .15s, transform .15s, color .15s;
+  }}
+  .ft-social:hover {{ background:rgba(255,255,255,0.1); border-color:rgba(255,255,255,0.3); transform:translateY(-1px); color:#fff; }}
+  .ft-contact-mini {{
+    display:flex; flex-direction:column; gap:6px; font-size:13px; color:rgba(255,255,255,0.5); line-height:1.5;
+  }}
+  .ft-contact-mini a {{ color:rgba(255,255,255,0.72); text-decoration:none; }}
+  .ft-contact-mini a:hover {{ color:#fff; }}
+
+  .ft-col {{ border:0; margin:0; padding:0; background:transparent; }}
+  .ft-col summary {{
+    list-style:none; cursor:default; font-family:var(--sans); font-size:12px; font-weight:700;
+    letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,0.92); margin:0 0 16px;
+  }}
+  .ft-col summary::-webkit-details-marker {{ display:none; }}
+  .ft-col ul {{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:11px; }}
+  .ft-col a {{
+    font-size:14px; color:rgba(255,255,255,0.62); text-decoration:none; line-height:1.4;
+    transition:color .15s;
+  }}
+  .ft-col a:hover {{ color:#fff; }}
+
+  .ft-bottom {{
+    border-top:1px solid rgba(255,255,255,0.08);
+    padding:18px 0 22px; background:rgba(0,0,0,0.22);
+  }}
+  .ft-bottom-inner {{
+    display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  }}
+  .ft-copy {{ font-size:13px; color:rgba(255,255,255,0.48); }}
+  .ft-legal {{ display:flex; flex-wrap:wrap; gap:8px 18px; }}
+  .ft-legal a {{ font-size:13px; color:rgba(255,255,255,0.55); text-decoration:none; }}
+  .ft-legal a:hover {{ color:#fff; }}
+  .ft-disclaimer {{ margin-top:12px; }}
+  .ft-disclaimer p {{
+    margin:0; font-size:11.5px; line-height:1.55; color:rgba(255,255,255,0.35); max-width:760px;
+  }}
+
+  @media (max-width:900px) {{
+    .prefoot-inner {{ flex-direction:column; align-items:flex-start; }}
+    .ft-grid {{ grid-template-columns:1fr 1fr; gap:28px 20px; }}
+  }}
+  @media (max-width:640px) {{
+    .ft-shell {{ padding:0 16px; }}
+    .prefoot {{ padding:36px 0 32px; margin-top:40px; }}
+    .prefoot-actions {{ width:100%; }}
+    .prefoot-btn {{ flex:1; min-height:46px; }}
+    .ft-trust {{ flex-direction:column; align-items:flex-start; gap:12px; padding:18px 0; }}
+    .ft-grid {{ grid-template-columns:1fr; gap:8px; padding:18px 0 10px; }}
+    .ft-brand {{ padding-bottom:18px; border-bottom:1px solid rgba(255,255,255,0.08); margin-bottom:6px; }}
+    .ft-col {{ border-bottom:1px solid rgba(255,255,255,0.08); }}
+    .ft-col summary {{
+      cursor:pointer; display:flex; align-items:center; justify-content:space-between;
+      padding:14px 0; margin:0; font-size:13px;
+    }}
+    .ft-col summary::after {{
+      content:''; width:8px; height:8px; border-right:1.5px solid rgba(255,255,255,0.55);
+      border-bottom:1.5px solid rgba(255,255,255,0.55); transform:rotate(45deg); transition:transform .2s;
+      margin-top:-4px;
+    }}
+    .ft-col[open] summary::after {{ transform:rotate(-135deg); margin-top:2px; }}
+    .ft-col ul {{ padding:0 0 14px; gap:12px; }}
+    .ft-col a {{ font-size:15px; display:inline-block; padding:4px 0; min-height:28px; }}
+    .ft-bottom-inner {{ flex-direction:column; align-items:flex-start; gap:12px; }}
+    .ft-legal {{ gap:10px 14px; }}
+  }}
 
   .ad-slot {{ margin:8px 0 38px; min-height:0; overflow:hidden; }}
 
-  @media (max-width:600px) {{ body {{ font-size:18px; }} article {{ padding:34px 18px 30px; }} .topbar {{ padding:8px 16px; }} .topbar .mail {{ font-size:12px; }} .toc ol {{ columns:1; }} }}
+  @media (max-width:600px) {{ body {{ font-size:18px; }} article {{ padding:32px 16px 28px; }} .topbar .mail {{ font-size:12px; }} .toc ol {{ columns:1; }} }}
 </style>
 </head>
 <body>
@@ -426,13 +737,18 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
   <div class="progress" id="pb"></div>
   {_social_bar()}
   <div class="nav">
-    <a class="brand" href="{WEBSITE}" target="_blank" rel="noreferrer"><img src="/static/zeorbit-logo.png" alt="ZeOrbit" /></a>
+    <a class="brand" href="{WEBSITE}" target="_blank" rel="noreferrer">
+      <img src="/static/zeorbit-logo.png" alt="ZeOrbit" />
+    </a>
+    <nav class="nav-mid" aria-label="On this page">
+      {nav_mid_html}
+    </nav>
     <a class="cta" href="tel:{PHONE}">✆ {PHONE_DISPLAY}</a>
   </div>
 
   {hero}
 
-  <article>
+  <article id="overview">
     {f'<span class="eyebrow">{location}</span>' if location else ''}
     <h1>{h1}</h1>
     <div class="byline">
@@ -445,30 +761,43 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
     {toc_html}
     {ad_unit}
     {body}
-    <div class="contact-card" id="contact">
-      <div class="cc-l">Ready to get started?</div>
-      <p>Speak with our team for a free, no-obligation consultation on your {biz.lower() or 'project'}.</p>
-      <div class="cc-actions">
-        <a class="cc-btn" href="tel:{PHONE}">✆ {PHONE_DISPLAY}</a>
-        <button type="button" class="cc-btn ghost" id="ccOpenDialog">Get a Free Quote</button>
+    <div class="article-end">
+      <div class="contact-card" id="contact">
+        <div class="cc-main">
+          <div class="cc-kicker">Free consultation</div>
+          <div class="cc-l">Ready for a clearer next step?</div>
+          <p>Get practical advice on your {biz.lower() or 'project'} — website, SEO, and local visibility — with no obligation.</p>
+          <div class="cc-actions">
+            <button type="button" class="cc-btn" id="ccOpenDialog">Get a Free Quote</button>
+            <a class="cc-btn ghost" href="tel:{PHONE}">Call {PHONE_DISPLAY}</a>
+          </div>
+        </div>
+        <div class="cc-side">
+          <p class="cc-side-label">Talk to ZeOrbit</p>
+          <a href="tel:{PHONE}">{PHONE_DISPLAY}</a>
+          <a href="mailto:{EMAIL}">{EMAIL}</a>
+          <p class="cc-meta">{ADDRESS}</p>
+        </div>
       </div>
-    </div>
 
-    <dialog class="lead-dialog" id="leadDialog">
-      <button type="button" class="ld-close" id="ccCloseDialog" aria-label="Close">✕</button>
-      <div class="ld-title">Get a Free Quote</div>
-      <p class="ld-sub">Leave your email and phone number — our team will reach out shortly.</p>
-      <form class="cc-form" id="ccLeadForm">
-        <input type="email" name="email" placeholder="Your email" required />
-        <input type="tel" name="phone" placeholder="Phone number" required />
-        <button type="submit" class="cc-btn">Send</button>
-      </form>
-      <div class="cc-form-msg" id="ccLeadMsg"></div>
-    </dialog>
-    <div class="bio">
-      <div>
-        <div class="name">{biz or 'ZeOrbit'} Editorial Team</div>
-        <div class="txt">Local {biz.lower() or 'service'} specialists serving {location or 'your area'}. Published and maintained by ZeOrbit — a U.S.-based web design, software &amp; SEO company.</div>
+      <dialog class="lead-dialog" id="leadDialog">
+        <button type="button" class="ld-close" id="ccCloseDialog" aria-label="Close">✕</button>
+        <div class="ld-title">Get a Free Quote</div>
+        <p class="ld-sub">Leave your email and phone number — our team will reach out shortly.</p>
+        <form class="cc-form" id="ccLeadForm">
+          <input type="email" name="email" placeholder="Your email" required />
+          <input type="tel" name="phone" placeholder="Phone number" required />
+          <button type="submit" class="cc-btn">Send</button>
+        </form>
+        <div class="cc-form-msg" id="ccLeadMsg"></div>
+      </dialog>
+
+      <div class="bio">
+        <img class="bio-mark" src="/static/zeorbit-logo.png" alt="" width="72" height="21" />
+        <div>
+          <div class="name">{biz or 'ZeOrbit'} Editorial Team</div>
+          <div class="txt">Local {biz.lower() or 'service'} specialists serving {location or 'your area'}. Published by ZeOrbit — web design, software &amp; SEO.</div>
+        </div>
       </div>
     </div>
   </article>
@@ -484,12 +813,19 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
 
     var leadDialog=document.getElementById('leadDialog');
     var ccOpenBtn=document.getElementById('ccOpenDialog');
+    var ccOpenFooter=document.getElementById('ccOpenDialogFooter');
     var ccCloseBtn=document.getElementById('ccCloseDialog');
     var ccForm=document.getElementById('ccLeadForm');
+    function openLead(){{ if(leadDialog) leadDialog.showModal(); }}
     if(leadDialog && ccOpenBtn){{
-      ccOpenBtn.addEventListener('click', function(){{ leadDialog.showModal(); }});
-      ccCloseBtn.addEventListener('click', function(){{ leadDialog.close(); }});
+      ccOpenBtn.addEventListener('click', openLead);
+      if(ccCloseBtn) ccCloseBtn.addEventListener('click', function(){{ leadDialog.close(); }});
       leadDialog.addEventListener('click', function(e){{ if(e.target===leadDialog) leadDialog.close(); }});
+    }}
+    if(ccOpenFooter){{ ccOpenFooter.addEventListener('click', openLead); }}
+    // Mobile: collapse footer nav groups by default
+    if(window.matchMedia('(max-width:640px)').matches){{
+      document.querySelectorAll('.ft-col').forEach(function(el){{ el.removeAttribute('open'); }});
     }}
     if(ccForm){{
       ccForm.addEventListener('submit', function(e){{

@@ -53,6 +53,33 @@ def is_configured() -> bool:
     return all(getattr(settings, key) for key in _REQUIRED_SETTINGS)
 
 
+def probe_connection() -> tuple[bool, str]:
+    """Hit Google Ads API for real. Returns (ok, detail). No mock."""
+    if not is_configured():
+        return False, "Missing GOOGLE_ADS_* credentials"
+    try:
+        from google.ads.googleads.errors import GoogleAdsException
+    except ImportError:
+        return False, "google-ads package not installed (pip install google-ads)"
+    try:
+        client = _build_client()
+        customer_id = _customer_id()
+        ga = client.get_service("GoogleAdsService")
+        query = "SELECT customer.id FROM customer LIMIT 1"
+        for batch in ga.search_stream(customer_id=customer_id, query=query):
+            if batch.results:
+                return True, f"customer {customer_id}"
+        return True, f"customer {customer_id}"
+    except Exception as e:
+        msg = str(e)
+        if "invalid_grant" in msg or "expired" in msg.lower() or "revoked" in msg.lower():
+            return False, (
+                "Refresh token expired/revoked. Run: "
+                "python3 scripts/get_google_ads_refresh_token.py"
+            )
+        return False, msg[:300]
+
+
 def _build_client():
     from google.ads.googleads.client import GoogleAdsClient  # optional dep
 
@@ -83,14 +110,18 @@ def _create_budget(client, customer_id: str, name: str, daily_budget: float) -> 
     return response.results[0].resource_name
 
 
-def _create_campaign(client, customer_id: str, name: str, budget_resource_name: str) -> str:
+def _create_campaign(client, customer_id: str, name: str, budget_resource_name: str, *, enable: bool = False) -> str:
     service = client.get_service("CampaignService")
     operation = client.get_type("CampaignOperation")
     campaign = operation.create
     campaign.name = f"{name} {uuid.uuid4().hex[:8]}"
     campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.SEARCH
-    # Created paused so nothing spends until a human reviews it in Google Ads.
-    campaign.status = client.enums.CampaignStatusEnum.PAUSED
+    # Default PAUSED ($0). Only ENABLE when explicitly requested / env auto-enable.
+    campaign.status = (
+        client.enums.CampaignStatusEnum.ENABLED
+        if enable
+        else client.enums.CampaignStatusEnum.PAUSED
+    )
     # Assigning the message (not just touching a sub-field) is required to
     # actually set the `campaign_bidding_strategy` oneof — enhanced_cpc_enabled
     # isn't settable in this API version/context, so plain Manual CPC.
@@ -154,9 +185,71 @@ def _create_responsive_search_ad(client, customer_id: str, ad_group_resource_nam
     return response.results[0].resource_name
 
 
+async def suggest_ad_copy(req) -> dict:
+    """Free AI (Groq/Gemini) or local template — production-ready draft, $0 spend."""
+    from services.llm_service import chat_json, active_provider
+
+    name = (req.business_name or "Your Business").strip()
+    cat = (req.category or "services").strip()
+    city = (req.city or "").strip()
+    prompt = (
+        f"Generate Google Ads RSA copy for {name}, category {cat}"
+        f"{f' in {city}' if city else ''}. "
+        "Return JSON only with keys: headlines (array of 5 strings, each <=30 chars), "
+        "descriptions (array of 2 strings, each <=90 chars), "
+        "keywords (array of 4-6 search phrases). No emojis."
+    )
+    data = await chat_json(prompt, temperature=0.6, max_tokens=800)
+    if data and isinstance(data.get("headlines"), list) and isinstance(data.get("descriptions"), list):
+        return {
+            "headlines": [str(h)[:30] for h in data["headlines"][:15]],
+            "descriptions": [str(d)[:90] for d in data["descriptions"][:4]],
+            "keywords": [str(k) for k in (data.get("keywords") or [])][:8],
+            "source": "ai",
+            "provider": active_provider(),
+            "demo": False,
+        }
+
+    place = city
+    cat_lower = cat.lower()
+    headlines = [
+        (f"{cat} in {place}" if place else cat)[:30],
+        f"{cat} Experts"[:30],
+        "Get a Free Quote"[:30],
+        f"Call {name}"[:30],
+        (f"Top-Rated Near {place}" if place else f"Top-Rated {cat}")[:30],
+    ]
+    descriptions = [
+        f"{name} provides reliable {cat_lower}. Free quotes available."[:90],
+        (f"Serving {place}. Fast, affordable, book online." if place else "Fast, affordable service. Book online in minutes.")[:90],
+    ]
+    keywords = [cat_lower, f"{cat_lower} near me", f"{cat_lower} in {place}" if place else f"best {cat_lower}", f"affordable {cat_lower}"]
+    return {
+        "headlines": headlines,
+        "descriptions": descriptions,
+        "keywords": keywords,
+        "source": "template",
+        "provider": None,
+        "demo": False,
+    }
+
+
 async def create_campaign(req: GoogleAdsCampaignRequest) -> GoogleAdsCampaignResult:
+    from providers.demo_google import use_demo_fallback, demo_ads_campaign
+
+    # Live Google Ads API first (free to call; campaigns created PAUSED = $0 spend).
     if not is_configured():
-        return GoogleAdsCampaignResult(success=False, error="Google Ads credentials not configured")
+        if use_demo_fallback(live_configured=False):
+            data = demo_ads_campaign(req.campaign_name)
+            return GoogleAdsCampaignResult(**data)
+        return GoogleAdsCampaignResult(
+            success=False,
+            error=(
+                "Google Ads isn't connected. Set GOOGLE_ADS_* credentials "
+                "(API is free; use a test account or keep campaigns paused). "
+                "Ad copy AI still works with GROQ_API_KEY or GEMINI_API_KEY."
+            ),
+        )
 
     url_error = _validate_final_url(req.final_url)
     if url_error:
@@ -166,6 +259,8 @@ async def create_campaign(req: GoogleAdsCampaignRequest) -> GoogleAdsCampaignRes
     try:
         from google.ads.googleads.errors import GoogleAdsException
     except ImportError:
+        if use_demo_fallback(live_configured=False):
+            return GoogleAdsCampaignResult(**demo_ads_campaign(req.campaign_name))
         return GoogleAdsCampaignResult(
             success=False,
             error="google-ads package not installed. Run: pip install google-ads",
@@ -176,7 +271,10 @@ async def create_campaign(req: GoogleAdsCampaignRequest) -> GoogleAdsCampaignRes
         customer_id = _customer_id()
 
         budget_resource_name = _create_budget(client, customer_id, req.campaign_name, req.daily_budget)
-        campaign_resource_name = _create_campaign(client, customer_id, req.campaign_name, budget_resource_name)
+        enable = bool(getattr(req, "enable", False) or settings.GOOGLE_ADS_AUTO_ENABLE)
+        campaign_resource_name = _create_campaign(
+            client, customer_id, req.campaign_name, budget_resource_name, enable=enable
+        )
         ad_group_resource_name = _create_ad_group(client, customer_id, req.campaign_name, campaign_resource_name)
         _add_keywords(client, customer_id, ad_group_resource_name, req.keywords)
         _create_responsive_search_ad(
@@ -184,15 +282,96 @@ async def create_campaign(req: GoogleAdsCampaignRequest) -> GoogleAdsCampaignRes
         )
 
         campaign_id = campaign_resource_name.split("/")[-1]
+        cid = customer_id
         return GoogleAdsCampaignResult(
             success=True,
             campaign_id=campaign_id,
             campaign_resource_name=campaign_resource_name,
             ad_group_resource_name=ad_group_resource_name,
-            manage_url=f"https://ads.google.com/aw/campaigns?campaignId={campaign_id}",
+            manage_url=(
+                f"https://ads.google.com/aw/campaigns?campaignId={campaign_id}"
+                f"&__c={cid}"
+            ),
+            demo=False,
         )
     except GoogleAdsException as ex:
+        if use_demo_fallback(live_configured=False):
+            return GoogleAdsCampaignResult(**demo_ads_campaign(req.campaign_name))
         details = "; ".join(err.message for err in ex.failure.errors)
         return GoogleAdsCampaignResult(success=False, error=f"Google Ads API error: {details}")
     except Exception as e:
+        if use_demo_fallback(live_configured=False):
+            return GoogleAdsCampaignResult(**demo_ads_campaign(req.campaign_name))
         return GoogleAdsCampaignResult(success=False, error=str(e))
+
+
+def list_campaigns(limit: int = 50) -> dict:
+    """Return recent campaigns in the configured customer account."""
+    if not is_configured():
+        return {"ok": False, "error": "Google Ads not configured", "campaigns": []}
+    try:
+        client = _build_client()
+        customer_id = _customer_id()
+        ga = client.get_service("GoogleAdsService")
+        query = f"""
+            SELECT campaign.id, campaign.name, campaign.status,
+                   campaign_budget.amount_micros, campaign.bidding_strategy_type
+            FROM campaign
+            ORDER BY campaign.id DESC
+            LIMIT {max(1, min(int(limit), 100))}
+        """
+        campaigns = []
+        for batch in ga.search_stream(customer_id=customer_id, query=query):
+            for row in batch.results:
+                status = row.campaign.status.name if hasattr(row.campaign.status, "name") else str(row.campaign.status)
+                budget = (row.campaign_budget.amount_micros or 0) / 1_000_000
+                campaigns.append({
+                    "id": str(row.campaign.id),
+                    "name": row.campaign.name,
+                    "status": status,
+                    "daily_budget": budget,
+                    "manage_url": (
+                        f"https://ads.google.com/aw/campaigns?campaignId={row.campaign.id}"
+                        f"&__c={customer_id}"
+                    ),
+                })
+        return {"ok": True, "customer_id": customer_id, "campaigns": campaigns}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:500], "campaigns": []}
+
+
+def set_campaign_status(campaign_id: str, enable: bool = True) -> dict:
+    """Enable or pause a campaign from the SEO tool (no Google Ads UI needed)."""
+    if not is_configured():
+        return {"ok": False, "error": "Google Ads not configured"}
+    cid = str(campaign_id or "").strip()
+    if not cid.isdigit():
+        return {"ok": False, "error": "Invalid campaign_id"}
+    try:
+        from google.protobuf import field_mask_pb2
+
+        client = _build_client()
+        customer_id = _customer_id()
+        service = client.get_service("CampaignService")
+        operation = client.get_type("CampaignOperation")
+        campaign = operation.update
+        campaign.resource_name = service.campaign_path(customer_id, cid)
+        campaign.status = (
+            client.enums.CampaignStatusEnum.ENABLED
+            if enable
+            else client.enums.CampaignStatusEnum.PAUSED
+        )
+        operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["status"]))
+        service.mutate_campaigns(customer_id=customer_id, operations=[operation])
+        return {
+            "ok": True,
+            "campaign_id": cid,
+            "status": "ENABLED" if enable else "PAUSED",
+            "note": (
+                "Campaign enabled in your tool. Google may still show 'Under review' "
+                "until their automatic policy check finishes — that cannot be skipped by any tool."
+                if enable else "Campaign paused."
+            ),
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:500]}

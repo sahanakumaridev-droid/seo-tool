@@ -8,7 +8,7 @@ from models.schemas import (
     GenerateRequest, SEOBlock, BulkGenerateResponse,
     ArticleRequest, WebsiteAnalysisRequest, WebsiteProfile,
 )
-from services.location_service import get_nearby_cities
+from services.location_service import get_nearby_cities, LocationNotResolvedError
 from services.content_service import generate_seo_block, generate_articles
 from services.website_analysis_service import analyze_website
 from services.export_service import export_json, export_html, export_wordpress
@@ -23,7 +23,10 @@ def slugify(text: str) -> str:
 
 @router.post("/generate", response_model=BulkGenerateResponse)
 async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(get_session)):
-    cities = await get_nearby_cities(req.base_location, req.num_cities)
+    try:
+        cities = await get_nearby_cities(req.base_location, req.num_cities)
+    except LocationNotResolvedError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not cities:
         raise HTTPException(status_code=404, detail="No cities found for the given location")
 
@@ -36,6 +39,7 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             req.target_keywords,
             req.industry,
             use_ai=req.use_ai,
+            llm_provider=req.llm_provider,
         )
         pages.append(block)
         
@@ -75,7 +79,10 @@ async def analyze_website_endpoint(req: WebsiteAnalysisRequest):
 async def generate_articles_endpoint(req: ArticleRequest, session: AsyncSession = Depends(get_session)):
     """Generate N unique articles from a primary keyword + location, grounded in a website analysis."""
     profile = await analyze_website(req.website_url)
-    pages = await generate_articles(req, profile)
+    try:
+        pages = await generate_articles(req, profile)
+    except LocationNotResolvedError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not pages:
         raise HTTPException(status_code=502, detail="Article generation failed. Check OPENAI_API_KEY.")
 
@@ -109,12 +116,16 @@ async def generate_single(
     city: str,
     state: str = "CA",
     use_ai: bool = False,
+    llm_provider: str = None,
 ):
-    return await generate_seo_block(business_type, city, state, use_ai=use_ai)
+    return await generate_seo_block(business_type, city, state, use_ai=use_ai, llm_provider=llm_provider)
 
 @router.post("/export/json")
 async def export_as_json(req: GenerateRequest):
-    cities = await get_nearby_cities(req.base_location, req.num_cities)
+    try:
+        cities = await get_nearby_cities(req.base_location, req.num_cities)
+    except LocationNotResolvedError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     pages = [await generate_seo_block(req.business_type, c.name, c.state) for c in cities]
     return JSONResponse(content={"pages": [p.model_dump() for p in pages]})
 
@@ -126,7 +137,10 @@ async def export_as_html(business_type: str, city: str, state: str = "CA"):
 
 @router.post("/export/wordpress")
 async def export_as_wordpress(req: GenerateRequest):
-    cities = await get_nearby_cities(req.base_location, req.num_cities)
+    try:
+        cities = await get_nearby_cities(req.base_location, req.num_cities)
+    except LocationNotResolvedError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     pages = [await generate_seo_block(req.business_type, c.name, c.state) for c in cities]
     wp_posts = [export_wordpress(p) for p in pages]
     return {"posts": wp_posts}

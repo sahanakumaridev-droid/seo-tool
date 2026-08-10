@@ -23,16 +23,6 @@ export const COMPETITOR_DATA = [
   { domain: 'rotorouter.com', traffic: 19800, keywords: 860, overlap: 31, da: 52, gap: 198 },
 ]
 
-export const RANKING_HISTORY = [
-  { date: 'Jan', pos1: 2, pos2: 8, pos3: 14 },
-  { date: 'Feb', pos1: 3, pos2: 7, pos3: 12 },
-  { date: 'Mar', pos1: 4, pos2: 6, pos3: 11 },
-  { date: 'Apr', pos1: 3, pos2: 5, pos3: 9 },
-  { date: 'May', pos1: 4, pos2: 6, pos3: 8 },
-  { date: 'Jun', pos1: 3, pos2: 4, pos3: 7 },
-  { date: 'Jul', pos1: 2, pos2: 4, pos3: 6 },
-]
-
 // Organic Performance dashboard chart — one row per month, one field per switchable series
 export const ORGANIC_PERFORMANCE = [
   { month: 'Aug', traffic: 3200, impressions: 41000, clicks: 1180, position: 18.4 },

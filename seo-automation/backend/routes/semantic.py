@@ -27,6 +27,12 @@ class CompetitorAnalysisRequest(BaseModel):
     city: str
 
 
+class DiscoverCompetitorsRequest(BaseModel):
+    website: str
+    business_type: str
+    city: str
+
+
 class SEORecommendationRequest(BaseModel):
     content: str
     target_keywords: List[str]
@@ -61,7 +67,6 @@ async def semantic_search(
 @router.post("/competitor-analysis")
 async def analyze_competitor(
     req: CompetitorAnalysisRequest,
-    current_user: User = Depends(get_current_active_user),
     ai_service: AdvancedAIService = Depends(get_advanced_ai_service)
 ):
     """AI-powered competitor analysis."""
@@ -74,6 +79,24 @@ async def analyze_competitor(
         return analysis
     except Exception as e:
         logger.error(f"Competitor analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/discover-competitors")
+async def discover_competitors(
+    req: DiscoverCompetitorsRequest,
+    ai_service: AdvancedAIService = Depends(get_advanced_ai_service)
+):
+    """AI-powered competitor discovery, grounded in the profile website's homepage."""
+    try:
+        result = await ai_service.discover_competitors(
+            req.website,
+            req.business_type,
+            req.city
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Competitor discovery failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

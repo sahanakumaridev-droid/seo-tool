@@ -1,11 +1,388 @@
-import { Link } from 'react-router-dom'
-import { ArrowRight, Phone } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
+import { ArrowRight, CheckCircle2, ChevronDown, Mail, MapPin, Phone } from 'lucide-react'
 import RevampHeader from '../components/revamp/RevampHeader'
 import ContactForm from '../components/revamp/ContactForm'
-import GoogleReviews from '../components/GoogleReviews'
 import SiteFooter from '../components/SiteFooter'
+import { Reveal } from '../components/premium/Reveal'
 import { SITE_CONTACT } from '../data/revampContent'
 import { NAV_PAGES } from '../data/navPages'
+import '../components/premium/premium-home.css'
+import './website-design-page.css'
+
+function scrollToContact() {
+  document.getElementById('wds-contact')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function useHashScroll() {
+  const { hash, pathname } = useLocation()
+  useEffect(() => {
+    if (!hash) return undefined
+    const id = hash.replace('#', '')
+    const timer = window.setTimeout(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 80)
+    return () => window.clearTimeout(timer)
+  }, [hash, pathname])
+}
+
+function FaqItem({ item, open, onToggle }) {
+  return (
+    <div className={`wds-faq-item${open ? ' is-open' : ''}`}>
+      <button type="button" className="wds-faq-q" onClick={onToggle} aria-expanded={open}>
+        <span>{item.q}</span>
+        <ChevronDown size={18} className="wds-faq-caret" />
+      </button>
+      {open ? <p className="wds-faq-a">{item.a}</p> : null}
+    </div>
+  )
+}
+
+function ContactPageLayout({ page }) {
+  const [showMap, setShowMap] = useState(false)
+  useHashScroll()
+
+  return (
+    <div className="rv-page zo-contact-page">
+      <RevampHeader />
+
+      <section className="zo-contact-banner" aria-label="Contact">
+        <div className="zo-contact-banner-bg" aria-hidden="true">
+          <img src="/from-zeorbit/contact/banner.jpg" alt="" loading="eager" decoding="async" />
+          <div className="zo-contact-banner-shade" />
+        </div>
+        <div className="rv-shell zo-contact-banner-inner">
+          <p className="zo-contact-eyebrow is-light">Get in touch</p>
+          <h1>Contact</h1>
+        </div>
+      </section>
+
+      <section className="zo-contact-panel" aria-label="Contact details and form">
+        <div className="rv-shell zo-contact-layout">
+          <div className="zo-contact-copy">
+            <p className="zo-contact-eyebrow">Contact us</p>
+            <h2>Get in touch</h2>
+            <p className="zo-contact-lead">{page.lead}</p>
+
+            <div className="zo-contact-offices">
+              <h3>Office Locations</h3>
+
+              <article className="zo-contact-office">
+                <h4>Our Balboa Avenue, San Diego, California</h4>
+                <p className="zo-contact-office-label">Address</p>
+                <ul>
+                  <li>
+                    {SITE_CONTACT.address.line1}, <strong>{SITE_CONTACT.address.line2}</strong>
+                  </li>
+                  <li>Customer Service</li>
+                  <li>
+                    <a href={`tel:${SITE_CONTACT.phoneTel}`}>{SITE_CONTACT.phone}</a>
+                  </li>
+                  <li>
+                    <a href={`mailto:${SITE_CONTACT.email}`}>{SITE_CONTACT.email}</a>
+                  </li>
+                </ul>
+                <a
+                  className="zo-contact-office-map"
+                  href={SITE_CONTACT.address.mapsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <MapPin size={15} strokeWidth={2.2} />
+                  Open in Maps
+                </a>
+              </article>
+
+              <article className="zo-contact-office">
+                <h4>Other Office Locations</h4>
+                <ul>
+                  {SITE_CONTACT.offices.map((office) => (
+                    <li key={office.label}>
+                      {office.lines[0]} <strong>{office.lines[1]}</strong>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            </div>
+
+            <div className="zo-contact-quick">
+              <a className="zo-contact-quick-btn is-primary" href={`tel:${SITE_CONTACT.phoneTel}`}>
+                <Phone size={18} strokeWidth={2.2} />
+                Call {SITE_CONTACT.phone}
+              </a>
+              <a className="zo-contact-quick-btn" href={`mailto:${SITE_CONTACT.email}`}>
+                <Mail size={18} strokeWidth={2.2} />
+                {SITE_CONTACT.email}
+              </a>
+            </div>
+          </div>
+
+          <div className="zo-contact-form-panel" id="contact">
+            <div className="zo-contact-form-head">
+              <p className="zo-contact-form-kicker">Feel free to contact us</p>
+              <h2>Send a message</h2>
+              <p>Share a short brief and we&apos;ll follow up with clear next steps.</p>
+            </div>
+            <ContactForm hideIntro submitLabel="Send message" variant="contactPage" />
+          </div>
+        </div>
+      </section>
+
+      <section className="zo-contact-agent" aria-label="Request a quote">
+        <div className="zo-contact-agent-bg" aria-hidden="true">
+          <img src="/from-zeorbit/contact/agent.jpg" alt="" loading="lazy" decoding="async" />
+          <div className="zo-contact-agent-shade" />
+        </div>
+        <div className="rv-shell zo-contact-agent-inner">
+          <h2>An agent is standing by to assist you with a quote.</h2>
+          <div className="zo-contact-agent-actions">
+            <a className="cz-btn-solid" href={`tel:${SITE_CONTACT.phoneTel}`}>
+              Call {SITE_CONTACT.phone}
+              <Phone size={16} strokeWidth={2.4} />
+            </a>
+            <a className="zo-contact-agent-ghost" href="#contact">
+              Request a quote
+              <ArrowRight size={16} strokeWidth={2.4} />
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section className="zo-contact-map" aria-label="Find ZeOrbit on the map">
+        <div className="rv-shell">
+          <div className="zo-contact-map-frame">
+            {showMap ? (
+              <iframe
+                title="ZeOrbit San Diego office map"
+                src="https://www.google.com/maps?q=4231+Balboa+Avenue+Suite+1340+San+Diego+CA+92117&output=embed"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                allowFullScreen
+              />
+            ) : (
+              <button type="button" className="zo-contact-map-gate" onClick={() => setShowMap(true)}>
+                <img src="/from-zeorbit/contact/map.jpg" alt="" loading="lazy" decoding="async" />
+                <span>
+                  <MapPin size={18} strokeWidth={2.2} />
+                  Load map
+                </span>
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {page.areas ? (
+        <section id="areas" className="zo-contact-areas" aria-label="Areas we serve">
+          <div className="rv-shell">
+            <p className="zo-contact-eyebrow">{page.areas.title}</p>
+            <h2>San Diego based. Nationwide reach.</h2>
+            <p className="zo-contact-lead">{page.areas.lead}</p>
+            <div className="zo-contact-area-tags">
+              {page.areas.items.map((area) => (
+                <span key={area}>{area}</span>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      <SiteFooter />
+    </div>
+  )
+}
+
+
+function ServiceLanding({ page }) {
+  const [openFaq, setOpenFaq] = useState(0)
+  useHashScroll()
+
+  return (
+    <div className="cz-page wds-page" data-hero={page.heroTone || 'light'}>
+      <RevampHeader />
+
+      <section className="wds-hero" aria-label={page.navLabel}>
+        <div className="wds-hero-bg" aria-hidden="true">
+          <img
+            src={page.image}
+            alt=""
+            width={1400}
+            height={900}
+            loading="eager"
+            decoding="async"
+            fetchPriority="high"
+          />
+          <div className="wds-hero-shade" />
+          <div className="wds-hero-grain" />
+        </div>
+        <div className="wds-hero-inner">
+          <Reveal className="wds-hero-copy" eager>
+            <p className="wds-hero-eyebrow">{page.eyebrow}</p>
+            <h1>{page.title}</h1>
+            <p className="wds-hero-lead">{page.lead}</p>
+            <div className="wds-hero-cta">
+              <button type="button" className="cz-btn-solid" onClick={scrollToContact}>
+                Get a free quote
+                <ArrowRight size={18} strokeWidth={2.4} />
+              </button>
+              <a className="wds-hero-ghost" href={`tel:${SITE_CONTACT.phoneTel}`}>
+                <Phone size={15} strokeWidth={2.4} />
+                Call {SITE_CONTACT.phone}
+              </a>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="wds-proof" aria-label="Capabilities">
+        <div className="cz-rail wds-proof-row">
+          {page.proof.map((item) => (
+            <span key={item}>{item}</span>
+          ))}
+        </div>
+      </section>
+
+      <section className="wds-section">
+        <div className="cz-rail">
+          <Reveal className="wds-section-head">
+            <p className="cz-kicker">What we deliver</p>
+            <h2>Focused capabilities — not a recycled checklist.</h2>
+            <p className="cz-whisper">
+              Every item below is unique to {page.navLabel.toLowerCase()}. Pick a path and we’ll scope it clearly.
+            </p>
+          </Reveal>
+          <div className="wds-service-grid">
+            {page.services.map((item) => (
+              <Reveal key={item.id} className="wds-service" id={item.id}>
+                <button type="button" className="wds-service-btn" onClick={scrollToContact}>
+                  <div className="wds-service-media">
+                    <img src={item.image} alt="" loading="lazy" decoding="async" />
+                  </div>
+                  <div className="wds-service-body">
+                    <h3>{item.title}</h3>
+                    <p>{item.copy}</p>
+                    <span>
+                      {item.cta} <ArrowRight size={14} strokeWidth={2.2} />
+                    </span>
+                  </div>
+                </button>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="wds-section wds-section-snow">
+        <div className="cz-rail">
+          <Reveal className="wds-section-head">
+            <p className="cz-kicker">Selected work</p>
+            <h2>Proof in the product.</h2>
+            <p className="cz-whisper">Imagery from real builds and growth systems — not stock filler.</p>
+          </Reveal>
+          <div className="wds-work-grid">
+            {page.work.map((item, i) => (
+              <Reveal key={item.title} className="wds-work-card">
+                <div className="wds-work-media">
+                  <img src={item.image} alt="" loading="lazy" decoding="async" />
+                </div>
+                <div className="wds-work-meta">
+                  <h3>{item.title}</h3>
+                  <p>{item.meta}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="wds-section">
+        <div className="cz-rail">
+          <Reveal className="wds-section-head">
+            <p className="cz-kicker">How we work</p>
+            <h2>A clear path from brief to launch.</h2>
+          </Reveal>
+          <ol className="wds-process">
+            {page.process.map((step) => (
+              <Reveal as="li" key={step.title} className="wds-process-step">
+                <h3>{step.title}</h3>
+                <p>{step.copy}</p>
+              </Reveal>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      {page.growth ? (
+        <section className="wds-growth">
+          <div className="cz-rail wds-growth-grid">
+            <Reveal className="wds-growth-copy">
+              <p className="cz-kicker is-light">{page.growth.kicker}</p>
+              <h2>{page.growth.title}</h2>
+              <p className="wds-growth-lead">{page.growth.lead}</p>
+              <ul>
+                {page.growth.points.map((point) => (
+                  <li key={point}>
+                    <CheckCircle2 size={18} strokeWidth={2} />
+                    {point}
+                  </li>
+                ))}
+              </ul>
+              <button type="button" className="cz-btn-solid" onClick={scrollToContact}>
+                {page.growth.cta}
+                <ArrowRight size={18} strokeWidth={2.4} />
+              </button>
+            </Reveal>
+            <Reveal className="wds-growth-media">
+              <img src={page.growth.image} alt="" loading="lazy" decoding="async" />
+            </Reveal>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="wds-section wds-section-snow">
+        <div className="cz-rail wds-faq-rail">
+          <Reveal className="wds-section-head">
+            <p className="cz-kicker">FAQ</p>
+            <h2>Questions specific to this service.</h2>
+          </Reveal>
+          <div className="wds-faq-list">
+            {page.faqs.map((item, i) => (
+              <FaqItem
+                key={item.q}
+                item={item}
+                open={openFaq === i}
+                onToggle={() => setOpenFaq(openFaq === i ? -1 : i)}
+              />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="wds-contact" className="wds-final">
+        <div className="cz-rail wds-final-inner">
+          <Reveal className="wds-final-copy">
+            <p className="wds-final-eyebrow">{page.finalCta.kicker}</p>
+            <h2>{page.finalCta.title}</h2>
+            <p>{page.finalCta.lead}</p>
+            <a className="wds-final-call" href={`tel:${SITE_CONTACT.phoneTel}`}>
+              <Phone size={16} strokeWidth={2.2} />
+              Prefer to talk? {SITE_CONTACT.phone}
+            </a>
+          </Reveal>
+          <Reveal className="wds-final-form" eager>
+            <div className="wds-final-form-head">
+              <p>Project inquiry</p>
+              <h3>Send a short brief</h3>
+            </div>
+            <ContactForm hideIntro submitLabel="Get a free quote" />
+          </Reveal>
+        </div>
+      </section>
+
+      <SiteFooter />
+    </div>
+  )
+}
 
 export default function ServicePage({ slug }) {
   const page = NAV_PAGES[slug]
@@ -21,131 +398,9 @@ export default function ServicePage({ slug }) {
     )
   }
 
-  return (
-    <div className="rv-page zo-service-page">
-      <RevampHeader />
+  if (page.isContact) {
+    return <ContactPageLayout page={page} />
+  }
 
-      <section className="zo-svc-hero">
-        <div className="rv-shell zo-svc-hero-grid">
-          <div>
-            <p className="zo-svc-eyebrow" style={{ color: page.accent }}>{page.eyebrow}</p>
-            <h1>{page.title}</h1>
-            <p className="zo-svc-lead">{page.lead}</p>
-            <div className="zo-svc-actions">
-              <a className="btn zo-gradient-btn" href={`tel:${SITE_CONTACT.phoneTel}`}>
-                <Phone size={16} /> Call {SITE_CONTACT.phone}
-              </a>
-              <a className="btn btn-secondary zo-outline-btn" href="#contact">
-                Start a Project <ArrowRight size={16} />
-              </a>
-            </div>
-            <div className="zo-svc-stats">
-              {page.stats.map((s) => (
-                <div key={s.label}>
-                  <strong>{s.value}</strong>
-                  <span>{s.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="zo-svc-hero-media">
-            <img
-              src={page.heroImage}
-              alt=""
-              width={960}
-              height={640}
-              loading="eager"
-              fetchPriority="high"
-              decoding="async"
-              sizes="(max-width: 860px) 100vw, 560px"
-            />
-            <div className="zo-svc-hero-glow" style={{ background: page.accent }} aria-hidden />
-          </div>
-        </div>
-      </section>
-
-      {page.highlights?.length ? (
-        <section className="zo-svc-highlights">
-          <div className="rv-shell zo-svc-highlights-grid">
-            {page.highlights.map((h) => (
-              <article key={h.title} className="zo-svc-chip">
-                <h3>{h.title}</h3>
-                <p>{h.copy}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {page.features?.length ? (
-        <section className="zo-svc-features">
-          <div className="rv-shell">
-            <header className="zo-svc-section-head">
-              <p className="zo-svc-eyebrow" style={{ color: page.accent }}>What you get</p>
-              <h2>Capabilities built for how your business runs.</h2>
-            </header>
-            <div className="zo-svc-feature-list">
-              {page.features.map((f, i) => (
-                <article key={f.title} className={`zo-svc-feature${i % 2 ? ' reverse' : ''}`}>
-                  <div className="zo-svc-feature-media">
-                    <img
-                      src={f.image}
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                      width={720}
-                      height={480}
-                      sizes="(max-width: 860px) 100vw, 520px"
-                    />
-                  </div>
-                  <div className="zo-svc-feature-copy">
-                    <h3>{f.title}</h3>
-                    <p>{f.copy}</p>
-                    <a className="zo-text-link" href="#contact">
-                      Discuss this capability <ArrowRight size={14} />
-                    </a>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      {page.process?.length ? (
-        <section className="zo-svc-process">
-          <div className="rv-shell">
-            <header className="zo-svc-section-head">
-              <p className="zo-svc-eyebrow" style={{ color: page.accent }}>Process</p>
-              <h2>From idea to launch—with one clear path.</h2>
-            </header>
-            <div className="zo-svc-process-grid">
-              {page.process.map((p) => (
-                <article key={p.step}>
-                  <span>{p.step}</span>
-                  <h3>{p.title}</h3>
-                  <p>{p.copy}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      {!page.isContact ? <GoogleReviews /> : null}
-
-      <section id="contact" className="rv-final-cta zo-svc-cta">
-        <div className="rv-shell">
-          <h2>{page.isContact ? 'Tell us what you need' : `Ready to start ${page.navLabel.toLowerCase()}?`}</h2>
-          <p>Share goals and constraints—we&apos;ll reply with clear next steps.</p>
-          <div className="rv-contact-wrap">
-            <ContactForm />
-          </div>
-        </div>
-      </section>
-
-      {page.isContact ? <GoogleReviews /> : null}
-      <SiteFooter />
-    </div>
-  )
+  return <ServiceLanding page={page} />
 }

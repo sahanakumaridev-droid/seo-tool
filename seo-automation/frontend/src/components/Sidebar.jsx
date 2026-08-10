@@ -1,11 +1,11 @@
 import { NavLink } from 'react-router-dom'
-import { useState, useEffect } from 'react'
 import {
-  LayoutDashboard, Search, FileText, Newspaper, TrendingUp, BarChart2,
-  HelpCircle, Globe, Share2, Briefcase, Users, MessageSquare, CreditCard, Shield,
-  UserPlus, Target, ChevronDown, Megaphone, Activity, MapPin, ScanSearch,
+  LayoutDashboard, Search, Newspaper, TrendingUp, BarChart2,
+  HelpCircle, Share2, Users, Shield,
+  UserPlus, Target, ChevronDown, Megaphone, Activity, ScanSearch, Plug, Rocket,
 } from 'lucide-react'
 import Logo from './Logo'
+import useProjectInfo from '../hooks/useProjectInfo'
 
 // Flat nav of only what's actually built. More SEO modules (backlinks, local
 // SEO, AI visibility, etc.) get added here once they're real pages — no
@@ -24,34 +24,13 @@ const SEO_NAV = [
 
 const CONTENT_AUTOMATION_NAV = [
   { to: '/articles',    icon: Newspaper,       label: 'Articles' },
-  { to: '/wordpress',   icon: Globe,           label: 'WordPress' },
   { to: '/indexing',    icon: ScanSearch,      label: 'Google Indexing' },
   { to: '/social',      icon: Share2,          label: 'Social Media' },
-  { to: '/gbp',         icon: MapPin,          label: 'Google Business Profile' },
   { to: '/google-ads',  icon: Megaphone,       label: 'Google Ads' },
   { to: '/leads',       icon: UserPlus,        label: 'Leads' },
+  { to: '/lead-engine', icon: Rocket,          label: 'Lead Engine' },
+  { to: '/integrations',icon: Plug,            label: 'API Integrations' },
 ]
-
-const MARKETPLACE_NAV = [
-  { to: '/marketplace',    icon: Briefcase,      label: 'Browse Requests' },
-  { to: '/my-requests',    icon: FileText,       label: 'My Requests' },
-  { to: '/professionals',  icon: Users,          label: 'Find Professionals' },
-  { to: '/messages',       icon: MessageSquare,  label: 'Messages' },
-  { to: '/credits',        icon: CreditCard,     label: 'Credits' },
-]
-
-function useProjectInfo() {
-  const read = () => {
-    try { return JSON.parse(localStorage.getItem('seo_project') || '{}') } catch { return {} }
-  }
-  const [info, setInfo] = useState(read)
-  useEffect(() => {
-    const handler = () => setInfo(read())
-    window.addEventListener('seo_project_updated', handler)
-    return () => window.removeEventListener('seo_project_updated', handler)
-  }, [])
-  return info
-}
 
 const navItemStyle = {
   display: 'flex', alignItems: 'center', gap: 10,
@@ -66,7 +45,7 @@ function NavItem({ to, icon: Icon, label, indent }) {
       style={{ ...navItemStyle, paddingLeft: indent ? 30 : 10 }}>
       {({ isActive }) => (
         <>
-          {Icon && <Icon size={15} style={{ color: isActive ? 'var(--brand)' : 'var(--text-3)', flexShrink: 0 }} />}
+          {Icon && <Icon size={15} style={{ color: isActive ? 'var(--brand)' : 'var(--text-2)', flexShrink: 0 }} />}
           {label}
         </>
       )}
@@ -82,9 +61,9 @@ export default function Sidebar({ open = false }) {
   return (
     <aside className={`sidebar${open ? ' open' : ''}`}>
       {/* Logo */}
-      <div style={{ padding: '18px 16px 14px', borderBottom: '1px solid var(--border)' }}>
-        <Logo size={30} />
-        <div style={{ color: 'var(--text-4)', fontSize: 10, marginTop: 4, letterSpacing: '0.04em' }}>SEO Intelligence</div>
+      <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid var(--border)' }}>
+        <Logo size={32} />
+        <div style={{ color: 'var(--text-3)', fontSize: 10, marginTop: 8, letterSpacing: '0.06em', fontWeight: 600, textTransform: 'uppercase' }}>SEO Intelligence</div>
       </div>
 
       {/* Workspace / project info */}
@@ -96,9 +75,9 @@ export default function Sidebar({ open = false }) {
         }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ color: 'var(--text-1)', fontSize: 12, fontWeight: 600 }} className="truncate">{projectName}</div>
-            <div style={{ color: 'var(--text-4)', fontSize: 10, marginTop: 1 }} className="truncate">{projectSub}</div>
+            <div style={{ color: 'var(--text-3)', fontSize: 10, marginTop: 1, fontWeight: 500 }} className="truncate">{projectSub}</div>
           </div>
-          <ChevronDown size={12} style={{ color: 'var(--text-4)', flexShrink: 0 }} />
+          <ChevronDown size={12} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
         </div>
       </div>
 
@@ -106,17 +85,12 @@ export default function Sidebar({ open = false }) {
       <nav style={{ flex: 1, padding: '8px 8px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
         {SEO_NAV.map(item => <NavItem key={item.to} {...item} />)}
 
-        <div style={{ color: 'var(--text-4)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '14px 10px 4px' }}>
+        <div style={{ color: 'var(--text-3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '14px 10px 4px' }}>
           Content Automation
         </div>
         {CONTENT_AUTOMATION_NAV.map(item => <NavItem key={item.to} {...item} />)}
 
-        <div style={{ color: 'var(--text-4)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '14px 10px 4px' }}>
-          Marketplace
-        </div>
-        {MARKETPLACE_NAV.map(item => <NavItem key={item.to} {...item} />)}
-
-        <div style={{ color: 'var(--text-4)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '14px 10px 4px' }}>
+        <div style={{ color: 'var(--text-3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '14px 10px 4px' }}>
           Admin
         </div>
         <NavItem to="/admin" icon={Shield} label="Admin Panel" />

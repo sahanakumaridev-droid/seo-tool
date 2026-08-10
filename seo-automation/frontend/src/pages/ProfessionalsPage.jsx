@@ -1,5 +1,5 @@
 /**
- * ProfessionalsPage — Browse verified professionals (Bark/Thumbtack directory style)
+ * ProfessionalsPage — Browse verified professionals.
  */
 import { useState, useEffect } from 'react'
 import {

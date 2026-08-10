@@ -1,16 +1,18 @@
 /**
- * Logo — ZeOrbit brand mark (public/zeorbit-logo.png).
- * Dark navy linework: use default on light surfaces.
- * Pass `onDark` for dark surfaces — uses light wordmark variant.
+ * Logo — official ZeOrbit mark (orbital Z + wordmark).
+ * Default: dark navy on transparent (light surfaces).
+ * Pass `onDark` for black/dark surfaces — official blue mark from zeorbit.com.
  */
 export default function Logo({ size = 40, onDark = false }) {
-  const src = onDark ? '/zeorbit-logo-light.png' : '/zeorbit-logo.png'
+  // onDark: brightened official blue mark (readable on black header)
+  const src = onDark ? '/zeorbit-logo-nav.png?v=7' : '/zeorbit-logo.png?v=3'
+  const aspect = onDark ? 632 / 180 : 1010 / 293
 
   return (
     <img
       src={src}
       alt="ZeOrbit"
-      width={Math.round(size * (1010 / 293))}
+      width={Math.round(size * aspect)}
       height={size}
       loading="eager"
       decoding="async"
@@ -18,7 +20,7 @@ export default function Logo({ size = 40, onDark = false }) {
         height: size,
         width: 'auto',
         display: 'block',
-        maxWidth: 'min(220px, 46vw)',
+        maxWidth: 'min(260px, 54vw)',
         objectFit: 'contain',
       }}
     />

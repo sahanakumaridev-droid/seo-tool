@@ -1,41 +1,27 @@
 import { Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import Logo from '../components/Logo'
+import RevampHeader from '../components/revamp/RevampHeader'
+import SectionHeading from '../components/revamp/SectionHeading'
 import InsightsFeed from '../components/revamp/InsightsFeed'
 
 export default function BlogPage() {
   return (
     <div className="rv-page">
-      <header className="rv-header">
-        <div className="rv-header-inner">
-          <a href="/" className="rv-logo-wrap" aria-label="ZeOrbit home">
-            <Logo size={32} />
-          </a>
-          <nav className="rv-desktop-nav" aria-label="Primary">
-            <Link to="/">Home</Link>
-            <Link to="/blog">Blog</Link>
-            <a href="/#contact">Contact</a>
-          </nav>
-          <div className="rv-header-actions">
-            <Link className="btn btn-primary" to="/login">Start a Project</Link>
-          </div>
-        </div>
-      </header>
+      <RevampHeader />
 
-      <main className="rv-section" style={{ paddingTop: 120 }}>
+      <main className="rv-section" style={{ paddingTop: 80 }}>
         <div className="rv-shell">
-          <p className="rv-eyebrow">Blog · Insights</p>
-          <h1 className="rv-blog-title">Published SEO intelligence</h1>
-          <p className="rv-blog-lead">
-            Live articles from the ZeOrbit SEO tool — every page published to the web
-            (and tracked WordPress posts) appears here automatically.
-          </p>
-
-          <p style={{ marginBottom: 24 }}>
+          <p style={{ marginBottom: 28 }}>
             <Link to="/" className="rv-link-button" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <ArrowLeft size={16} /> Back to home
             </Link>
           </p>
+
+          <SectionHeading
+            eyebrow="Blog · Insights"
+            title="Published SEO intelligence."
+            description="Live articles from the ZeOrbit SEO tool — every page published to the web (and tracked WordPress posts) appears here automatically."
+          />
 
           <InsightsFeed limit={48} showViewAll={false} emptyUseFallback={false} />
         </div>

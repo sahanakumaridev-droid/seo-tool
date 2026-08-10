@@ -37,8 +37,43 @@ _STATE_NAME_TO_CODE = {
     "west virginia": "WV", "wisconsin": "WI", "wyoming": "WY", "district of columbia": "DC",
 }
 
-# Ultimate fallback if the dataset is missing and geocoding fails.
+class LocationNotResolvedError(Exception):
+    """Raised when a base location can't be matched in the dataset or geocoded.
+
+    Previously this silently fell back to a hardcoded San Diego default, which
+    made "nearby cities" quietly wrong for any location the dataset/OpenCage
+    couldn't resolve. Callers should catch this and surface a 400 instead.
+    """
+
+
+# Ultimate fallback only used when the bundled dataset itself failed to load.
 _DEFAULT_LATLON = (32.7157, -117.1611)  # San Diego, CA
+
+# us_cities.json has no population field, so ambiguous same-named cities
+# (many US city names exist in 5-10+ states) can't be disambiguated by size.
+# Without a state, dataset order (alphabetical by state code) would silently
+# win — e.g. "Austin" resolving to Austin, AR instead of Austin, TX. This
+# curated list covers the most commonly-typed ambiguous names; anything not
+# listed here falls back to the previous (dataset-order) behavior.
+_MAJOR_CITY_OVERRIDES = {
+    "austin": "TX", "columbus": "OH", "springfield": "MO", "richmond": "VA",
+    "portland": "OR", "arlington": "TX", "franklin": "TN", "salem": "OR",
+    "georgetown": "TX", "clinton": "MD", "greenville": "SC", "charleston": "SC",
+    "columbia": "SC", "lexington": "KY", "jackson": "MS", "madison": "WI",
+    "manchester": "NH", "burlington": "VT", "auburn": "AL", "rochester": "NY",
+    "kingston": "NY", "aurora": "CO", "peoria": "IL", "bristol": "CT",
+    "cambridge": "MA", "concord": "NH", "dover": "DE", "florence": "AL",
+    "jacksonville": "FL", "lancaster": "PA", "marion": "IN", "monroe": "LA",
+    "newport": "RI", "oxford": "MS", "paris": "TX", "riverside": "CA",
+    "troy": "MI", "washington": "DC", "alexandria": "VA", "arlington heights": "IL",
+    "bellevue": "WA", "berlin": "NH", "cleveland": "OH", "dayton": "OH",
+    "denton": "TX", "fairfield": "CA", "glendale": "AZ", "hamilton": "OH",
+    "henderson": "NV", "irving": "TX", "kent": "WA", "lakewood": "CO",
+    "lincoln": "NE", "milford": "CT", "naperville": "IL", "norfolk": "VA",
+    "orange": "CA", "pasadena": "CA", "plymouth": "MA", "rockford": "IL",
+    "rome": "GA", "salisbury": "MD", "santa fe": "NM", "savannah": "GA",
+    "sterling": "VA", "vancouver": "WA", "waterloo": "IA",
+}
 
 
 def haversine(lat1, lon1, lat2, lon2) -> float:
@@ -67,6 +102,12 @@ def _geocode_from_dataset(base_location: str) -> Optional[dict]:
     if not matches and not state:
         # loose contains-match as a last resort
         matches = [c for c in _US_CITIES if c["city"].lower() == city]
+    if len(matches) > 1 and not state:
+        override_state = _MAJOR_CITY_OVERRIDES.get(city)
+        if override_state:
+            preferred = [c for c in matches if c["state"] == override_state]
+            if preferred:
+                return preferred[0]
     return matches[0] if matches else None
 
 
@@ -95,7 +136,15 @@ async def get_nearby_cities(base_location: str, num_cities: int = 10) -> List[Ci
         base_lat, base_lon = base_city_rec["lat"], base_city_rec["lon"]
     else:
         latlon = await _geocode_opencage(base_location)
-        base_lat, base_lon = latlon if latlon else _DEFAULT_LATLON
+        if latlon:
+            base_lat, base_lon = latlon
+        elif _US_CITIES:
+            raise LocationNotResolvedError(
+                f"Could not find \"{base_location}\". Check the spelling, or include the "
+                "state (e.g. \"Springfield, MO\") if the city name is shared by multiple states."
+            )
+        else:
+            base_lat, base_lon = _DEFAULT_LATLON
 
     if not _US_CITIES:
         # Dataset unavailable — return just the base location so callers still work.

@@ -52,7 +52,7 @@ export default function Footer() {
         {/* Brand */}
         <div>
           <div style={{ marginBottom: 12 }}>
-            <Logo size={22} />
+            <Logo size={36} />
           </div>
           <p style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.6, maxWidth: 260, margin: 0 }}>
             AI-powered local SEO automation built for U.S. businesses. Rank in every city, publish
@@ -106,18 +106,26 @@ export default function Footer() {
         <span style={{ fontSize: 12, color: 'var(--text-4)' }}>
           © {year} ZeOrbit — SEO Intelligence Platform. Made in the USA. 🇺🇸
         </span>
-        <div style={{ display: 'flex', gap: 20 }}>
-          {['zeorbit.com', 'instagram.com/zeorbit', 'twitter.com/orbit_ze'].map((l) => (
+        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+          {[
+            { label: 'zeorbit.com', href: 'https://zeorbit.com' },
+            { label: 'facebook', href: 'https://www.facebook.com/zeorbit.web.designers.mobileapp.developers' },
+            { label: 'instagram', href: 'https://www.instagram.com/zeorbit/' },
+            { label: 'linkedin', href: 'https://www.linkedin.com/company/zeorbit/' },
+            { label: 'twitter', href: 'https://twitter.com/orbit_ze' },
+            { label: 'youtube', href: 'https://www.youtube.com/@ZeOrbit-Firm/' },
+            { label: 'pinterest', href: 'https://www.pinterest.com/zeorbitsd/' },
+          ].map(({ label, href }) => (
             <a
-              key={l}
-              href={`https://${l}`}
+              key={label}
+              href={href}
               target="_blank"
               rel="noreferrer"
               style={{ fontSize: 12, color: 'var(--text-4)', textDecoration: 'none', transition: 'color .15s' }}
               onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-1)')}
               onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-4)')}
             >
-              {l}
+              {label}
             </a>
           ))}
         </div>

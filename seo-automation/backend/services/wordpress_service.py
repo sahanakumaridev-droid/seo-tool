@@ -86,10 +86,17 @@ def _build_content_html(block: SEOBlock) -> str:
             f'<span class="trust-badge">{check_icon}<span>{h3}</span></span>'
             for h3 in block.h3s[:4]
         )
-        parts.append(f'<div class="trust-badges">{badges}</div>')
+        parts.append(
+            '<section class="trust-section" aria-label="Why choose us">'
+            '<div class="trust-kicker">Why businesses choose us</div>'
+            f'<div class="trust-badges">{badges}</div>'
+            '</section>'
+        )
 
     if block.faqs:
-        parts.append('<h2>Frequently Asked Questions</h2>')
+        parts.append('<section class="faq-wrap" aria-labelledby="faq-heading">')
+        parts.append('<h2 id="faq-heading">Frequently Asked Questions</h2>')
+        parts.append('<p class="faq-lead">Clear answers to the questions local buyers ask most.</p>')
         parts.append('<div class="faq-section" itemscope itemtype="https://schema.org/FAQPage">')
         for i, faq in enumerate(block.faqs):
             parts.append(
@@ -100,9 +107,11 @@ def _build_content_html(block: SEOBlock) -> str:
                 f'<p itemprop="text">{faq.answer}</p>'
                 f'</div></details>'
             )
-        parts.append('</div>')
+        parts.append('</div></section>')
 
-    parts.append(f'<div class="pull-quote"><p>{block.cta}</p></div>')
+    # Soft end-note only — primary conversion lives in the contact band below.
+    if block.cta:
+        parts.append(f'<p class="end-note">{block.cta}</p>')
 
     schema = block.schema_markup
     if schema:
@@ -163,6 +172,35 @@ async def _check_duplicate(slug: str, wp_api_base: str, headers: dict) -> Option
                     return posts[0].get("id")
     except Exception:
         pass
+    return None
+
+
+# In-process cache so repeated publishes don't re-look-up/re-create the same
+# category on every call. Keyed by (wp_api_base, category name, lowercased).
+_category_cache: dict[tuple[str, str], int] = {}
+
+
+async def _find_or_create_category(name: str, wp_api_base: str, headers: dict) -> Optional[int]:
+    """Find a WordPress category by name, creating it if it doesn't exist yet."""
+    cache_key = (wp_api_base, name.strip().lower())
+    if cache_key in _category_cache:
+        return _category_cache[cache_key]
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(f"{wp_api_base}/categories", params={"search": name}, headers=headers)
+            if resp.status_code == 200:
+                for cat in resp.json():
+                    if cat.get("name", "").strip().lower() == name.strip().lower():
+                        _category_cache[cache_key] = cat["id"]
+                        return cat["id"]
+            create_resp = await client.post(f"{wp_api_base}/categories", json={"name": name}, headers=headers)
+            if create_resp.status_code in (200, 201):
+                cat_id = create_resp.json().get("id")
+                if cat_id:
+                    _category_cache[cache_key] = cat_id
+                    return cat_id
+    except Exception as e:
+        print(f"[WP] Category lookup/create failed for '{name}': {e}")
     return None
 
 
@@ -239,9 +277,17 @@ async def publish_to_wordpress(
         "excerpt": block.meta_description,
     }
 
-    # Categories and tags
-    if config.category_ids:
-        post_data["categories"] = config.category_ids
+    # Categories and tags — explicit category_ids always win; otherwise
+    # auto-resolve a category from content_type (service page vs. blog post)
+    # so pillar pages and supporting posts land in separate categories.
+    category_ids = list(config.category_ids)
+    if not category_ids:
+        category_name = "Blog" if block.content_type == "blog" else f"{block.business_type} Services"
+        resolved_id = await _find_or_create_category(category_name, wp_api_base, headers)
+        if resolved_id:
+            category_ids = [resolved_id]
+    if category_ids:
+        post_data["categories"] = category_ids
     if config.tag_ids:
         post_data["tags"] = config.tag_ids
 

@@ -79,6 +79,15 @@ class Settings(BaseSettings):
     # e.g. "https://zeorbit.com/sitemap_index.xml".
     GSC_SITE_URL: str = ""
     WP_SITEMAP_URL: str = ""
+    # Optional: paste the google-site-verification content token from Search Console
+    # (URL-prefix property → HTML tag). Injected into every /p/{slug} page <head>.
+    GSC_VERIFICATION_META: str = ""
+    # Optional: filename Google gives you for HTML-file verification, e.g.
+    # "google123abc.html", served at /{filename} with GSC_VERIFICATION_FILE_BODY.
+    GSC_VERIFICATION_FILENAME: str = ""
+    GSC_VERIFICATION_FILE_BODY: str = ""
+    # Auto-submit sitemap + track all /p/ pages after publish (default on).
+    GSC_AUTO_PUSH_ON_PUBLISH: bool = True
 
     # ── Image APIs ───────────────────────────────────────────────
     UNSPLASH_ACCESS_KEY: str = ""
@@ -115,10 +124,15 @@ class Settings(BaseSettings):
     GOOGLE_ADS_REFRESH_TOKEN: str = ""
     GOOGLE_ADS_CUSTOMER_ID: str = ""       # the ad account to create campaigns in (digits only, no dashes)
     GOOGLE_ADS_LOGIN_CUSTOMER_ID: str = "" # manager (MCC) account id, if the above is a client account under one
+    # After /p/ publish: auto-create a Search campaign for that URL (paused unless AUTO_ENABLE).
+    GOOGLE_ADS_AUTO_CREATE_ON_PUBLISH: bool = True
+    # Dangerous for spend — leave false unless billing is intentional. Default keeps campaigns paused.
+    GOOGLE_ADS_AUTO_ENABLE: bool = False
 
-    # ── Lead capture ─────────────────────────────────────────────
-    BARK_API_KEY: str = ""
-    THUMBTACK_API_KEY: str = ""
+    # ── Demo mode (optional sales simulation ONLY when live APIs missing) ─
+    # Production default: false. Prefer free live Google APIs + free Groq/Gemini.
+    # When true AND credentials are missing, Indexing/GBP/Ads return demo data.
+    DEMO_MODE: bool = False
 
     class Config:
         env_file = ".env"

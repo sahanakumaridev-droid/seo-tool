@@ -96,9 +96,12 @@ async def _gemini(prompt: str, temperature: float, max_tokens: int, json_mode: b
         return None
 
 
-async def chat_text(prompt: str, temperature: float = 0.7, max_tokens: int = 3500) -> Optional[str]:
-    """Return raw text from the active provider, or None."""
-    provider = active_provider()
+async def chat_text(prompt: str, temperature: float = 0.7, max_tokens: int = 3500,
+                     provider: Optional[str] = None) -> Optional[str]:
+    """Return raw text from the active provider, or None. Pass `provider` to
+    override the global setting for just this call (e.g. a per-request
+    user choice), without mutating global state."""
+    provider = provider or active_provider()
     if provider == "groq":
         return await _openai_compatible(prompt, settings.GROQ_API_KEY,
                                         "https://api.groq.com/openai/v1", settings.GROQ_MODEL,
@@ -111,9 +114,11 @@ async def chat_text(prompt: str, temperature: float = 0.7, max_tokens: int = 350
     return None
 
 
-async def chat_json(prompt: str, temperature: float = 0.7, max_tokens: int = 3500) -> Optional[dict]:
-    """Return a parsed JSON object from the active provider, or None."""
-    provider = active_provider()
+async def chat_json(prompt: str, temperature: float = 0.7, max_tokens: int = 3500,
+                     provider: Optional[str] = None) -> Optional[dict]:
+    """Return a parsed JSON object from the active provider, or None. Pass
+    `provider` to override the global setting for just this call."""
+    provider = provider or active_provider()
     raw = None
     if provider == "groq":
         raw = await _openai_compatible(prompt, settings.GROQ_API_KEY,

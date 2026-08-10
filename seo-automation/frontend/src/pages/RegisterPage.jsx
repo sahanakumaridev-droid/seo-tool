@@ -2,24 +2,36 @@ import { useState } from 'react'
 import { useNavigate, Link, Navigate } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import AuthLayout from '../components/auth/AuthLayout'
+import { registerUser } from '../api'
 
 export default function RegisterPage({ onLogin }) {
   const navigate = useNavigate()
-  // Snapshot once at mount — deliberately not reactive to the live auth flag,
-  // so submitting this form (which flips that flag) can't re-trigger this
-  // redirect and race the manual navigate() below.
   const [alreadyAuthed] = useState(() => localStorage.getItem('seo_auth') === 'true')
   const [form, setForm] = useState({ name: '', email: '', password: '' })
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   if (alreadyAuthed) return <Navigate to="/content" replace />
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    setError('')
     setLoading(true)
-    await new Promise(r => setTimeout(r, 600))
-    onLogin()
-    navigate('/onboarding')
+    try {
+      await registerUser({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        role: 'client',
+      })
+      onLogin()
+      navigate('/onboarding')
+    } catch (err) {
+      const detail = err.response?.data?.detail
+      setError(typeof detail === 'string' ? detail : 'Registration failed. Try a different email.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -63,14 +75,12 @@ export default function RegisterPage({ onLogin }) {
           />
         </div>
 
-        <button type="submit" disabled={loading || !form.name || !form.email || !form.password} className="btn btn-primary"
-          style={{ width: '100%', padding: '13px', fontSize: 15, marginTop: 4 }}>
-          {loading ? 'Creating account…' : <>Start Free Audit <ArrowRight size={16} /></>}
-        </button>
+        {error && <div className="alert alert-error">⚠ {error}</div>}
 
-        <p style={{ fontSize: 11.5, color: 'var(--text-4)', textAlign: 'center', margin: 0 }}>
-          By signing up, you agree to our Terms & Privacy Policy.
-        </p>
+        <button type="submit" disabled={loading || !form.name || !form.email || form.password.length < 6}
+          className="btn btn-primary" style={{ width: '100%', padding: '13px', fontSize: 15, marginTop: 4 }}>
+          {loading ? 'Creating account…' : <>Create account <ArrowRight size={16} /></>}
+        </button>
       </form>
     </AuthLayout>
   )

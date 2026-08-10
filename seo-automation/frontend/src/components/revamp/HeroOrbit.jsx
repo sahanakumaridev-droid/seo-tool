@@ -1,4 +1,4 @@
-const NODES = ['AI', 'Web', 'Mobile', 'Software', 'SEO', 'Data', 'Automation']
+const NODES = ['Keywords', 'Content', 'Rankings', 'Competitors', 'AI', 'WordPress', 'Indexing']
 
 export default function HeroOrbit() {
   return (
