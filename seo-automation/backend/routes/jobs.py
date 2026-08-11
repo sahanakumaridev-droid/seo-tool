@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
+import asyncio
 from models.schemas import BulkGenerateResponse, GenerateRequest, BulkPublishRequest
 from services.job_service import create_job, get_job, run_bulk_job, cleanup_old_jobs
 from services.content_service import generate_seo_block
@@ -21,9 +22,36 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
     job_id = create_job(total=len(cities))
     cleanup_old_jobs()
 
+    used_featured: list = []
+    used_lock = asyncio.Lock()
+
+    # Seed exclude list from already-published pages in this niche
+    try:
+        from db import AsyncSessionLocal, PageRecord
+        from sqlalchemy import select
+        from services.image_service import topic_image_family
+        niche = topic_image_family(req.business_type)
+        async with AsyncSessionLocal() as session:
+            rows = (await session.execute(select(PageRecord))).scalars().all()
+            for row in rows:
+                block0 = row.seo_block if isinstance(row.seo_block, dict) else {}
+                fam = topic_image_family(f"{row.business_type or ''} {(block0 or {}).get('business_type') or ''}")
+                if niche and fam and niche != fam:
+                    continue
+                if (block0 or {}).get("featured_image_url"):
+                    used_featured.append(block0["featured_image_url"])
+                for im in (block0 or {}).get("in_content_images") or []:
+                    u = im.get("url") if isinstance(im, dict) else None
+                    if u:
+                        used_featured.append(u)
+    except Exception as e:
+        print(f"[Jobs] could not seed used images: {e}")
+
     async def generate_task(city_info):
         name = city_info.name if hasattr(city_info, "name") else city_info["name"]
         state = city_info.state if hasattr(city_info, "state") else city_info["state"]
+        async with used_lock:
+            exclude = list(used_featured)
         block = await generate_seo_block(
             business_type=req.business_type,
             city=name,
@@ -32,7 +60,31 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
             industry=req.industry,
             use_ai=req.use_ai,
             llm_provider=req.llm_provider,
+            exclude_image_urls=exclude,
         )
+        async with used_lock:
+            # Re-check under lock in case another task claimed the same URL first
+            if block.featured_image_url:
+                from services.image_service import normalize_image_key, generate_article_images
+                taken = {normalize_image_key(u) for u in used_featured}
+                key = normalize_image_key(block.featured_image_url)
+                if key in taken:
+                    images = await generate_article_images(
+                        f"{req.business_type} {name}",
+                        f"{name}, {state}".strip(", "),
+                        "",
+                        count=3,
+                        exclude_urls=used_featured,
+                        industry=req.industry or "",
+                    )
+                    if images:
+                        block.in_content_images = images
+                        block.featured_image_url = images[0].url
+                if block.featured_image_url:
+                    used_featured.append(block.featured_image_url)
+                for im in block.in_content_images or []:
+                    if im.url:
+                        used_featured.append(im.url)
         return block.model_dump()
 
     background_tasks.add_task(

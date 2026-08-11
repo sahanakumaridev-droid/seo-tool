@@ -194,6 +194,33 @@ def _fill(template: str, bt: str, city: str, state: str) -> str:
 def _slugify(text: str) -> str:
     return re.sub(r'[^a-z0-9-]+', '-', text.lower()).strip('-')
 
+
+_NICHE_TYPO_FIXES = {
+    "sotware": "software",
+    "softwar": "software",
+    "pulmbing": "plumbing",
+    "resturant": "restaurant",
+    "restuarant": "restaurant",
+}
+
+
+def normalize_niche_text(text: str) -> str:
+    """Fix common niche typos so titles/slugs/images stay on-topic."""
+    if not text:
+        return text
+
+    def _fix(match: re.Match) -> str:
+        word = match.group(0)
+        fixed = _NICHE_TYPO_FIXES[word.lower()]
+        if word.isupper():
+            return fixed.upper()
+        if word[:1].isupper():
+            return fixed.title()
+        return fixed
+
+    pattern = re.compile(r"\b(" + "|".join(re.escape(k) for k in _NICHE_TYPO_FIXES) + r")\b", re.I)
+    return pattern.sub(_fix, text)
+
 async def _get_business_image(business_type: str, city: str) -> str:
     """
     Fetch a business-specific image using curated Unsplash photo IDs.
@@ -641,7 +668,14 @@ async def generate_seo_block(
     industry: str = "",
     use_ai: bool = False,
     llm_provider: Optional[str] = None,
+    exclude_image_urls: Optional[list] = None,
 ) -> SEOBlock:
+    from services.image_service import resolve_campaign_niche
+    # Industry=Education + leftover "software engineer" niche → Education Services
+    business_type = resolve_campaign_niche(
+        normalize_niche_text(business_type or ""),
+        industry or "",
+    )
     if use_ai:
         try:
             block = await _generate_ai_block(business_type, city, state, target_keywords, industry, llm_provider)
@@ -659,6 +693,8 @@ async def generate_seo_block(
         focus_keyword = block.keywords.primary if block.keywords and block.keywords.primary else f"{business_type} {city}"
         images = await generate_article_images(
             focus_keyword, f"{city}, {state}".strip(", "), "", count=3,
+            exclude_urls=exclude_image_urls,
+            industry=industry or "",
         )
         block.in_content_images = images
         if images:
@@ -668,8 +704,8 @@ async def generate_seo_block(
         print(f"[Image] Set {len(images)} image(s) for {business_type} in {city}")
     except Exception as e:
         print(f"[Image] Failed to set image: {e}")
-        # Final fallback
-        block.featured_image_url = f"https://picsum.photos/seed/{business_type.lower()}-{city.lower()}/1200/600"
+        # Final fallback — curated on-topic Unsplash, never random picsum
+        block.featured_image_url = await _get_business_image(business_type, city)
 
     return block
 
@@ -1049,6 +1085,7 @@ async def generate_articles(req: ArticleRequest, profile: WebsiteProfile) -> Lis
     angles = await _plan_article_angles(req.primary_keyword, req.location, profile, max(per_city, 5))
 
     blocks: List[SEOBlock] = []
+    used_featured: List[str] = []
     for ci, city in enumerate(cities):
         for ai in range(per_city):
             angle = angles[(ci * per_city + ai) % len(angles)] if angles else {}
@@ -1062,13 +1099,23 @@ async def generate_articles(req: ArticleRequest, profile: WebsiteProfile) -> Lis
                         req.primary_keyword, f"{city.name}, {city.state}".strip(", "),
                         profile.business_name if profile else "", count=3,
                         angle_title=angle.get("title", ""),
+                        exclude_urls=used_featured,
+                        industry=getattr(req, "industry", "") or "",
                     )
                     block.in_content_images = images
                     if images:
                         block.featured_image_url = images[0].url
+                        used_featured.append(images[0].url)
                 except Exception as e:
                     print(f"[Articles] image generation failed: {e}")
-                    block.featured_image_url = f"https://picsum.photos/seed/{req.primary_keyword.lower()}-{city.name.lower()}/1200/600"
+                    from services.image_service import _curated_image_url
+                    block.featured_image_url = _curated_image_url(
+                        req.primary_keyword,
+                        f"{req.primary_keyword}|{city.name}|0",
+                        exclude=used_featured,
+                    )
+                    if block.featured_image_url:
+                        used_featured.append(block.featured_image_url)
                 blocks.append(block)
             except Exception as e:
                 print(f"[Articles] generation failed for {city.name}: {e}")

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import ScrollToTop from './components/ScrollToTop'
+import SiteDock from './components/SiteDock'
 import LandingPage from './pages/LandingPage'
 import BlogPage from './pages/BlogPage'
 import ServicePage from './pages/ServicePage'
@@ -9,6 +10,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
+      <SiteDock />
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/blog" element={<BlogPage />} />

@@ -199,7 +199,7 @@ export const NAV_PAGES = {
       {
         title: 'Conversion landing pages',
         meta: 'PPC · CRO',
-        image: '/showcase/web-ecommerce-mac.png',
+        image: '/showcase/pro/commerce-ui-a.jpg',
       },
       {
         title: 'Content engines',

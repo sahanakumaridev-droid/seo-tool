@@ -1,15 +1,19 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Zap, MapPin, Globe, Eye, X, RefreshCw, Save, CheckCircle,
-         FileJson, Tag, Plus, Upload, ChevronDown, ChevronUp, Megaphone } from 'lucide-react'
+         FileJson, Tag, Plus, Upload, ChevronDown, ChevronUp, Megaphone, Trash2 } from 'lucide-react'
 import { generateBulk, exportJson, exportWordpress, generateSingle,
          savePage, publishToWordPress, publishBulkToWordPress, startBulkGenerateJob, getJob, publishAllToWeb, zeorbitBlogUrl,
-         getNearbyCities } from '../api'
+         getNearbyCities, deletePage, listPages } from '../api'
+import axios from 'axios'
 
 const BUSINESS_TYPES = [
   'Web Design', 'Website Redesign', 'Small Business Web Design', 'WordPress Development',
   'eCommerce Development', 'Mobile App Development', 'iOS App Development', 'Android App Development',
   'App MVP Development', 'Nonprofit Website Design', 'SEO Agency',
+  'Education', 'Tutoring', 'Online Courses',
+  'Restaurant', 'Cafe', 'Catering',
+  'Finance', 'Accounting',
   'Plumbing', 'HVAC', 'Roofing', 'Landscaping', 'Cleaning', 'Electrical', 'Painting', 'Pest Control', 'Moving',
 ]
 const INDUSTRIES = ['Contractors', 'Healthcare', 'Retail', 'Restaurants',
@@ -22,6 +26,106 @@ const SEO_PLUGINS = [
   { value: 'aioseo', label: 'All in One SEO' },
   { value: 'yoast', label: 'Yoast SEO' },
 ]
+
+/** Map free-text niche / industry / keyword → category family for alignment checks. */
+function categoryFamily(text) {
+  const t = (text || '').toLowerCase()
+  if (!t.trim()) return ''
+  if (/(restaurant|cafe|catering|dining|food service|bistro)/.test(t)) return 'restaurant'
+  if (/(educat|tutor|school|course|university|college|learning)/.test(t)) return 'education'
+  if (/(financ|account|bank|invest|wealth|bookkeep)/.test(t)) return 'finance'
+  if (/(legal|law|attorney|lawyer)/.test(t)) return 'legal'
+  if (/(real estate|realtor|property)/.test(t)) return 'real_estate'
+  if (/(health|dental|clinic|medical|doctor)/.test(t)) return 'healthcare'
+  if (/(retail|store|shop|ecommerce|e-commerce)/.test(t) && !/web|website|design/.test(t)) return 'retail'
+  if (/(plumb|hvac|roof|landscap|clean|electric|paint|pest|moving|contractor)/.test(t)) return 'contractors'
+  if (/(software|engineer|coding|saas|mobile app|ios app|android|app mvp|app development)/.test(t)) return 'software'
+  if (/(web design|website|wordpress|seo agency|redesign|web develop)/.test(t)) return 'web'
+  if (/(professional services)/.test(t)) return 'professional'
+  return ''
+}
+
+function industryFamily(industry) {
+  const map = {
+    Contractors: 'contractors',
+    Healthcare: 'healthcare',
+    Retail: 'retail',
+    Restaurants: 'restaurant',
+    'Professional Services': 'professional',
+    'Real Estate': 'real_estate',
+    Legal: 'legal',
+    Finance: 'finance',
+    Education: 'education',
+    Other: 'other',
+  }
+  return map[industry] || categoryFamily(industry) || 'other'
+}
+
+/** Families that can pair with each other without a warning. */
+const FAMILY_COMPAT = {
+  web: new Set(['web', 'professional', 'retail', 'other', 'software']),
+  software: new Set(['software', 'professional', 'other', 'web']),
+  education: new Set(['education', 'professional', 'other']),
+  restaurant: new Set(['restaurant', 'retail', 'other']),
+  finance: new Set(['finance', 'professional', 'other']),
+  legal: new Set(['legal', 'professional', 'other']),
+  real_estate: new Set(['real_estate', 'professional', 'other']),
+  healthcare: new Set(['healthcare', 'professional', 'other']),
+  retail: new Set(['retail', 'restaurant', 'other', 'web']),
+  contractors: new Set(['contractors', 'other']),
+  professional: new Set(['professional', 'web', 'software', 'finance', 'legal', 'education', 'real_estate', 'healthcare', 'other']),
+  other: null, // compatible with all
+}
+
+const FAMILY_LABEL = {
+  web: 'Web / Digital',
+  software: 'Software / Apps',
+  education: 'Education',
+  restaurant: 'Restaurants / Food',
+  finance: 'Finance',
+  legal: 'Legal',
+  real_estate: 'Real Estate',
+  healthcare: 'Healthcare',
+  retail: 'Retail',
+  contractors: 'Contractors / Trades',
+  professional: 'Professional Services',
+  other: 'Other',
+}
+
+function familiesCompatible(a, b) {
+  if (!a || !b || a === 'other' || b === 'other') return true
+  if (a === b) return true
+  const set = FAMILY_COMPAT[a]
+  return set ? set.has(b) : false
+}
+
+/**
+ * Analyse Business Niche + Industry + Keywords for mismatched categories.
+ * Returns { ok, message } — message is snackbar-ready when not ok.
+ */
+function analyzeCategoryAlignment(niche, industry, keywords = []) {
+  const nicheFam = categoryFamily(niche)
+  const indFam = industryFamily(industry)
+  if (!nicheFam) return { ok: true, message: '' }
+
+  if (indFam && indFam !== 'other' && !familiesCompatible(nicheFam, indFam)) {
+    return {
+      ok: false,
+      message: `Please select matching categories only — Business Niche is “${FAMILY_LABEL[nicheFam] || nicheFam}” but Industry is “${FAMILY_LABEL[indFam] || indFam}”. Align niche, industry, and keywords.`,
+    }
+  }
+
+  const kwText = (keywords || []).join(' ')
+  const kwFam = categoryFamily(kwText)
+  if (kwFam && !familiesCompatible(nicheFam, kwFam)) {
+    return {
+      ok: false,
+      message: `Please select matching categories only — keywords look like “${FAMILY_LABEL[kwFam]}” but Business Niche is “${FAMILY_LABEL[nicheFam]}”. Use keywords for the same category.`,
+    }
+  }
+
+  return { ok: true, message: '' }
+}
 
 // ── Preview Modal ──────────────────────────────────────────────
 function PreviewModal({ block, businessType, targetKeywords = [], wpConfig, onClose, onRegenerate }) {
@@ -339,12 +443,13 @@ function WordPressPanel({ wpConfig, setWpConfig }) {
 
 // ── Main Page ──────────────────────────────────────────────────
 export default function ContentPage() {
-  const DEFAULTS = { business_type: 'Web Design', base_location: 'San Diego, CA', num_cities: 10, industry: 'Contractors' }
+  const DEFAULTS = { business_type: '', base_location: 'San Diego, CA', num_cities: 10, industry: 'Contractors' }
   const navigate = useNavigate()
   const [form, setForm] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem('seo_project') || '{}')
-      return { ...DEFAULTS, ...saved }
+      // Never prefill Business Niche — user must choose it each campaign setup
+      return { ...DEFAULTS, ...saved, business_type: '' }
     } catch { return DEFAULTS }
   })
 
@@ -368,8 +473,11 @@ export default function ContentPage() {
   const [targetKeywords, setTargetKeywords] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem('seo_keywords') || '[]') } catch { return [] }
   })
-  const [useAi, setUseAi] = useState(false)
+  const [useAi, setUseAi] = useState(true)
   const [llmProvider, setLlmProvider] = useState('')
+  const [llmAvailability, setLlmAvailability] = useState({})
+  const [savedPages, setSavedPages] = useState([])
+  const [deletingSlug, setDeletingSlug] = useState('')
   const [useAsync, setUseAsync] = useState(false)
   const [asyncJobId, setAsyncJobId] = useState('')
   const [jobProgress, setJobProgress] = useState(null)  // { completed, failed, total, status }
@@ -386,8 +494,20 @@ export default function ContentPage() {
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type })
-    setTimeout(() => setToast(null), 4000)
+    setTimeout(() => setToast(null), type === 'warning' ? 6500 : 4000)
   }
+
+  // Warn when niche / industry / keywords point at different categories
+  useEffect(() => {
+    const niche = (form.business_type || '').trim()
+    if (!niche) return
+    const timer = setTimeout(() => {
+      const result = analyzeCategoryAlignment(niche, form.industry, targetKeywords)
+      if (!result.ok) showToast(result.message, 'warning')
+    }, 450)
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.business_type, form.industry, targetKeywords])
 
   // Keep results + keywords alive when navigating to a page preview and back
   useEffect(() => { sessionStorage.setItem('seo_pages', JSON.stringify(pages)) }, [pages])
@@ -414,6 +534,35 @@ export default function ContentPage() {
     } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // AI model availability + saved location pages (for trash / restart)
+  useEffect(() => {
+    axios.get('/api/content/llm-providers').then(r => setLlmAvailability(r.data || {})).catch(() => {})
+    listPages(0, 100).then(r => setSavedPages(Array.isArray(r.data) ? r.data : [])).catch(() => {})
+  }, [pages])
+
+  const handleDeleteSaved = async (slug) => {
+    if (!slug || !confirm(`Delete location content "${slug}"? You can regenerate it after.`)) return
+    setDeletingSlug(slug)
+    try {
+      await deletePage(slug)
+      setSavedPages(prev => prev.filter(p => p.slug !== slug))
+      setPages(prev => prev.filter(p => p.slug !== slug))
+      showToast('Location content deleted')
+    } catch (e) {
+      showToast(e.response?.data?.detail || e.message, 'error')
+    } finally {
+      setDeletingSlug('')
+    }
+  }
+
+  const handleClearResults = () => {
+    if (!pages.length) return
+    if (!confirm('Clear generated results from this session? Saved/published pages stay until you trash them below.')) return
+    setPages([])
+    sessionStorage.removeItem('seo_pages')
+    showToast('Session results cleared — ready to regenerate')
+  }
 
   // Location Expansion preview — reflect the real nearby cities for whatever
   // base_location is currently typed, instead of a hardcoded city list.
@@ -475,6 +624,26 @@ export default function ContentPage() {
 
   const handleGenerate = async (e) => {
     e.preventDefault()
+    const niche = (form.business_type || '').trim()
+    if (!niche) {
+      setError('Select or enter a Business Niche before generating pages.')
+      showToast('Business Niche is required')
+      document.getElementById('business-niche-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    if (!targetKeywords.length) {
+      setError('Add at least one target keyword before generating pages.')
+      showToast('Target keywords are required')
+      document.getElementById('target-keywords-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    const alignment = analyzeCategoryAlignment(niche, form.industry, targetKeywords)
+    if (!alignment.ok) {
+      setError(alignment.message)
+      showToast(alignment.message, 'warning')
+      document.getElementById('business-niche-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
     setLoading(true)
     setError('')
     setPublishResults({})
@@ -482,6 +651,7 @@ export default function ContentPage() {
     try {
       const payload = {
         ...form,
+        business_type: niche,
         num_cities: Number(form.num_cities),
         target_keywords: targetKeywords,
         use_ai: useAi,
@@ -564,16 +734,23 @@ export default function ContentPage() {
   }
 
   const filtered = pages.filter(p => p.city.toLowerCase().includes(filter.toLowerCase()))
+  const categoryAlignment = analyzeCategoryAlignment(
+    (form.business_type || '').trim(),
+    form.industry,
+    targetKeywords,
+  )
 
   return (
     <div className="space-y-5 fade-in">
-      {/* Toast */}
+      {/* Toast / snackbar */}
       {toast && (
-        <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-5 py-3 rounded-xl shadow-2xl text-sm font-semibold transition-all
-          ${toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
-          <CheckCircle size={16} />
-          {toast.msg}
-          <button onClick={() => setToast(null)} className="ml-2 opacity-70 hover:opacity-100"><X size={14} /></button>
+        <div className={`fixed top-5 right-5 z-50 flex items-start gap-3 px-5 py-3 rounded-xl shadow-2xl text-sm font-semibold transition-all max-w-md
+          ${toast.type === 'success' ? 'bg-emerald-500 text-white'
+            : toast.type === 'warning' ? 'bg-amber-500 text-slate-900'
+              : 'bg-red-500 text-white'}`}>
+          <CheckCircle size={16} className="mt-0.5 flex-shrink-0" />
+          <span className="leading-snug">{toast.msg}</span>
+          <button onClick={() => setToast(null)} className="ml-2 opacity-70 hover:opacity-100 flex-shrink-0"><X size={14} /></button>
         </div>
       )}
       {/* Page header */}
@@ -584,12 +761,13 @@ export default function ContentPage() {
         </div>
       </div>
 
-      {/* Target Keywords */}
-      <div className="card p-5 border-indigo-500/20">
+      {/* Target Keywords — required */}
+      <div id="target-keywords-section" className={`card p-5 ${targetKeywords.length ? 'border-indigo-500/20' : 'border-amber-500/40'}`}>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Tag size={15} className="text-indigo-400" />
             <span className="text-sm font-semibold text-white">Target Keywords</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">Required</span>
             <span className="text-xs text-slate-500">— woven into every generated page</span>
           </div>
           {targetKeywords.length > 0 && (
@@ -598,12 +776,19 @@ export default function ContentPage() {
             </button>
           )}
         </div>
+        {!targetKeywords.length && (
+          <div className="mb-3 text-xs text-amber-300/90">
+            Add at least one keyword (type and press Enter, or pick a suggestion) before generating.
+          </div>
+        )}
         <div className="flex gap-2 mb-3">
           <input type="text" value={kwInput}
             onChange={e => setKwInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword() } }}
+            required={targetKeywords.length === 0}
+            aria-required="true"
             placeholder="e.g. web design san diego — press Enter to add"
-            className="flex-1 bg-white/4 border border-white/8 rounded-lg px-4 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50" />
+            className={`flex-1 bg-white/4 border rounded-lg px-4 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50 ${targetKeywords.length ? 'border-white/8' : 'border-amber-500/40'}`} />
           <button type="button" onClick={() => addKeyword()}
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-indigo-600/20 border border-indigo-600/30 text-indigo-300 hover:bg-indigo-600/30 transition-colors text-sm font-medium">
             <Plus size={14} /> Add
@@ -637,8 +822,11 @@ export default function ContentPage() {
             <Zap size={14} className="text-indigo-400" /> Campaign Setup
           </h3>
           <form onSubmit={handleGenerate} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Business Niche</label>
+            <div id="business-niche-section">
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                Business Niche
+                <span className="ml-2 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">Required</span>
+              </label>
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {BUSINESS_TYPES.map(bt => (
                   <button key={bt} type="button" onClick={() => updateForm(f => ({ ...f, business_type: bt }))}
@@ -649,16 +837,32 @@ export default function ContentPage() {
               </div>
               <input type="text" value={form.business_type}
                 onChange={e => updateForm(f => ({ ...f, business_type: e.target.value }))}
-                placeholder="Custom niche..."
-                className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50" />
+                required
+                aria-required="true"
+                placeholder="Select a chip or type a custom niche…"
+                className={`w-full bg-white/4 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50 ${(form.business_type || '').trim() ? 'border-white/8' : 'border-amber-500/40'}`} />
+              {!(form.business_type || '').trim() && (
+                <p className="mt-1.5 text-[10px] text-amber-400">Choose a niche chip or type one — required to generate.</p>
+              )}
+              {(form.business_type || '').trim() && (
+                <p className="mt-1.5 text-[10px] text-slate-500">This controls page topic, titles, and images.</p>
+              )}
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Industry / Audience</label>
-              <select value={form.industry} onChange={e => updateForm(f => ({ ...f, industry: e.target.value }))}
+              <select
+                value={form.industry}
+                onChange={e => updateForm(f => ({ ...f, industry: e.target.value }))}
                 className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500/50">
                 {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
               </select>
+              <p className="mt-1.5 text-[10px] text-slate-500">Shapes copy tone. Keep it in the same category as Business Niche.</p>
             </div>
+            {!categoryAlignment.ok && (
+              <div className="text-[11px] leading-snug px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/35 text-amber-200">
+                {categoryAlignment.message}
+              </div>
+            )}
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
                 <MapPin size={10} className="inline mr-1" />Base Location
@@ -688,31 +892,40 @@ export default function ContentPage() {
             {error && <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 text-xs">{error}</div>}
 
             {/* AI + Async toggles */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-white/3 border border-white/6">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between px-2.5 py-2 rounded-lg bg-white/3 border border-white/6">
                 <div>
-                  <div className="text-xs font-semibold text-slate-300">🤖 AI Content (GPT-4)</div>
-                  <div className="text-[10px] text-slate-500">Unique, high-quality content per city</div>
+                  <div className="text-xs font-semibold text-slate-300">AI Content</div>
+                  <div className="text-[10px] text-slate-500">Unique copy per location</div>
                 </div>
                 <button type="button" onClick={() => setUseAi(a => !a)}
                   className={`w-9 h-5 rounded-full transition-colors relative flex-shrink-0 ${useAi ? 'bg-indigo-500' : 'bg-white/10'}`}>
                   <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${useAi ? 'left-4' : 'left-0.5'}`} />
                 </button>
               </div>
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-white/3 border border-white/6">
-                <div className="text-xs font-semibold text-slate-300">AI Model</div>
-                <select value={llmProvider} onChange={e => setLlmProvider(e.target.value)} disabled={!useAi}
-                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none disabled:opacity-50">
+              <div className="flex items-center justify-between px-2.5 py-2 rounded-lg bg-white/3 border border-white/6">
+                <div>
+                  <div className="text-xs font-semibold text-slate-300">AI Model</div>
+                  <div className="text-[10px] text-slate-500">
+                    {llmAvailability.active ? `Active: ${llmAvailability.active}` : 'Turn on AI Content to use'}
+                  </div>
+                </div>
+                <select
+                  value={llmProvider}
+                  onChange={e => { setLlmProvider(e.target.value); if (e.target.value) setUseAi(true) }}
+                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none min-w-[120px]"
+                >
                   <option value="">Auto</option>
-                  <option value="openai">GPT-4</option>
                   <option value="gemini">Gemini</option>
+                  <option value="anthropic">Claude</option>
+                  <option value="openai">ChatGPT (GPT-4)</option>
                   <option value="groq">Groq</option>
                 </select>
               </div>
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-white/3 border border-white/6">
+              <div className="flex items-center justify-between px-2.5 py-2 rounded-lg bg-white/3 border border-white/6">
                 <div>
                   <div className="text-xs font-semibold text-slate-300">⚡ Async Job (50+ pages)</div>
-                  <div className="text-[10px] text-slate-500">Background processing, track in Jobs page</div>
+                  <div className="text-[10px] text-slate-500">Background processing</div>
                 </div>
                 <button type="button" onClick={() => setUseAsync(a => !a)}
                   className={`w-9 h-5 rounded-full transition-colors relative flex-shrink-0 ${useAsync ? 'bg-amber-500' : 'bg-white/10'}`}>
@@ -743,34 +956,68 @@ export default function ContentPage() {
               )
             })()}
 
-            <button type="submit" disabled={loading || !!asyncJobId}
-              className="btn-primary w-full py-2.5 rounded-lg text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
+            <button type="submit" disabled={loading || !!asyncJobId || !targetKeywords.length || !(form.business_type || '').trim() || !categoryAlignment.ok}
+              className="btn-primary w-full py-2.5 rounded-lg text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
+              title={
+                !(form.business_type || '').trim() ? 'Select a Business Niche first'
+                  : !targetKeywords.length ? 'Add at least one target keyword first'
+                    : !categoryAlignment.ok ? 'Align niche, industry, and keywords to the same category'
+                      : undefined
+              }>
               {loading || asyncJobId
                 ? <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.2)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/></svg>{asyncJobId ? 'Generating…' : `Generating ${form.num_cities} pages...`}</>
                 : <><Zap size={14} />{useAsync ? 'Start Async Job' : 'Generate Pages'}{useAi ? ' (AI)' : ''}</>}
             </button>
+            {!(form.business_type || '').trim() ? (
+              <p className="text-[11px] text-amber-400 text-center">Select a Business Niche to enable generate.</p>
+            ) : !targetKeywords.length ? (
+              <p className="text-[11px] text-amber-400 text-center">Add a target keyword above to enable generate.</p>
+            ) : !categoryAlignment.ok ? (
+              <p className="text-[11px] text-amber-400 text-center">Please select matching categories only.</p>
+            ) : null}
           </form>
         </div>
 
-        <div className="card p-4 lg:col-span-2">
-          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-            <Globe size={11} /> Location Expansion — {form.num_cities} cities
+        <div className="card p-3 lg:col-span-2">
+          <h4 className="text-[11px] font-semibold uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: 'var(--text-2)' }}>
+            <Globe size={11} /> Location Expansion — {nearbyCities.length || form.num_cities} locations
           </h4>
-          <div className="flex flex-wrap gap-1.5">
-            {nearbyCities.slice(0, 15).map(c => (
-              <span key={`${c.name}-${c.state}`} className="text-xs px-2 py-1 rounded bg-white/5 border border-white/8 text-slate-400">
-                {c.name}{c.state ? `, ${c.state}` : ''}
-              </span>
-            ))}
-            {nearbyCities.length > 15 && (
-              <span className="text-xs px-2 py-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
-                +{nearbyCities.length - 15} more cities
+          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
+            {nearbyCities.slice(0, 40).map(c => {
+              const kind = c.kind || 'city'
+              const style = kind === 'state'
+                ? { background: '#eef2ff', border: '1px solid #6366f1', color: '#312e81' }
+                : kind === 'county'
+                  ? { background: '#fff7ed', border: '1px solid #ea580c', color: '#9a3412' }
+                  : { background: '#f8fafc', border: '1px solid #64748b', color: '#0f172a' }
+              return (
+                <span
+                  key={`${c.name}-${c.state}-${kind}`}
+                  className="text-[11px] px-2 py-0.5 rounded font-semibold"
+                  style={style}
+                >
+                  {kind !== 'city' && (
+                    <span className="uppercase text-[9px] mr-1" style={{ opacity: 0.85, fontWeight: 800 }}>
+                      {kind}
+                    </span>
+                  )}
+                  {c.name}{c.state ? `, ${c.state}` : ''}
+                </span>
+              )
+            })}
+            {nearbyCities.length > 40 && (
+              <span className="text-[11px] px-2 py-0.5 rounded font-semibold"
+                style={{ background: '#eef2ff', border: '1px solid #6366f1', color: '#3730a3' }}>
+                +{nearbyCities.length - 40} more
               </span>
             )}
             {!nearbyCities.length && !nearbyError && form.base_location.trim() && (
-              <span className="text-xs text-slate-500">Looking up nearby cities…</span>
+              <span className="text-xs" style={{ color: 'var(--text-3)' }}>Looking up locations…</span>
             )}
           </div>
+          <p className="text-[10px] mt-2" style={{ color: 'var(--text-3)' }}>
+            Tip: use a state (“Illinois, IL”), county (“Cook County, IL”), or city (“Chicago, IL”).
+          </p>
         </div>
       </div>
 
@@ -779,37 +1026,36 @@ export default function ContentPage() {
 
       {/* ── SUCCESS BANNER — appears immediately after generation ── */}
       {pages.length > 0 && (
-        <div ref={resultsRef} className="rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-          style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(124,58,237,0.1))', border: '1px solid rgba(99,102,241,0.3)' }}>
+        <div ref={resultsRef} className="content-action-bar rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
-              <CheckCircle size={18} className="text-emerald-400" />
+            <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: '#d1fae5', border: '1px solid #6ee7b7' }}>
+              <CheckCircle size={18} style={{ color: '#047857' }} />
             </div>
             <div>
-              <p className="text-white font-semibold text-sm">{pages.length} SEO pages generated</p>
-              <p className="text-slate-400 text-xs mt-0.5">
+              <p className="font-semibold text-sm" style={{ color: '#0f172a' }}>{pages.length} SEO pages generated</p>
+              <p className="text-xs mt-0.5" style={{ color: '#334155' }}>
                 {form.business_type} · {form.base_location} · Ready to download or publish
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={() => handleExport('json')} disabled={exporting === 'json'}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/8 border border-white/12 text-slate-200 text-sm font-medium hover:bg-white/12 transition-colors disabled:opacity-50">
+              className="content-btn flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm disabled:opacity-50">
               <FileJson size={14} /> {exporting === 'json' ? 'Exporting...' : 'Download JSON'}
             </button>
             <button onClick={handlePublishAllWeb} disabled={webAll?.loading}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg btn-primary text-white text-sm font-semibold disabled:opacity-60">
+              className="content-btn-primary flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm disabled:opacity-60">
               {webAll?.loading
                 ? <><svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" strokeWidth="3" strokeLinecap="round"/></svg>Publishing all…</>
                 : <><Globe size={14} /> Publish All {pages.length} to ZeOrbit</>}
             </button>
             <button onClick={() => handleExport('wp')} disabled={exporting === 'wp'}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/8 border border-white/12 text-slate-200 text-sm font-medium hover:bg-white/12 transition-colors disabled:opacity-50">
+              className="content-btn flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm disabled:opacity-50">
               <FileJson size={14} /> {exporting === 'wp' ? 'Exporting...' : 'WP Format'}
             </button>
             {wpConfig.wp_url && (
               <button onClick={handlePublishAll} disabled={publishingAll}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-600/20 border border-violet-600/30 text-violet-300 text-sm font-medium hover:bg-violet-600/30 transition-colors disabled:opacity-50">
+                className="content-btn-violet flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm disabled:opacity-50">
                 <Upload size={14} /> {publishingAll ? 'Publishing...' : 'Publish All to WordPress'}
               </button>
             )}
@@ -865,14 +1111,22 @@ export default function ContentPage() {
       {/* Results Table */}
       {pages.length > 0 && (
         <div className="card" ref={resultsRef}>
-          <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+          <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
             <div className="flex items-center gap-3">
-              <h3 className="text-sm font-semibold text-white">{pages.length} Pages Generated</h3>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-400/10 text-emerald-400 border border-emerald-400/20">Complete</span>
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{pages.length} Pages Generated</h3>
+              <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #6ee7b7' }}>Complete</span>
             </div>
-            <input type="text" placeholder="Filter by city..." value={filter}
-              onChange={e => setFilter(e.target.value)}
-              className="bg-white/4 border border-white/8 rounded-lg px-3 py-1.5 text-sm text-slate-300 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50 w-48" />
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={handleClearResults}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold"
+                style={{ background: '#fff', border: '1px solid #94a3b8', color: '#0f172a' }}>
+                <Trash2 size={11} /> Clear session
+              </button>
+              <input type="text" placeholder="Filter by city..." value={filter}
+                onChange={e => setFilter(e.target.value)}
+                className="rounded-lg px-3 py-1.5 text-sm w-48"
+                style={{ background: '#fff', border: '1px solid #94a3b8', color: '#0f172a' }} />
+            </div>
           </div>
           <div style={{ overflowX: 'auto' }}>
           <table className="data-table">
@@ -887,36 +1141,49 @@ export default function ContentPage() {
                 const pr = publishResults[i]
                 return (
                   <tr key={`${block.city}-${i}`}>
-                    <td className="text-slate-600 text-xs">{i + 1}</td>
+                    <td className="text-xs font-semibold" style={{ color: 'var(--text-3)' }}>{i + 1}</td>
                     <td>
-                      <div className="font-semibold text-slate-200">{block.city}</div>
-                      <div className="text-xs text-slate-500">{block.state}</div>
+                      <div className="font-semibold text-sm" style={{ color: 'var(--text-1)' }}>{block.city}</div>
+                      <div className="text-xs muted-cell">{block.state}</div>
                     </td>
                     <td className="max-w-[240px]">
-                      <div className="text-slate-300 text-xs truncate">{block.title}</div>
-                      <div className="text-slate-600 text-xs truncate mt-0.5">{block.slug}</div>
+                      <div className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>{block.title}</div>
+                      <div className="text-xs muted-cell mt-0.5">{block.slug}</div>
                     </td>
                     <td>
                       <div className="flex items-center gap-2">
-                        <div className="w-14 h-1.5 rounded-full bg-white/8 overflow-hidden">
+                        <div className="w-14 h-1.5 rounded-full overflow-hidden" style={{ background: '#e2e8f0' }}>
                           <div className="h-full rounded-full"
-                            style={{ width: `${score}%`, background: score >= 75 ? '#10b981' : score >= 50 ? '#f59e0b' : '#ef4444' }} />
+                            style={{ width: `${score}%`, background: score >= 75 ? '#059669' : score >= 50 ? '#d97706' : '#dc2626' }} />
                         </div>
-                        <span className={`text-xs font-bold ${score >= 75 ? 'text-emerald-400' : score >= 50 ? 'text-amber-400' : 'text-red-400'}`}>{score}</span>
+                        <span className="text-xs font-bold" style={{ color: score >= 75 ? '#047857' : score >= 50 ? '#b45309' : '#b91c1c' }}>{score}</span>
                       </div>
                     </td>
-                    <td className="text-xs text-slate-400 max-w-[140px] truncate">{block.keywords?.primary}</td>
+                    <td className="text-xs font-medium max-w-[140px]" style={{ color: 'var(--text-2)' }}>{block.keywords?.primary}</td>
                     <td>
                       <div className="flex items-center gap-1.5">
                         <button onClick={() => navigate('/page-preview', { state: { block, index: i, businessType: form.business_type, wpConfig } })}
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs transition-colors"
-                          style={{ background: 'var(--brand-soft)', border: '1px solid rgba(59,130,246,0.3)', color: 'var(--brand)' }}>
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold"
+                          style={{ background: '#fff', border: '1px solid var(--brand)', color: 'var(--brand-dark)' }}>
                           <Eye size={11} /> View
                         </button>
+                        {block.slug && (
+                          <button onClick={() => handleDeleteSaved(block.slug)} disabled={deletingSlug === block.slug}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+                            style={{ background: '#fff', border: '1px solid #f87171', color: '#b91c1c' }}
+                            title="Trash this location content">
+                            <Trash2 size={11} /> {deletingSlug === block.slug ? '…' : 'Trash'}
+                          </button>
+                        )}
                         {wpConfig.wp_url && (
                           <button onClick={() => handlePublishSingle(block, i)}
                             disabled={pr === 'loading'}
-                            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs transition-colors ${pr?.success ? 'bg-emerald-500/15 border border-emerald-500/25 text-emerald-400' : pr?.error ? 'bg-red-500/15 border border-red-500/25 text-red-400' : 'bg-white/5 border border-white/8 text-slate-400 hover:bg-white/8'} disabled:opacity-50`}>
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+                            style={{
+                              background: pr?.success ? '#ecfdf5' : pr?.error ? '#fef2f2' : '#fff',
+                              border: `1px solid ${pr?.success ? '#6ee7b7' : pr?.error ? '#fecaca' : '#94a3b8'}`,
+                              color: pr?.success ? '#047857' : pr?.error ? '#b91c1c' : '#0f172a',
+                            }}>
                             <Upload size={11} />
                             {pr === 'loading' ? '...' : pr?.success ? 'Done' : pr?.error ? 'Err' : 'WP'}
                           </button>
@@ -928,6 +1195,38 @@ export default function ContentPage() {
               })}
             </tbody>
           </table>
+          </div>
+        </div>
+      )}
+
+      {/* Saved / published location content — trash & restart */}
+      {savedPages.length > 0 && (
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+            <div>
+              <h3 className="text-sm font-semibold text-white">Saved location content</h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">Trash pages you no longer need, then regenerate for new locations above.</p>
+            </div>
+            <button type="button" onClick={() => { setPages([]); showToast('Ready to generate fresh locations') }}
+              className="text-xs px-3 py-1.5 rounded-lg bg-indigo-500/15 border border-indigo-500/25 text-indigo-200">
+              Restart generation
+            </button>
+          </div>
+          <div className="max-h-48 overflow-y-auto divide-y divide-white/5">
+            {savedPages.slice(0, 40).map(p => (
+              <div key={p.slug} className="flex items-center justify-between gap-2 py-2">
+                <div className="min-w-0">
+                  <div className="text-xs font-medium text-slate-200 truncate">
+                    {p.city || p.seo_block?.city}{p.state || p.seo_block?.state ? `, ${p.state || p.seo_block?.state}` : ''}
+                  </div>
+                  <div className="text-[10px] text-slate-500 truncate">{p.slug}</div>
+                </div>
+                <button type="button" onClick={() => handleDeleteSaved(p.slug)} disabled={deletingSlug === p.slug}
+                  className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] bg-red-500/10 border border-red-500/20 text-red-300 disabled:opacity-50">
+                  <Trash2 size={10} /> Trash
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}

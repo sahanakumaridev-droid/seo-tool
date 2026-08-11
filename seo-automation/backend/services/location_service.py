@@ -1,10 +1,12 @@
 """
 location_service.py
-Nationwide (USA) nearby-city lookup.
+Nationwide (USA) nearby-city / state / county lookup.
 
-Geocodes a base location by matching a bundled free US cities dataset
-(data/us_cities.json, ~30k cities) — no API key required. Falls back to
-OpenCage geocoding (free tier) and finally a small San Diego seed list.
+Geocodes a base location by matching:
+  1. US state name or code (e.g. "Illinois", "Illinois, IL", "IL")
+  2. US county (e.g. "Orange County, CA")
+  3. Bundled free US cities dataset (data/us_cities.json, ~30k cities)
+Falls back to OpenCage geocoding (free tier) when needed.
 """
 import os
 import json
@@ -14,14 +16,29 @@ from typing import List, Optional, Tuple
 from models.schemas import CityInfo
 from config import settings
 
-# ── Bundled dataset ─────────────────────────────────────────────
-_DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "us_cities.json")
+# ── Bundled datasets ─────────────────────────────────────────────
+_DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 _US_CITIES: List[dict] = []
+_US_STATES: dict = {}
+_US_COUNTIES: List[dict] = []
+
 try:
-    with open(_DATA_PATH, encoding="utf-8") as _f:
+    with open(os.path.join(_DATA_DIR, "us_cities.json"), encoding="utf-8") as _f:
         _US_CITIES = json.load(_f)
 except Exception as _e:  # pragma: no cover
     print(f"[Location] Could not load us_cities.json: {_e}")
+
+try:
+    with open(os.path.join(_DATA_DIR, "us_state_centroids.json"), encoding="utf-8") as _f:
+        _US_STATES = json.load(_f)
+except Exception as _e:  # pragma: no cover
+    print(f"[Location] Could not load us_state_centroids.json: {_e}")
+
+try:
+    with open(os.path.join(_DATA_DIR, "us_counties.json"), encoding="utf-8") as _f:
+        _US_COUNTIES = json.load(_f)
+except Exception as _e:  # pragma: no cover
+    print(f"[Location] Could not load us_counties.json: {_e}")
 
 _STATE_NAME_TO_CODE = {
     "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR", "california": "CA",
@@ -36,25 +53,18 @@ _STATE_NAME_TO_CODE = {
     "texas": "TX", "utah": "UT", "vermont": "VT", "virginia": "VA", "washington": "WA",
     "west virginia": "WV", "wisconsin": "WI", "wyoming": "WY", "district of columbia": "DC",
 }
+_STATE_CODE_TO_NAME = {code: meta["name"] for code, meta in _US_STATES.items()}
+# Also fill from name map if centroid file missing names
+for _n, _c in _STATE_NAME_TO_CODE.items():
+    _STATE_CODE_TO_NAME.setdefault(_c, _n.title())
+
 
 class LocationNotResolvedError(Exception):
-    """Raised when a base location can't be matched in the dataset or geocoded.
-
-    Previously this silently fell back to a hardcoded San Diego default, which
-    made "nearby cities" quietly wrong for any location the dataset/OpenCage
-    couldn't resolve. Callers should catch this and surface a 400 instead.
-    """
+    """Raised when a base location can't be matched in the dataset or geocoded."""
 
 
-# Ultimate fallback only used when the bundled dataset itself failed to load.
 _DEFAULT_LATLON = (32.7157, -117.1611)  # San Diego, CA
 
-# us_cities.json has no population field, so ambiguous same-named cities
-# (many US city names exist in 5-10+ states) can't be disambiguated by size.
-# Without a state, dataset order (alphabetical by state code) would silently
-# win — e.g. "Austin" resolving to Austin, AR instead of Austin, TX. This
-# curated list covers the most commonly-typed ambiguous names; anything not
-# listed here falls back to the previous (dataset-order) behavior.
 _MAJOR_CITY_OVERRIDES = {
     "austin": "TX", "columbus": "OH", "springfield": "MO", "richmond": "VA",
     "portland": "OR", "arlington": "TX", "franklin": "TN", "salem": "OR",
@@ -73,6 +83,8 @@ _MAJOR_CITY_OVERRIDES = {
     "orange": "CA", "pasadena": "CA", "plymouth": "MA", "rockford": "IL",
     "rome": "GA", "salisbury": "MD", "santa fe": "NM", "savannah": "GA",
     "sterling": "VA", "vancouver": "WA", "waterloo": "IA",
+    "chicago": "IL", "honolulu": "HI", "hartford": "CT", "raleigh": "NC",
+    "charlotte": "NC", "sacramento": "CA", "san diego": "CA", "los angeles": "CA",
 }
 
 
@@ -84,23 +96,94 @@ def haversine(lat1, lon1, lat2, lon2) -> float:
     return R * 2 * math.asin(math.sqrt(a))
 
 
+def _normalize_state_token(raw: str) -> Optional[str]:
+    """Return 2-letter state code for a name or code, else None."""
+    if not raw:
+        return None
+    t = raw.strip()
+    if len(t) == 2 and t.upper() in _US_STATES:
+        return t.upper()
+    return _STATE_NAME_TO_CODE.get(t.lower())
+
+
 def _parse_location(base_location: str) -> Tuple[str, Optional[str]]:
     """'Austin, TX' -> ('austin', 'TX'); 'Austin, Texas' -> ('austin','TX'); 'Austin' -> ('austin', None)."""
     parts = [p.strip() for p in base_location.split(",") if p.strip()]
     city = parts[0].lower() if parts else base_location.strip().lower()
     state = None
     if len(parts) >= 2:
-        raw = parts[1].strip()
-        state = raw.upper() if len(raw) == 2 else _STATE_NAME_TO_CODE.get(raw.lower())
+        state = _normalize_state_token(parts[1])
     return city, state
+
+
+def _resolve_as_state(base_location: str) -> Optional[dict]:
+    """
+    Detect when the user entered a US state (not a city).
+    Accepts: "Illinois", "Illinois, IL", "IL", "North Carolina, NC", "Hawaii, HI".
+    Returns {code, name, lat, lon} or None.
+    """
+    raw = (base_location or "").strip()
+    if not raw:
+        return None
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    first = parts[0]
+    second = parts[1] if len(parts) > 1 else None
+
+    code_from_first = _normalize_state_token(first)
+    code_from_second = _normalize_state_token(second) if second else None
+
+    # "IL" alone
+    if code_from_first and len(first) == 2 and not second:
+        code = code_from_first
+    # "Illinois" or "North Carolina"
+    elif code_from_first and len(first) > 2:
+        # If second part is present, it must match or be absent of conflicting code
+        if code_from_second and code_from_second != code_from_first:
+            return None
+        code = code_from_first
+    # "Illinois, IL" where first is name and second is code — already handled above
+    # "Something, IL" where first is NOT a state name — not a state query
+    else:
+        return None
+
+    meta = _US_STATES.get(code)
+    if not meta:
+        return None
+    return {"code": code, "name": meta["name"], "lat": meta["lat"], "lon": meta["lon"]}
+
+
+def _normalize_county_name(name: str) -> str:
+    n = (name or "").strip().lower()
+    n = n.replace(" parish", "").replace(" municipality", "").replace(" county", "").strip()
+    return n
+
+
+def _resolve_as_county(base_location: str) -> Optional[dict]:
+    """Match only explicit county/parish queries, e.g. 'Orange County, CA'.
+
+    Bare city names like 'San Diego, CA' must NOT match 'San Diego County'.
+    """
+    city, state = _parse_location(base_location)
+    if "county" not in city and "parish" not in city and "municipality" not in city:
+        return None
+
+    target = _normalize_county_name(city)
+    matches = [
+        c for c in _US_COUNTIES
+        if _normalize_county_name(c["name"]) == target and (not state or c["state"] == state)
+    ]
+    return matches[0] if matches else None
 
 
 def _geocode_from_dataset(base_location: str) -> Optional[dict]:
     """Find the base city record in the bundled dataset."""
     city, state = _parse_location(base_location)
+    # Don't treat state names as cities
+    if _normalize_state_token(city) and (not state or _normalize_state_token(city) == state or len(city) > 2):
+        if city in _STATE_NAME_TO_CODE or (len(city) == 2 and city.upper() in _US_STATES):
+            return None
     matches = [c for c in _US_CITIES if c["city"].lower() == city and (not state or c["state"] == state)]
     if not matches and not state:
-        # loose contains-match as a last resort
         matches = [c for c in _US_CITIES if c["city"].lower() == city]
     if len(matches) > 1 and not state:
         override_state = _MAJOR_CITY_OVERRIDES.get(city)
@@ -129,44 +212,266 @@ async def _geocode_opencage(base_location: str) -> Optional[Tuple[float, float]]
     return None
 
 
-async def get_nearby_cities(base_location: str, num_cities: int = 10) -> List[CityInfo]:
-    """Return the N nearest US cities to the base location (nationwide)."""
-    base_city_rec = _geocode_from_dataset(base_location)
-    if base_city_rec:
-        base_lat, base_lon = base_city_rec["lat"], base_city_rec["lon"]
-    else:
-        latlon = await _geocode_opencage(base_location)
-        if latlon:
-            base_lat, base_lon = latlon
-        elif _US_CITIES:
-            raise LocationNotResolvedError(
-                f"Could not find \"{base_location}\". Check the spelling, or include the "
-                "state (e.g. \"Springfield, MO\") if the city name is shared by multiple states."
-            )
-        else:
-            base_lat, base_lon = _DEFAULT_LATLON
+def _city_info(name: str, state: str, lat: float, lon: float, kind: str = "city") -> CityInfo:
+    return CityInfo(
+        name=name, state=state, country="USA",
+        latitude=lat, longitude=lon, kind=kind,
+    )
 
-    if not _US_CITIES:
-        # Dataset unavailable — return just the base location so callers still work.
-        city, state = _parse_location(base_location)
-        return [CityInfo(name=city.title(), state=state or "", country="USA",
-                         latitude=base_lat, longitude=base_lon)]
 
+# Curated major metros per state — shown first when base location is a state.
+_STATE_MAJOR_CITIES = {
+    "AL": ["Birmingham", "Montgomery", "Huntsville", "Mobile", "Tuscaloosa"],
+    "AK": ["Anchorage", "Fairbanks", "Juneau", "Sitka"],
+    "AZ": ["Phoenix", "Tucson", "Mesa", "Scottsdale", "Chandler", "Flagstaff"],
+    "AR": ["Little Rock", "Fayetteville", "Fort Smith", "Springdale"],
+    "CA": ["Los Angeles", "San Diego", "San Francisco", "San Jose", "Sacramento",
+           "Oakland", "Fresno", "Long Beach", "Anaheim", "Riverside", "Bakersfield"],
+    "CO": ["Denver", "Colorado Springs", "Aurora", "Fort Collins", "Boulder"],
+    "CT": ["Hartford", "New Haven", "Stamford", "Bridgeport", "Waterbury", "Norwalk"],
+    "DE": ["Wilmington", "Dover", "Newark"],
+    "DC": ["Washington"],
+    "FL": ["Miami", "Orlando", "Tampa", "Jacksonville", "Tallahassee", "Fort Lauderdale"],
+    "GA": ["Atlanta", "Savannah", "Augusta", "Columbus", "Macon"],
+    "HI": ["Honolulu", "Hilo", "Kailua", "Pearl City", "Kahului"],
+    "ID": ["Boise", "Meridian", "Nampa", "Idaho Falls"],
+    "IL": ["Chicago", "Aurora", "Naperville", "Rockford", "Peoria", "Springfield", "Elgin"],
+    "IN": ["Indianapolis", "Fort Wayne", "Evansville", "South Bend"],
+    "IA": ["Des Moines", "Cedar Rapids", "Davenport", "Iowa City"],
+    "KS": ["Wichita", "Overland Park", "Kansas City", "Topeka"],
+    "KY": ["Louisville", "Lexington", "Bowling Green", "Covington"],
+    "LA": ["New Orleans", "Baton Rouge", "Shreveport", "Lafayette"],
+    "ME": ["Portland", "Lewiston", "Bangor", "Augusta"],
+    "MD": ["Baltimore", "Annapolis", "Frederick", "Rockville"],
+    "MA": ["Boston", "Worcester", "Cambridge", "Springfield"],
+    "MI": ["Detroit", "Grand Rapids", "Ann Arbor", "Lansing"],
+    "MN": ["Minneapolis", "Saint Paul", "Rochester", "Duluth"],
+    "MS": ["Jackson", "Gulfport", "Biloxi", "Hattiesburg"],
+    "MO": ["Kansas City", "Saint Louis", "Springfield", "Columbia"],
+    "MT": ["Billings", "Missoula", "Great Falls", "Bozeman"],
+    "NE": ["Omaha", "Lincoln", "Bellevue"],
+    "NV": ["Las Vegas", "Henderson", "Reno", "North Las Vegas"],
+    "NH": ["Manchester", "Nashua", "Concord"],
+    "NJ": ["Newark", "Jersey City", "Paterson", "Trenton"],
+    "NM": ["Albuquerque", "Santa Fe", "Las Cruces"],
+    "NY": ["New York", "Buffalo", "Rochester", "Albany", "Syracuse"],
+    "NC": ["Charlotte", "Raleigh", "Greensboro", "Durham", "Winston-Salem", "Asheville"],
+    "ND": ["Fargo", "Bismarck", "Grand Forks"],
+    "OH": ["Columbus", "Cleveland", "Cincinnati", "Toledo", "Akron"],
+    "OK": ["Oklahoma City", "Tulsa", "Norman"],
+    "OR": ["Portland", "Eugene", "Salem", "Bend"],
+    "PA": ["Philadelphia", "Pittsburgh", "Allentown", "Harrisburg"],
+    "RI": ["Providence", "Warwick", "Cranston"],
+    "SC": ["Charleston", "Columbia", "Greenville", "Myrtle Beach"],
+    "SD": ["Sioux Falls", "Rapid City", "Aberdeen"],
+    "TN": ["Nashville", "Memphis", "Knoxville", "Chattanooga"],
+    "TX": ["Houston", "Dallas", "Austin", "San Antonio", "Fort Worth", "El Paso"],
+    "UT": ["Salt Lake City", "Provo", "Ogden", "West Valley City"],
+    "VT": ["Burlington", "South Burlington", "Rutland", "Montpelier"],
+    "VA": ["Virginia Beach", "Richmond", "Norfolk", "Arlington", "Alexandria"],
+    "WA": ["Seattle", "Spokane", "Tacoma", "Bellevue", "Vancouver"],
+    "WV": ["Charleston", "Huntington", "Morgantown"],
+    "WI": ["Milwaukee", "Madison", "Green Bay", "Kenosha"],
+    "WY": ["Cheyenne", "Casper", "Laramie"],
+}
+
+
+def _major_cities_in_state(state_code: str, limit: int) -> List[CityInfo]:
+    """Return curated major metros for a state, then fill from the cities dataset."""
+    by_name = {}
+    for c in _US_CITIES:
+        if c["state"] != state_code:
+            continue
+        key = c["city"].lower()
+        by_name.setdefault(key, c)
+
+    result: List[CityInfo] = []
+    seen = set()
+    for name in _STATE_MAJOR_CITIES.get(state_code, []):
+        rec = by_name.get(name.lower())
+        if not rec:
+            continue
+        key = rec["city"].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(_city_info(rec["city"], rec["state"], rec["lat"], rec["lon"], "city"))
+        if len(result) >= limit:
+            return result
+
+    meta = _US_STATES.get(state_code) or {}
+    lat, lon = meta.get("lat", 0), meta.get("lon", 0)
+    scored = sorted(
+        (c for c in _US_CITIES if c["state"] == state_code),
+        key=lambda c: haversine(lat, lon, c["lat"], c["lon"]),
+    )
+    for c in scored:
+        key = c["city"].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(_city_info(c["city"], c["state"], c["lat"], c["lon"], "city"))
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _counties_in_state(state_code: str, limit: int) -> List[CityInfo]:
+    rows = [c for c in _US_COUNTIES if c["state"] == state_code]
+    return [
+        _city_info(c["name"], c["state"], c["lat"], c["lon"], "county")
+        for c in rows[:limit]
+    ]
+
+
+def _nearby_counties(lat: float, lon: float, limit: int, state: Optional[str] = None) -> List[CityInfo]:
+    scored = []
+    for c in _US_COUNTIES:
+        if state and c["state"] != state:
+            continue
+        dist = haversine(lat, lon, c["lat"], c["lon"])
+        scored.append((dist, c))
+    scored.sort(key=lambda x: x[0])
+    return [
+        _city_info(c["name"], c["state"], c["lat"], c["lon"], "county")
+        for _, c in scored[:limit]
+    ]
+
+
+def _nearby_cities(lat: float, lon: float, limit: int, state: Optional[str] = None) -> List[CityInfo]:
     scored = []
     seen = set()
     for c in _US_CITIES:
+        if state and c["state"] != state:
+            continue
         key = (c["city"].lower(), c["state"])
         if key in seen:
             continue
         seen.add(key)
-        dist = haversine(base_lat, base_lon, c["lat"], c["lon"])
+        dist = haversine(lat, lon, c["lat"], c["lon"])
         scored.append((dist, c))
     scored.sort(key=lambda x: x[0])
+    return [
+        _city_info(c["city"], c["state"], c["lat"], c["lon"], "city")
+        for _, c in scored[:limit]
+    ]
 
+
+async def get_nearby_cities(base_location: str, num_cities: int = 10) -> List[CityInfo]:
+    """
+    Return locations for expansion around the base.
+
+    For a **state** base (e.g. "Illinois, IL"): returns the state first, then
+    counties in that state, then major cities — so the UI can show the state
+    itself (not only child cities).
+
+    For a **county** base: returns the county first, then nearby cities.
+
+    For a **city** base: returns nearest cities (and a few nearby counties).
+    """
+    num_cities = max(1, min(int(num_cities or 10), 100))
+
+    # ── 1) State-level query ──────────────────────────────────────
+    state_rec = _resolve_as_state(base_location)
+    if state_rec:
+        code = state_rec["code"]
+        result: List[CityInfo] = [
+            _city_info(
+                state_rec["name"],
+                code,
+                state_rec["lat"],
+                state_rec["lon"],
+                "state",
+            )
+        ]
+        # Mix counties + cities so Location Expansion matches product expectation
+        counties = _counties_in_state(code, max(3, num_cities // 3))
+        cities = _major_cities_in_state(code, num_cities)
+        # Interleave: prefer cities list size, inject counties after top cities
+        top_cities = cities[: max(5, num_cities - len(counties) - 1)]
+        remaining_slots = num_cities - len(result)
+        mixed: List[CityInfo] = []
+        # Put primary metro cities first, then counties, then more cities
+        mixed.extend(top_cities[:5])
+        mixed.extend(counties)
+        mixed.extend(top_cities[5:])
+        mixed.extend(cities[len(top_cities):])
+        seen = {(result[0].name.lower(), result[0].state)}
+        for item in mixed:
+            key = (item.name.lower(), item.state)
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(item)
+            if len(result) >= remaining_slots + 1:
+                break
+        return result[:num_cities]
+
+    # ── 2) County-level query ─────────────────────────────────────
+    county_rec = _resolve_as_county(base_location)
+    if county_rec:
+        result = [
+            _city_info(
+                county_rec["name"],
+                county_rec["state"],
+                county_rec["lat"],
+                county_rec["lon"],
+                "county",
+            )
+        ]
+        cities = _nearby_cities(
+            county_rec["lat"], county_rec["lon"],
+            num_cities - 1, state=county_rec["state"],
+        )
+        result.extend(cities)
+        return result[:num_cities]
+
+    # ── 3) City-level (dataset / OpenCage) ────────────────────────
+    base_city_rec = _geocode_from_dataset(base_location)
+    if base_city_rec:
+        base_lat, base_lon = base_city_rec["lat"], base_city_rec["lon"]
+        base_state = base_city_rec["state"]
+    else:
+        latlon = await _geocode_opencage(base_location)
+        if latlon:
+            base_lat, base_lon = latlon
+            _, base_state = _parse_location(base_location)
+        elif _US_CITIES:
+            raise LocationNotResolvedError(
+                f"Could not find \"{base_location}\". Try a city (\"Chicago, IL\"), "
+                "a state (\"Illinois, IL\"), or a county (\"Cook County, IL\")."
+            )
+        else:
+            base_lat, base_lon = _DEFAULT_LATLON
+            base_state = None
+
+    if not _US_CITIES:
+        city, state = _parse_location(base_location)
+        return [_city_info(city.title(), state or "", base_lat, base_lon, "city")]
+
+    # Cities + a few nearby counties for local SEO expansion
+    city_slots = max(1, num_cities - min(4, num_cities // 4))
+    county_slots = num_cities - city_slots
+    cities = _nearby_cities(base_lat, base_lon, city_slots)
+    counties = _nearby_counties(base_lat, base_lon, county_slots, state=base_state) if county_slots else []
+
+    # Put base city first if we resolved it from dataset
     result = []
-    for _, c in scored[:num_cities]:
-        result.append(CityInfo(
-            name=c["city"], state=c["state"], country="USA",
-            latitude=c["lat"], longitude=c["lon"],
-        ))
-    return result
+    seen = set()
+    if base_city_rec:
+        base_item = _city_info(
+            base_city_rec["city"], base_city_rec["state"],
+            base_city_rec["lat"], base_city_rec["lon"], "city",
+        )
+        result.append(base_item)
+        seen.add((base_item.name.lower(), base_item.state))
+
+    for item in cities + counties:
+        key = (item.name.lower(), item.state)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(item)
+        if len(result) >= num_cities:
+            break
+    return result[:num_cities]

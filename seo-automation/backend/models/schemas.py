@@ -3,13 +3,18 @@ from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime
 
 class GenerateRequest(BaseModel):
-    business_type: str = Field(..., example="Web Design")
+    business_type: str = Field(..., min_length=1, example="Web Design", description="Business niche (required)")
     base_location: str = Field(..., example="San Diego, CA")
     num_cities: int = Field(default=10, ge=1, le=100)
-    target_keywords: List[str] = Field(default=[], example=["web design san diego"])
+    target_keywords: List[str] = Field(
+        ...,
+        min_length=1,
+        example=["web design san diego"],
+        description="At least one target keyword is required",
+    )
     industry: str = Field(default="", example="Contractors")
     use_ai: bool = Field(default=False, description="Use an LLM for content generation")
-    llm_provider: Optional[str] = Field(default=None, description="auto | groq | gemini | openai — overrides server default for this request")
+    llm_provider: Optional[str] = Field(default=None, description="auto | groq | gemini | openai | anthropic — overrides server default for this request")
 
 class KeywordSet(BaseModel):
     primary: str
@@ -92,7 +97,7 @@ class ArticleRequest(BaseModel):
     num_articles: int = Field(default=1, ge=1, le=10, description="Articles per city (angle variety)")
     industry: str = Field(default="")
     use_ai: bool = Field(default=True, description="Use an LLM when available; template fallback otherwise")
-    llm_provider: Optional[str] = Field(default=None, description="auto | groq | gemini | openai — overrides server default for this request")
+    llm_provider: Optional[str] = Field(default=None, description="auto | groq | gemini | openai | anthropic — overrides server default for this request")
 
 class WebsiteAnalysisRequest(BaseModel):
     website_url: str = Field(..., example="https://example.com")
@@ -120,6 +125,7 @@ class CityInfo(BaseModel):
     latitude: float
     longitude: float
     population: Optional[int] = None
+    kind: str = "city"  # city | state | county
 
 # WordPress integration models
 class WordPressConfig(BaseModel):

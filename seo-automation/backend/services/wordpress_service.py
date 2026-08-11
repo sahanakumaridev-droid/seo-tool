@@ -17,12 +17,34 @@ from services.image_service import (
 
 def _figure_html(img) -> str:
     """Render an in-content image as a semantic <figure> with caption."""
+    url = img.url if hasattr(img, "url") else (img or {}).get("url", "")
+    alt = img.alt_text if hasattr(img, "alt_text") else (img or {}).get("alt_text", "")
+    title = img.title if hasattr(img, "title") else (img or {}).get("title", "")
+    caption = img.caption if hasattr(img, "caption") else (img or {}).get("caption", "")
     return (
         f'<figure class="wp-block-image">'
-        f'<img src="{img.url}" alt="{img.alt_text}" title="{img.title}" loading="lazy" />'
-        f'<figcaption>{img.caption}</figcaption>'
+        f'<img src="{url}" alt="{alt}" title="{title}" loading="lazy" />'
+        f'<figcaption>{caption}</figcaption>'
         f'</figure>'
     )
+
+
+def _img_url(img) -> str:
+    if not img:
+        return ""
+    if hasattr(img, "url"):
+        return (img.url or "").split("?")[0]
+    if isinstance(img, dict):
+        return (img.get("url") or "").split("?")[0]
+    return ""
+
+
+def _img_is_featured(img) -> bool:
+    if hasattr(img, "is_featured"):
+        return bool(img.is_featured)
+    if isinstance(img, dict):
+        return bool(img.get("is_featured"))
+    return False
 
 
 def _build_content_html(block: SEOBlock) -> str:
@@ -32,15 +54,38 @@ def _build_content_html(block: SEOBlock) -> str:
     if block.intro:
         parts.append(f'<p class="seo-intro">{block.intro}</p>')
 
-    # In-content images (non-featured) are distributed across the H2 sections.
-    in_content_imgs = [img for img in (block.in_content_images or []) if not img.is_featured]
+    # In-content images only — never re-show the hero/featured photo in the body.
+    featured_key = (block.featured_image_url or "").split("?")[0]
+    in_content_imgs = []
+    seen = {featured_key} if featured_key else set()
+    for img in (block.in_content_images or []):
+        if _img_is_featured(img):
+            continue
+        key = _img_url(img)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        in_content_imgs.append(img)
+
     img_positions = {}
     if in_content_imgs and block.h2s:
         step = max(1, len(block.h2s) // (len(in_content_imgs) + 1))
         for n, img in enumerate(in_content_imgs):
-            img_positions[min((n + 1) * step, len(block.h2s) - 1)] = img
+            # Spread images across distinct H2 slots (avoid overwriting the same index).
+            pos = min((n + 1) * step, len(block.h2s) - 1)
+            while pos in img_positions and pos < len(block.h2s) - 1:
+                pos += 1
+            if pos not in img_positions:
+                img_positions[pos] = img
 
     body_paragraphs = [p.strip() for p in block.content.split('\n\n') if p.strip()]
+
+    # Red highlight CALL NOW buttons (matches zeorbit.com blog CTAs)
+    call_btn = (
+        '<div class="call-now-wrap">'
+        '<a class="call-now-btn" href="tel:6197249517">CALL NOW : 619-724-9517</a>'
+        '</div>'
+    )
 
     for i, h2 in enumerate(block.h2s):
         parts.append(f'<h2>{h2}</h2>')
@@ -71,6 +116,9 @@ def _build_content_html(block: SEOBlock) -> str:
                 parts.append('\n'.join(html_lines))
             else:
                 parts.append(f'<p>{para}</p>')
+        # Place a red CALL NOW CTA after every other section (like live ZeOrbit blogs)
+        if i % 2 == 0:
+            parts.append(call_btn)
 
     if block.h3s:
         # These are short trust/benefit statements ("Fast Turnaround for

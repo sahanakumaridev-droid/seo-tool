@@ -62,11 +62,12 @@ _URL_APPLE_MAPS = "https://maps.apple/p/VA-_LREgJ5PzDV"
 _URL_GOOGLE_MAPS = "https://maps.app.goo.gl/teVefHUc3yycwkcA7"
 _URL_YELP = "https://www.yelp.com/biz/zeorbit-san-diego-2"
 
+# (url, svg_path, brand_color) — official brand colors
 _SOCIALS = [
     (_URL_FACEBOOK, _FB_PATH, "#1877F2"),
     (_URL_X, _X_PATH, "#000000"),
     (_URL_LINKEDIN, _LI_PATH, "#0A66C2"),
-    (_URL_INSTAGRAM, _IG_PATH, "#C6288E"),
+    (_URL_INSTAGRAM, _IG_PATH, "#E1306C"),
     (_URL_YOUTUBE, _YT_PATH, "#FF0000"),
     (_URL_PINTEREST, _PIN_PATH, "#E60023"),
 ]
@@ -86,10 +87,12 @@ _MAP_ICONS = [
 
 
 def _social_bar() -> str:
+    # Brand-colored circles + white glyphs (X stays black circle so it reads on the bar)
     icons = "".join(
-        f'<a href="{url}" target="_blank" rel="noreferrer" aria-label="social">'
-        f'<svg width="15" height="15" viewBox="0 0 24 24" fill="#fff"><path d="{d}"/></svg></a>'
-        for url, d, _c in _SOCIALS
+        f'<a class="tb-social" href="{url}" target="_blank" rel="noreferrer" aria-label="social" '
+        f'style="background:{c}">'
+        f'<svg width="13" height="13" viewBox="0 0 24 24" fill="#fff"><path d="{d}"/></svg></a>'
+        for url, d, c in _SOCIALS
     )
     return (f'<div class="topbar">'
             f'<div class="topbar-l">'
@@ -97,6 +100,52 @@ def _social_bar() -> str:
             f'<a class="mail tel" href="tel:{PHONE}">✆ {PHONE_DISPLAY}</a>'
             f'</div>'
             f'<div class="socials">{icons}</div></div>')
+
+
+def _share_bar(public_url: str, title: str, image_url: str = "") -> str:
+    """Share row below the article — same networks as the topbar, posting this page URL."""
+    from urllib.parse import quote
+
+    url = (public_url or "").strip()
+    if not url or "example.com" in url.lower():
+        return ""
+    t = (title or "").strip()
+    u = quote(url, safe="")
+    qt = quote(t, safe="")
+    media = quote(image_url, safe="") if image_url else ""
+    pin = (
+        f"https://pinterest.com/pin/create/button/?url={u}&description={qt}"
+        + (f"&media={media}" if media else "")
+    )
+    # Official brand colors (filled circles, white glyphs)
+    items = [
+        ("Share on Facebook", f"https://www.facebook.com/sharer/sharer.php?u={u}&quote={qt}", _FB_PATH, "#1877F2", None),
+        ("Share on X", f"https://twitter.com/intent/tweet?url={u}&text={qt}", _X_PATH, "#000000", None),
+        ("Share on LinkedIn", f"https://www.linkedin.com/sharing/share-offsite/?url={u}", _LI_PATH, "#0A66C2", None),
+        ("Share on Instagram", _URL_INSTAGRAM, _IG_PATH, None, "linear-gradient(45deg,#f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%)"),
+        ("Share on YouTube", _URL_YOUTUBE, _YT_PATH, "#FF0000", None),
+        ("Share on Pinterest", pin, _PIN_PATH, "#E60023", None),
+        (
+            "Share by email",
+            f"mailto:?subject={quote('I wanted to share this article with you', safe='')}&body={u}",
+            "M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z",
+            "#EA4335",
+            None,
+        ),
+    ]
+    buttons = []
+    for label, href, path, solid, gradient in items:
+        bg = f"background:{gradient};" if gradient else f"background:{solid};"
+        buttons.append(
+            f'<a class="share-btn" href="{href}" target="_blank" rel="noopener noreferrer" '
+            f'aria-label="{label}" title="{label}" style="{bg}">'
+            f'<svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="{path}"/></svg></a>'
+        )
+    return (
+        f'<div class="share-bar" aria-label="Share this article">'
+        f'<div class="share-label">Share</div>'
+        f'<div class="share-icons">{"".join(buttons)}</div></div>'
+    )
 
 def _gtm_snippets() -> tuple[str, str]:
     """Return (head, body) Google Tag Manager snippets, or ('','') when no
@@ -158,9 +207,10 @@ def _adsense_in_article_unit() -> str:
 def _footer() -> str:
     """Premium multi-section footer: CTA → trust → nav grid → legal bar."""
     socials = "".join(
-        f'<a class="ft-social" href="{url}" target="_blank" rel="noreferrer" aria-label="social">'
-        f'<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="{d}"/></svg></a>'
-        for url, d, _c in _SOCIALS[:4]  # keep compact: FB, X, LI, IG
+        f'<a class="ft-social" href="{url}" target="_blank" rel="noreferrer" aria-label="social" '
+        f'style="background:{c};border-color:{c};color:#fff">'
+        f'<svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="{d}"/></svg></a>'
+        for url, d, c in _SOCIALS
     )
 
     # Reuse existing ZeOrbit destinations — remapped into clearer nav groups.
@@ -201,8 +251,8 @@ def _footer() -> str:
         <p class="prefoot-p">Talk with ZeOrbit about web design, SEO, and local visibility — no pressure, just a practical next step.</p>
       </div>
       <div class="prefoot-actions">
-        <button type="button" class="prefoot-btn prefoot-btn-primary" id="ccOpenDialogFooter">Get a Free Quote</button>
-        <a class="prefoot-btn prefoot-btn-ghost" href="tel:{PHONE}">Call {PHONE_DISPLAY}</a>
+        <a class="call-now-btn" href="tel:6197249517">CALL NOW : 619-724-9517</a>
+        <button type="button" class="prefoot-btn prefoot-btn-ghost" id="ccOpenDialogFooter">Get a Free Quote</button>
       </div>
     </div>
   </section>
@@ -222,7 +272,7 @@ def _footer() -> str:
       <div class="ft-grid">
         <div class="ft-brand">
           <a class="ft-logo" href="{WEBSITE}" target="_blank" rel="noreferrer">
-            <img src="/static/zeorbit-logo-light.png" alt="ZeOrbit" />
+            <img src="/static/zeorbit-logo.png" alt="ZeOrbit" />
           </a>
           <p class="ft-brand-p">Helping businesses improve their visibility, websites, and digital growth with smarter SEO tools and strategies.</p>
           <div class="ft-socials">{socials}</div>
@@ -281,8 +331,8 @@ def _read_time(block: SEOBlock) -> int:
     return max(1, round(len(re.findall(r"\w+", text)) / 200))
 
 
-def _short_nav_label(text: str, limit: int = 22) -> str:
-    """Compact in-page nav label from a long H2."""
+def _short_nav_label(text: str) -> str:
+    """Short in-page nav label — never truncated with ellipsis."""
     t = re.sub(r"<[^>]+>", "", text or "").strip()
     t = re.sub(r"\s+", " ", t)
     lower = t.lower()
@@ -300,6 +350,12 @@ def _short_nav_label(text: str, limit: int = 22) -> str:
         return "Process"
     if "faq" in lower or "frequently" in lower:
         return "FAQ"
+    if "customer" in lower or "lead" in lower or "get more" in lower:
+        return "Customers"
+    if "what does" in lower or "what is" in lower or "do in" in lower:
+        return "Services"
+    if "why" in lower or "choose" in lower:
+        return "Why Us"
     t = re.sub(
         r"^(what are|what makes|what is|how much does|how long does|how do|is|are|why|when)\s+",
         "",
@@ -307,19 +363,25 @@ def _short_nav_label(text: str, limit: int = 22) -> str:
         flags=re.I,
     )
     t = re.sub(r"^(the|a|an)\s+", "", t, flags=re.I).strip(" ?|")
-    # Prefer phrase before city/location comma for brevity
     if " in " in t.lower():
         t = re.split(r"\s+in\s+", t, maxsplit=1, flags=re.I)[0].strip()
-    if len(t) > limit:
-        cut = t[: limit - 1]
-        if " " in cut:
-            cut = cut.rsplit(" ", 1)[0]
-        t = cut + "…"
-    return t or "Section"
+    # Keep at most two short words — no ellipsis
+    words = [w for w in re.findall(r"[A-Za-z0-9]+", t) if w]
+    if not words:
+        return "Section"
+    return " ".join(words[:2])
 
 
 def render_public_html(block: SEOBlock, public_url: str = "") -> str:
     body = _build_content_html(block)
+    # Old generated schema used example.com — rewrite to the real public page URL.
+    if public_url:
+        body = re.sub(
+            r"https?://(?:www\.)?example\.(?:com|org)[^\s\"'<>]*",
+            public_url,
+            body,
+            flags=re.I,
+        )
     headings = re.findall(r"<h2>(.*?)</h2>", body)
     toc = []
     for i, h in enumerate(headings):
@@ -360,6 +422,7 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
         f'<meta name="google-site-verification" content="{_esc(verify_token)}" />'
         if verify_token else ""
     )
+    share_bar = _share_bar(public_url, block.title or block.h1 or "", featured)
 
     return f"""<!doctype html>
 <html lang="en">
@@ -379,47 +442,58 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
 <meta name="robots" content="index,follow" />
 <link rel="icon" type="image/png" href="/static/zeorbit-logo.png" />
 <link rel="apple-touch-icon" href="/static/zeorbit-logo.png" />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800;900&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet" />
 <style>
   :root {{
     --brand:#2563EB; --brand-dark:#1D4ED8; --navy:#0B1F3A; --signal:#38BDF8;
     --ink:#0B1220; --body:#2A2A2A; --muted:#5B6676; --faint:#8A94A6;
     --line:#E6E3DD; --bg:#FFFFFF; --soft:#F7F5F1;
-    --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-    --serif:'Newsreader',Georgia,serif;
-    --display:'Playfair Display',Georgia,'Times New Roman',serif;
+    /* Apple system font stack (SF Pro on Apple devices) */
+    --apple:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','Helvetica Neue',Helvetica,Arial,sans-serif;
+    --sans:var(--apple);
+    --serif:var(--apple);
+    --display:var(--apple);
   }}
   * {{ box-sizing:border-box; }}
   html {{ scroll-behavior:smooth; }}
-  body {{ margin:0; background:var(--bg); color:var(--body); font-family:var(--serif); font-size:19px; line-height:1.85; -webkit-font-smoothing:antialiased; }}
+  body {{ margin:0; background:var(--bg); color:var(--body); font-family:var(--apple); font-size:19px; line-height:1.85; -webkit-font-smoothing:antialiased; }}
   .sr-only {{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }}
 
   /* Black utility bar */
-  .topbar {{ display:flex; align-items:center; justify-content:space-between; background:#0A0A0A; color:#fff; padding:10px 28px; font-family:var(--sans); }}
+  .topbar {{ display:flex; align-items:center; justify-content:space-between; background:#0A0A0A; color:#fff; padding:10px 28px; font-family:var(--apple); }}
   .topbar-l {{ display:flex; align-items:center; gap:20px; flex-wrap:wrap; }}
   .topbar .mail {{ color:#fff; text-decoration:none; font-size:13px; opacity:.9; }}
   .topbar .mail:hover {{ opacity:1; }}
   .topbar .tel {{ font-weight:600; }}
-  .topbar .socials {{ display:flex; gap:14px; align-items:center; }}
-  .topbar .socials a {{ display:inline-flex; opacity:.85; transition:opacity .15s; }}
-  .topbar .socials a:hover {{ opacity:1; }}
+  .topbar .socials {{ display:flex; gap:8px; align-items:center; }}
+  .topbar .socials a.tb-social {{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:26px; height:26px; border-radius:50%; opacity:.95;
+    border:1px solid rgba(255,255,255,0.22);
+    transition:opacity .15s, transform .15s;
+  }}
+  .topbar .socials a.tb-social:hover {{ opacity:1; transform:translateY(-1px); }}
 
-  /* Header — logo | center links | call */
-  .nav {{ position:sticky; top:0; z-index:10; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:16px;
-          padding:14px 28px; background:rgba(255,255,255,0.96); backdrop-filter:blur(12px); border-bottom:1px solid var(--line); }}
+  /* Header — compact logo | center links | call */
+  .nav {{ position:sticky; top:0; z-index:10; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px;
+          padding:8px 20px; background:rgba(255,255,255,0.96); backdrop-filter:blur(12px); border-bottom:1px solid var(--line);
+          font-family:var(--apple); min-height:0; }}
   .brand {{ display:inline-flex; align-items:center; text-decoration:none; justify-self:start; }}
-  .brand img {{ height:32px; width:auto; display:block; }}
-  .nav-mid {{ display:flex; align-items:center; justify-content:center; gap:4px 22px; flex-wrap:wrap; }}
+  .brand img {{ height:24px; width:auto; display:block; }}
+  .nav-mid {{ display:flex; align-items:center; justify-content:center; gap:2px 14px; flex-wrap:nowrap; }}
   .nav-mid a {{
-    font-family:var(--sans); font-size:13.5px; font-weight:600; color:var(--ink); text-decoration:none;
-    letter-spacing:.01em; padding:6px 2px; border-bottom:2px solid transparent; transition:color .15s, border-color .15s;
+    font-family:var(--apple); font-size:11px; font-weight:600; color:var(--ink); text-decoration:none;
+    text-transform:uppercase; letter-spacing:.06em; padding:4px 0; border-bottom:2px solid transparent;
+    transition:color .15s, border-color .15s; white-space:nowrap;
   }}
   .nav-mid a:hover {{ color:var(--brand); border-bottom-color:var(--brand); }}
-  .nav .cta {{ font-family:var(--sans); font-size:13px; font-weight:600; color:#fff; background:var(--navy); padding:12px 20px; border-radius:4px; text-decoration:none; letter-spacing:.02em; flex-shrink:0; transition:background .15s; justify-self:end; }}
-  .nav .cta:hover {{ background:#132a4d; }}
-  .progress {{ position:fixed; top:0; left:0; height:3px; width:0; background:var(--brand); z-index:20; }}
+  .nav .cta {{
+    font-family:var(--apple); font-size:11px; font-weight:600; color:#fff; background:#F33A3A;
+    padding:8px 14px; border-radius:20px; text-decoration:none; letter-spacing:.06em;
+    flex-shrink:0; transition:background .15s, transform .15s; justify-self:end;
+    border:1px solid #fff; text-align:center; text-transform:uppercase; white-space:nowrap;
+  }}
+  .nav .cta:hover {{ background:#E02828; }}
+  .progress {{ position:fixed; top:0; left:0; height:2px; width:0; background:#F33A3A; z-index:20; }}
 
   @media (max-width:800px) {{
     .nav {{ grid-template-columns:1fr auto; }}
@@ -427,52 +501,67 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
   }}
   @media (max-width:640px) {{
     .topbar {{ padding:8px 16px; }}
-    .nav {{ padding:12px 16px; gap:14px; }}
-    .brand img {{ height:26px; }}
-    .nav .cta {{ padding:10px 14px; font-size:12px; }}
+    .nav {{ padding:7px 14px; gap:10px; }}
+    .brand img {{ height:22px; }}
+    .nav .cta {{ padding:7px 12px; font-size:10px; }}
   }}
 
-  /* Content — full-width with even side padding */
-  article {{ max-width:none; width:100%; margin:0; padding:44px 28px 36px; box-sizing:border-box; }}
+  /* Content — wider column so less empty left/right space on desktop */
+  article {{ max-width:1080px; width:100%; margin:0 auto; padding:40px 28px 40px; box-sizing:border-box; }}
   .eyebrow {{ display:inline-block; font-family:var(--sans); font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.14em; color:var(--ink); border:1.5px solid var(--ink); padding:9px 22px; border-radius:999px; margin-bottom:26px; }}
-  h1 {{ font-family:var(--display); font-size:clamp(34px,6vw,56px); line-height:1.08; font-weight:800; letter-spacing:-0.01em; color:var(--ink); margin:0 0 24px; }}
-  .byline {{ display:flex; align-items:center; gap:12px; font-family:var(--sans); margin:0 0 32px; }}
+  h1 {{ font-family:var(--display); font-size:clamp(32px,5vw,48px); line-height:1.12; font-weight:800; letter-spacing:-0.02em; color:var(--ink); margin:0 0 20px; }}
+  .byline {{ display:flex; align-items:center; gap:12px; font-family:var(--sans); margin:0 0 28px; }}
   .byline .who {{ font-size:14px; font-weight:600; color:var(--ink); }}
   .byline .sub {{ font-size:13px; color:var(--faint); }}
-  /* Banner — inset with page padding */
+  /* Banner — full width of article column */
   .hero-wrap {{
-    width:auto; margin:0 28px; max-height:min(48vh, 420px); overflow:hidden; position:relative;
-    background:var(--soft); border-radius:12px; border:1px solid var(--line);
+    width:100%; margin:0 0 28px; max-height:min(52vh, 480px); overflow:hidden; position:relative;
+    background:var(--soft); border-radius:14px; border:1px solid var(--line);
   }}
-  .hero-wrap img {{ width:100%; height:100%; min-height:220px; max-height:min(48vh, 420px); object-fit:cover; display:block; }}
-  .hero-wrap::after {{ content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,0) 50%, rgba(11,18,32,0.28) 100%); pointer-events:none; border-radius:inherit; }}
+  .hero-wrap img {{ width:100%; height:100%; min-height:240px; max-height:min(52vh, 480px); object-fit:cover; display:block; }}
+  .hero-wrap::after {{ content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(11,18,32,0.22) 100%); pointer-events:none; border-radius:inherit; }}
   @media (max-width:640px) {{
-    .hero-wrap {{ margin:0 16px; border-radius:10px; }}
+    .hero-wrap {{ border-radius:10px; }}
+    article {{ padding:28px 16px 24px; }}
+    .hero-wrap img {{ min-height:180px; }}
   }}
 
-  .quick {{ background:var(--soft); border-left:4px solid var(--navy); border-radius:4px; padding:18px 22px; margin:0 0 32px; }}
+  .quick {{ background:var(--soft); border-left:4px solid var(--navy); border-radius:4px; padding:18px 22px; margin:0 0 28px; }}
   .quick-l {{ font-family:var(--sans); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--navy); margin-bottom:6px; }}
-  .quick p {{ margin:0; font-size:19px; color:var(--ink); }}
+  .quick p {{ margin:0; font-size:18px; color:var(--ink); line-height:1.55; }}
 
-  .toc {{ border-top:2px solid var(--ink); border-bottom:2px solid var(--ink); padding:20px 4px; margin:0 0 38px; }}
+  .toc {{ border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:18px 4px; margin:0 0 32px; }}
   .toc-title {{ font-family:var(--sans); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); margin-bottom:12px; }}
-  .toc ol {{ margin:0; padding-left:20px; columns:2; column-gap:32px; }} .toc li {{ margin:8px 0; }}
-  .toc a {{ font-family:var(--sans); font-size:15px; color:var(--body); text-decoration:none; }}
+  .toc ol {{ margin:0; padding-left:20px; columns:2; column-gap:28px; }} .toc li {{ margin:6px 0; }}
+  .toc a {{ font-family:var(--sans); font-size:14px; color:var(--body); text-decoration:none; }}
   .toc a:hover {{ color:var(--brand); }}
 
-  p {{ margin:0 0 26px; color:var(--body); }}
-  .seo-intro {{ font-size:22px; line-height:1.75; color:#1B2536; }}
-  h2 {{ font-family:var(--display); font-size:33px; font-weight:700; letter-spacing:-0.01em; color:var(--ink); margin:52px 0 16px; scroll-margin-top:90px; }}
+  p {{ margin:0 0 22px; color:var(--body); font-size:18px; line-height:1.75; }}
+  .seo-intro {{ font-size:20px; line-height:1.7; color:#1B2536; }}
+  h2 {{ font-family:var(--display); font-size:clamp(26px,3.5vw,34px); font-weight:700; letter-spacing:-0.015em; color:var(--ink); margin:44px 0 14px; scroll-margin-top:90px; }}
   #overview, #contact, #faq-heading {{ scroll-margin-top:90px; }}
-  h3 {{ font-family:var(--sans); font-size:20px; font-weight:700; color:var(--ink); margin:32px 0 10px; }}
-  ul,ol {{ margin:0 0 26px; padding-left:24px; }} li {{ margin:10px 0; }}
+  h3 {{ font-family:var(--sans); font-size:19px; font-weight:700; color:var(--ink); margin:28px 0 10px; }}
+  ul,ol {{ margin:0 0 22px; padding-left:24px; }} li {{ margin:8px 0; line-height:1.6; }}
   a {{ color:var(--brand); text-underline-offset:2px; }}
+
+  /* Red highlight CALL NOW buttons — matches zeorbit.com blog CTAs */
+  .call-now-wrap {{ text-align:center; margin:28px 0 32px; }}
+  .call-now-btn {{
+    display:inline-block; background:#F33A3A; color:#fff !important; border:1px solid #fff;
+    border-radius:30px; padding:20px 30px; font-family:var(--sans); font-size:20px; font-weight:500;
+    line-height:1.15; text-decoration:none !important; text-align:center; text-transform:capitalize;
+    transition:background .15s, transform .15s; box-shadow:none;
+  }}
+  .call-now-btn:hover {{ background:#E02828; transform:translateY(-1px); color:#fff !important; }}
+  @media (max-width:640px) {{
+    .call-now-btn {{ font-size:16px; padding:16px 22px; width:100%; max-width:340px; box-sizing:border-box; }}
+  }}
   figure, .wp-block-image {{
-    margin:40px 0; padding:0; background:var(--soft); border:1px solid var(--line); border-radius:12px;
-    overflow:hidden;
+    margin:28px 0; padding:0; background:var(--soft); border:1px solid var(--line); border-radius:12px;
+    overflow:hidden; width:100%;
   }}
   figure img, .wp-block-image img {{
-    width:100%; max-height:min(52vh, 480px); object-fit:cover; display:block; border-radius:0;
+    width:100%; max-height:min(48vh, 440px); object-fit:cover; display:block; border-radius:0;
   }}
   figure figcaption, .wp-block-image figcaption {{
     font-family:var(--sans); font-size:12.5px; color:var(--muted); text-align:left;
@@ -528,6 +617,22 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
   }}
   .pull-quote {{ display:none; }} /* legacy pages */
 
+  .share-bar {{
+    margin:36px 0 8px; padding:18px 0 6px; border-top:1px solid var(--line);
+    display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+    font-family:var(--sans);
+  }}
+  .share-label {{
+    font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--faint);
+  }}
+  .share-icons {{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }}
+  .share-btn {{
+    width:40px; height:40px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;
+    color:#fff; text-decoration:none; box-shadow:0 1px 2px rgba(0,0,0,.12);
+    transition:transform .15s ease, opacity .15s ease, box-shadow .15s ease;
+  }}
+  .share-btn:hover {{ transform:translateY(-2px); opacity:.95; box-shadow:0 4px 10px rgba(0,0,0,.18); }}
+
   .article-end {{
     margin:40px 0 8px; display:grid; gap:16px;
   }}
@@ -548,7 +653,8 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
   }}
   .contact-card .cc-l {{ font-family:var(--display); font-size:clamp(24px, 3vw, 30px); font-weight:800; margin:0 0 10px; color:#fff; line-height:1.2; }}
   .contact-card p {{ font-family:var(--sans); font-size:15px; color:rgba(255,255,255,0.78); margin:0 0 22px; max-width:460px; line-height:1.6; }}
-  .cc-actions {{ display:flex; gap:12px; flex-wrap:wrap; }}
+  .cc-actions {{ display:flex; gap:14px; flex-wrap:wrap; align-items:center; }}
+  .cc-actions .call-now-btn {{ padding:16px 26px; font-size:17px; }}
   .cc-btn {{ font-family:var(--sans); font-size:14.5px; font-weight:700; text-decoration:none; padding:13px 20px; border-radius:6px; background:#fff; color:var(--navy); letter-spacing:.01em; border:none; cursor:pointer; display:inline-flex; align-items:center; }}
   .cc-btn.ghost {{ background:transparent; color:#fff; border:1.5px solid rgba(255,255,255,0.35); }}
   .cc-btn:hover {{ opacity:.94; }}
@@ -572,14 +678,6 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
   .cc-form .cc-btn {{ background:var(--brand); color:#fff; padding:12px 18px; font-size:14px; }}
   .cc-form-msg {{ font-family:var(--sans); font-size:13.5px; color:var(--ink); margin-top:14px; display:none; text-align:center; }}
   .cc-form-msg.show {{ display:block; }}
-
-  .bio {{
-    display:flex; gap:14px; align-items:flex-start; margin:0; padding:18px 20px;
-    background:#fff; border:1px solid var(--line); border-radius:12px;
-  }}
-  .bio-mark {{ flex-shrink:0; margin-top:2px; height:22px; width:auto; display:block; }}
-  .bio .name {{ font-family:var(--sans); font-weight:700; font-size:14.5px; color:var(--ink); }}
-  .bio .txt {{ font-family:var(--sans); font-size:13.5px; color:var(--muted); margin-top:4px; line-height:1.55; }}
 
   @media (max-width:800px) {{
     .contact-card {{ grid-template-columns:1fr; }}
@@ -659,10 +757,10 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
   .ft-socials {{ display:flex; gap:10px; margin-bottom:18px; }}
   .ft-social {{
     width:34px; height:34px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center;
-    color:rgba(255,255,255,0.85); border:1px solid rgba(255,255,255,0.14); background:rgba(255,255,255,0.03);
-    transition:background .15s, border-color .15s, transform .15s, color .15s;
+    color:#fff; border:1px solid transparent;
+    transition:transform .15s, opacity .15s, filter .15s;
   }}
-  .ft-social:hover {{ background:rgba(255,255,255,0.1); border-color:rgba(255,255,255,0.3); transform:translateY(-1px); color:#fff; }}
+  .ft-social:hover {{ transform:translateY(-1px); opacity:.92; filter:brightness(1.08); color:#fff; }}
   .ft-contact-mini {{
     display:flex; flex-direction:column; gap:6px; font-size:13px; color:rgba(255,255,255,0.5); line-height:1.5;
   }}
@@ -729,7 +827,7 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
 
   .ad-slot {{ margin:8px 0 38px; min-height:0; overflow:hidden; }}
 
-  @media (max-width:600px) {{ body {{ font-size:18px; }} article {{ padding:32px 16px 28px; }} .topbar .mail {{ font-size:12px; }} .toc ol {{ columns:1; }} }}
+  @media (max-width:600px) {{ body {{ font-size:18px; }} article {{ padding:28px 16px 24px; }} .topbar .mail {{ font-size:12px; }} .toc ol {{ columns:1; }} }}
 </style>
 </head>
 <body>
@@ -743,7 +841,7 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
     <nav class="nav-mid" aria-label="On this page">
       {nav_mid_html}
     </nav>
-    <a class="cta" href="tel:{PHONE}">✆ {PHONE_DISPLAY}</a>
+    <a class="cta" href="tel:6197249517">CALL NOW : 619-724-9517</a>
   </div>
 
   {hero}
@@ -761,6 +859,7 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
     {toc_html}
     {ad_unit}
     {body}
+    {share_bar}
     <div class="article-end">
       <div class="contact-card" id="contact">
         <div class="cc-main">
@@ -768,8 +867,8 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
           <div class="cc-l">Ready for a clearer next step?</div>
           <p>Get practical advice on your {biz.lower() or 'project'} — website, SEO, and local visibility — with no obligation.</p>
           <div class="cc-actions">
+            <a class="call-now-btn" href="tel:6197249517">CALL NOW : 619-724-9517</a>
             <button type="button" class="cc-btn" id="ccOpenDialog">Get a Free Quote</button>
-            <a class="cc-btn ghost" href="tel:{PHONE}">Call {PHONE_DISPLAY}</a>
           </div>
         </div>
         <div class="cc-side">
@@ -791,14 +890,6 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
         </form>
         <div class="cc-form-msg" id="ccLeadMsg"></div>
       </dialog>
-
-      <div class="bio">
-        <img class="bio-mark" src="/static/zeorbit-logo.png" alt="" width="72" height="21" />
-        <div>
-          <div class="name">{biz or 'ZeOrbit'} Editorial Team</div>
-          <div class="txt">Local {biz.lower() or 'service'} specialists serving {location or 'your area'}. Published by ZeOrbit — web design, software &amp; SEO.</div>
-        </div>
-      </div>
     </div>
   </article>
 

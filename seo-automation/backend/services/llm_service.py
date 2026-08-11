@@ -22,17 +22,32 @@ from config import settings
 def active_provider() -> Optional[str]:
     """Return the provider we'll actually use, or None if none configured."""
     pref = (settings.LLM_PROVIDER or "auto").lower()
+    # Normalize aliases from the UI
+    aliases = {"chatgpt": "openai", "gpt": "openai", "gpt-4": "openai", "claude": "anthropic"}
+    pref = aliases.get(pref, pref)
     have = {
         "groq": bool(settings.GROQ_API_KEY),
         "gemini": bool(settings.GEMINI_API_KEY),
         "openai": bool(settings.OPENAI_API_KEY),
+        "anthropic": bool(settings.ANTHROPIC_API_KEY),
     }
     if pref in have:
         return pref if have[pref] else None
-    for p in ("groq", "gemini", "openai"):  # auto order: free first
+    for p in ("groq", "gemini", "openai", "anthropic"):  # auto order: free first
         if have[p]:
             return p
     return None
+
+
+def available_providers() -> dict:
+    """Which providers have API keys configured (for the UI dropdown)."""
+    return {
+        "groq": bool(settings.GROQ_API_KEY),
+        "gemini": bool(settings.GEMINI_API_KEY),
+        "openai": bool(settings.OPENAI_API_KEY),
+        "anthropic": bool(settings.ANTHROPIC_API_KEY),
+        "active": active_provider(),
+    }
 
 
 def llm_available() -> bool:
@@ -96,11 +111,43 @@ async def _gemini(prompt: str, temperature: float, max_tokens: int, json_mode: b
         return None
 
 
+async def _anthropic(prompt: str, temperature: float, max_tokens: int) -> Optional[str]:
+    if not settings.ANTHROPIC_API_KEY:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=90) as client:
+            resp = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": settings.ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": "claude-3-5-sonnet-20241022",
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "messages": [{"role": "user", "content": prompt}],
+                },
+            )
+            if resp.status_code != 200:
+                print(f"[LLM] Anthropic {resp.status_code}: {resp.text[:200]}")
+                return None
+            data = resp.json()
+            parts = data.get("content") or []
+            return "".join(p.get("text", "") for p in parts if p.get("type") == "text") or None
+    except Exception as e:
+        print(f"[LLM] Anthropic error: {e}")
+        return None
+
+
 async def chat_text(prompt: str, temperature: float = 0.7, max_tokens: int = 3500,
                      provider: Optional[str] = None) -> Optional[str]:
     """Return raw text from the active provider, or None. Pass `provider` to
     override the global setting for just this call (e.g. a per-request
     user choice), without mutating global state."""
+    aliases = {"chatgpt": "openai", "gpt": "openai", "gpt-4": "openai", "claude": "anthropic"}
+    provider = aliases.get((provider or "").lower(), provider) if provider else None
     provider = provider or active_provider()
     if provider == "groq":
         return await _openai_compatible(prompt, settings.GROQ_API_KEY,
@@ -111,6 +158,8 @@ async def chat_text(prompt: str, temperature: float = 0.7, max_tokens: int = 350
     if provider == "openai":
         return await _openai_compatible(prompt, settings.OPENAI_API_KEY, "", "gpt-4o",
                                         temperature, max_tokens, json_mode=False)
+    if provider == "anthropic":
+        return await _anthropic(prompt, temperature, max_tokens)
     return None
 
 
@@ -118,6 +167,8 @@ async def chat_json(prompt: str, temperature: float = 0.7, max_tokens: int = 350
                      provider: Optional[str] = None) -> Optional[dict]:
     """Return a parsed JSON object from the active provider, or None. Pass
     `provider` to override the global setting for just this call."""
+    aliases = {"chatgpt": "openai", "gpt": "openai", "gpt-4": "openai", "claude": "anthropic"}
+    provider = aliases.get((provider or "").lower(), provider) if provider else None
     provider = provider or active_provider()
     raw = None
     if provider == "groq":
@@ -129,4 +180,9 @@ async def chat_json(prompt: str, temperature: float = 0.7, max_tokens: int = 350
     elif provider == "openai":
         raw = await _openai_compatible(prompt, settings.OPENAI_API_KEY, "", "gpt-4o",
                                        temperature, max_tokens, json_mode=True)
+    elif provider == "anthropic":
+        raw = await _anthropic(
+            prompt + "\n\nRespond with valid JSON only, no markdown fences.",
+            temperature, max_tokens,
+        )
     return _extract_json(raw) if raw else None

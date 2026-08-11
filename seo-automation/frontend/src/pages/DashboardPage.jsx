@@ -31,79 +31,138 @@ export default function DashboardPage() {
   const navigate = useNavigate()
   const project = useProjectInfo()
 
-  const website = project.website || 'example.com'
+  const website = project.website || ''
   const seoHealth = project.audit?.overall_score ?? byKey('seoHealth').value
 
   return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 22, maxWidth: 980 }}>
-      {/* Header */}
-      <div>
-        <h1 className="font-display" style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-1)' }}>{greeting()}, {project.business_name || 'there'}</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-3)' }}>{website} · Last 30 days</p>
-      </div>
-
-      {/* Hero: score + headline metrics, secondary stats de-emphasized below */}
-      <div className="card p-6 flex items-center gap-8 flex-wrap">
-        <ScoreRing score={seoHealth} />
-        <div style={{ display: 'flex', gap: 40, flexWrap: 'wrap' }}>
-          {['traffic', 'keywords'].map(key => {
-            const kpi = byKey(key)
-            return (
-              <div key={key}>
-                <div className="font-display" style={{ fontSize: 32, fontWeight: 800, color: 'var(--text-1)', lineHeight: 1.1 }}>{kpi.value}</div>
-                <div className="text-sm mt-1" style={{ color: 'var(--text-3)' }}>{kpi.label}</div>
-                <span className="text-xs font-semibold" style={{ color: 'var(--green)' }}>▲ {kpi.delta}</span>
-              </div>
-            )
-          })}
-        </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 28, flexWrap: 'wrap' }}>
-          {['backlinks', 'avgPosition', 'aiVisibility'].map(key => {
-            const kpi = byKey(key)
-            return (
-              <div key={key} style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-2)' }}>{kpi.value}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--text-4)' }}>{kpi.label}</div>
-              </div>
-            )
-          })}
+    <div
+      className="fade-in dash-overview"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 14,
+        width: '100%',
+        maxWidth: 1120,
+        minHeight: 'calc(100vh - 78px)',
+      }}
+    >
+      {/* Compact header */}
+      <div className="flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-1)', margin: 0, letterSpacing: '-0.02em' }}>
+            {greeting()}, {project.business_name || 'there'}
+          </h1>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-3)', margin: 0 }}>
+            {website || 'Add website in Onboarding'} · Last 30 days
+          </p>
         </div>
       </div>
 
-      {/* Traffic trend */}
-      <div className="card p-5">
-        <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)', marginBottom: 16 }}>Organic Traffic</h2>
-        <ResponsiveContainer width="100%" height={220}>
-          <AreaChart data={ORGANIC_PERFORMANCE} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
-            <defs>
-              <linearGradient id="og" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#FF5A4E" stopOpacity={0.18} />
-                <stop offset="100%" stopColor="#FF5A4E" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-            <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#98A2B3' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: '#98A2B3' }} axisLine={false} tickLine={false} />
-            <Tooltip content={<ChartTip />} />
-            <Area type="monotone" dataKey="traffic" stroke="#FF5A4E" strokeWidth={2.5} fill="url(#og)" />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
+      {/* Main grid — fits at 100% zoom without horizontal sprawl */}
+      <div
+        className="dash-overview-grid"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1.05fr) minmax(0, 1.35fr)',
+          gap: 14,
+          alignItems: 'stretch',
+          flex: 1,
+        }}
+      >
+        {/* Left: score + KPIs */}
+        <div className="card p-4" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <ScoreRing score={seoHealth} size={88} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-3)' }}>
+                SEO Health
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 4, lineHeight: 1.35 }}>
+                Snapshot of traffic, keywords, and visibility for this workspace.
+              </div>
+            </div>
+          </div>
 
-      {/* Top opportunities — short, focused list */}
-      <div className="card p-5">
-        <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)', marginBottom: 12 }}>Top Opportunities</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {SEO_OPPORTUNITIES.slice(0, 4).map(o => (
-            <button key={o.label} onClick={() => navigate(o.to)}
-              className="btn"
-              style={{ justifyContent: 'space-between', width: '100%', padding: '10px 8px', background: 'none', border: 'none', textAlign: 'left' }}>
-              <span className="flex items-center gap-2" style={{ fontSize: 13.5, color: 'var(--text-2)' }}>
-                <AlertTriangle size={14} style={{ color: TONE_DOT[o.tone] }} /> {o.label}
-              </span>
-              <ChevronRight size={14} style={{ color: 'var(--text-4)' }} />
-            </button>
-          ))}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+              gap: 10,
+            }}
+          >
+            {['traffic', 'keywords', 'backlinks', 'avgPosition', 'aiVisibility'].map(key => {
+              const kpi = byKey(key)
+              if (!kpi) return null
+              return (
+                <div
+                  key={key}
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 10,
+                    background: 'var(--bg-raised)',
+                    border: '1px solid var(--border)',
+                  }}
+                >
+                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-1)', lineHeight: 1.1 }}>
+                    {kpi.value}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 3 }}>{kpi.label}</div>
+                  {kpi.delta ? (
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--green)', marginTop: 4 }}>▲ {kpi.delta}</div>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Right: traffic + opportunities stacked to fill height */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+          <div className="card p-4" style={{ flex: '1 1 auto', minHeight: 0 }}>
+            <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', margin: '0 0 10px' }}>Organic Traffic</h2>
+            <ResponsiveContainer width="100%" height={168}>
+              <AreaChart data={ORGANIC_PERFORMANCE} margin={{ top: 4, right: 6, left: -22, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="og" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#FF5A4E" stopOpacity={0.18} />
+                    <stop offset="100%" stopColor="#FF5A4E" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#98A2B3' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: '#98A2B3' }} axisLine={false} tickLine={false} width={36} />
+                <Tooltip content={<ChartTip />} />
+                <Area type="monotone" dataKey="traffic" stroke="#FF5A4E" strokeWidth={2} fill="url(#og)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="card p-4">
+            <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', margin: '0 0 8px' }}>Top Opportunities</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {SEO_OPPORTUNITIES.slice(0, 4).map(o => (
+                <button
+                  key={o.label}
+                  onClick={() => navigate(o.to)}
+                  className="btn"
+                  style={{
+                    justifyContent: 'space-between',
+                    width: '100%',
+                    padding: '8px 6px',
+                    background: 'none',
+                    border: 'none',
+                    textAlign: 'left',
+                  }}
+                >
+                  <span className="flex items-center gap-2" style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
+                    <AlertTriangle size={13} style={{ color: TONE_DOT[o.tone], flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.label}</span>
+                  </span>
+                  <ChevronRight size={13} style={{ color: 'var(--text-4)', flexShrink: 0 }} />
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>

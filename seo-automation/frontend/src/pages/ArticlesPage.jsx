@@ -237,9 +237,13 @@ export default function ArticlesPage() {
           </h3>
           <form onSubmit={handleGenerate} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Primary Keyword</label>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                Primary Keyword <span className="text-amber-400">*</span>
+              </label>
               <input type="text" value={form.primary_keyword}
                 onChange={e => update({ primary_keyword: e.target.value })}
+                required
+                aria-required="true"
                 placeholder="e.g. commercial roofing"
                 className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50" />
             </div>
@@ -279,12 +283,13 @@ export default function ArticlesPage() {
               <p className="text-[10px] text-slate-600 mt-1">One localized post per city (target + nearest {form.num_cities - 1} cities)</p>
             </div>
             <div className="flex items-center justify-between p-2.5 rounded-lg bg-white/3 border border-white/6">
-              <div className="text-xs font-semibold text-slate-300">🤖 AI Model</div>
+              <div className="text-xs font-semibold text-slate-300">AI Model</div>
               <select value={form.llm_provider || ''} onChange={e => update({ llm_provider: e.target.value || null })}
                 className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none">
                 <option value="">Auto</option>
-                <option value="openai">GPT-4</option>
                 <option value="gemini">Gemini</option>
+                <option value="anthropic">Claude</option>
+                <option value="openai">ChatGPT (GPT-4)</option>
                 <option value="groq">Groq</option>
               </select>
             </div>

@@ -150,6 +150,21 @@ export default function IndexingStatusPage() {
         </div>
       )}
 
+      {!gscConfigured && (
+        <div className="card p-4 border border-amber-500/25 bg-amber-500/5">
+          <div className="flex items-start gap-2 text-sm text-amber-100">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-400" />
+            <div>
+              <strong className="text-amber-200">Indexing status needs Google Search Console.</strong>
+              <p className="text-xs text-slate-400 mt-1">
+                Crawl-ready means your live page is public. “Indexed” can only be confirmed after the live website
+                (or property) is verified in Search Console and connected here. Until then we show crawl / sitemap status only.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {setup && (
         <div className="card p-5">
           <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 6px', color: 'var(--text-1)' }}>

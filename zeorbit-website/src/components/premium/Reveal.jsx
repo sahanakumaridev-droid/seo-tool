@@ -26,7 +26,7 @@ export function useReveal(options = {}) {
           io.disconnect()
         }
       },
-      { threshold: options.threshold ?? 0.12, rootMargin: options.rootMargin ?? '0px 0px -6% 0px' },
+      { threshold: options.threshold ?? 0.08, rootMargin: options.rootMargin ?? '80px 0px 20% 0px' },
     )
 
     io.observe(el)

@@ -329,6 +329,7 @@ async def list_blog_posts(
 
 @router.get("/", response_model=List[dict])
 async def list_pages(
+    request: Request,
     skip: int = 0,
     limit: int = 20,
     session: AsyncSession = Depends(get_session),
@@ -337,6 +338,7 @@ async def list_pages(
         select(PageRecord).offset(skip).limit(limit).order_by(PageRecord.created_at.desc())
     )
     rows = result.scalars().all()
+    base = _public_base(request)
     return [
         {
             "id": r.id,
@@ -346,6 +348,7 @@ async def list_pages(
             "state": r.state,
             "slug": r.slug,
             "seo_block": r.seo_block,
+            "public_url": f"{base}/p/{r.slug}",
             "created_at": r.created_at.isoformat() if r.created_at else None,
         }
         for r in rows

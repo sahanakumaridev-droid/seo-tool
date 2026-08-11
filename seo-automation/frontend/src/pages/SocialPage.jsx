@@ -3,6 +3,36 @@ import { Share2, Globe, MessageCircle, Briefcase, Camera, CheckCircle, XCircle,
          Send, RefreshCw, ExternalLink, Sparkles, Copy, ArrowRight } from 'lucide-react'
 import { shareToSocial, getSocialPlatforms, listPages } from '../api'
 import axios from 'axios'
+import useProjectInfo from '../hooks/useProjectInfo'
+
+/** Prefer live WP URL, then published /p/ URL, then profile website — never example.com. */
+function isUsableUrl(url) {
+  if (!url || typeof url !== 'string') return false
+  const u = url.trim().toLowerCase()
+  if (!u) return false
+  if (u.includes('example.com') || u.includes('example.org') || u.includes('placeholder')) return false
+  return true
+}
+
+function resolvePostUrl(block, projectWebsite, pagePublicUrl) {
+  if (isUsableUrl(pagePublicUrl)) return pagePublicUrl
+  if (!block) return ''
+  if (isUsableUrl(block.wp_post_url)) return block.wp_post_url
+  if (isUsableUrl(block.public_url)) return block.public_url
+  if (block.slug) {
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    // Frontend origin serves the SPA — only use it when /p/ is same-host (prod proxy).
+    if (origin && !origin.includes('example.com') && !/:(5173|5174|3000)$/.test(origin)) {
+      return `${origin}/p/${block.slug}`
+    }
+  }
+  const site = (projectWebsite || '').trim().replace(/\/$/, '')
+  if (site && isUsableUrl(site.startsWith('http') ? site : `https://${site}`)) {
+    const base = site.startsWith('http') ? site : `https://${site}`
+    return block.slug ? `${base}/${block.slug}` : base
+  }
+  return ''
+}
 
 /* ── ZeOrbit's real social accounts ─────────────────────────── */
 const PLATFORMS = {
@@ -106,14 +136,20 @@ const PLATFORMS = {
     ),
   },
 }
-function buildCaption(block, platform) {
+function buildCaption(block, platform, projectWebsite, pagePublicUrl) {
   if (!block) return ''
   const kws = block?.keywords?.secondary?.slice(0, 4) || []
   const hashtags = kws.map(k => '#' + k.replace(/\s+/g, '')).join(' ')
-  const postUrl = block?.wp_post_url || `https://example.com/${block?.slug}`
+  const postUrl = resolvePostUrl(block, projectWebsite, pagePublicUrl)
   const base = `${block?.title}\n\n${block?.meta_description}`
-  if (platform === 'twitter') return `${base.slice(0, 180)}\n\n${postUrl}\n\n${hashtags}`.slice(0, 280)
-  return `${base}\n\n🔗 ${postUrl}\n\n${hashtags} #LocalSEO #SmallBusiness`
+  if (platform === 'twitter') {
+    return postUrl
+      ? `${base.slice(0, 180)}\n\n${postUrl}\n\n${hashtags}`.slice(0, 280)
+      : `${base.slice(0, 220)}\n\n${hashtags}`.slice(0, 280)
+  }
+  return postUrl
+    ? `${base}\n\n🔗 ${postUrl}\n\n${hashtags} #LocalSEO #SmallBusiness`
+    : `${base}\n\n${hashtags} #LocalSEO #SmallBusiness`
 }
 
 /* ── Platform Card ───────────────────────────────────────────── */
@@ -181,6 +217,7 @@ function PlatformCard({ id, platform, onShare, hasPage }) {
 
 /* ── Main Component ──────────────────────────────────────────── */
 export default function SocialPage() {
+  const project = useProjectInfo()
   const [apiStatus, setApiStatus] = useState({ facebook: false, twitter: false, linkedin: false, instagram: false, pinterest: false, threads: false })
   const [pages, setPages] = useState([])
   const [selected, setSelected] = useState(null)
@@ -201,8 +238,12 @@ export default function SocialPage() {
   const handleShare = (platformId) => {
     if (!selected) { setError('Select a page first to share'); return }
     const block = selected.seo_block
-    const postUrl = block?.wp_post_url || `https://example.com/${block?.slug}`
-    const caption = buildCaption(block, platformId)
+    const postUrl = resolvePostUrl(block, project.website, selected.public_url)
+    if (!postUrl) {
+      setError('Publish this page to the web (or set your website in Onboarding) before sharing.')
+      return
+    }
+    const caption = buildCaption(block, platformId, project.website, selected.public_url)
     const shareLink = PLATFORMS[platformId].shareUrl(postUrl, caption)
     window.open(shareLink, '_blank', 'width=640,height=520,noopener')
   }
@@ -210,7 +251,7 @@ export default function SocialPage() {
   /* Copy caption */
   const handleCopy = (platformId) => {
     if (!selected) return
-    navigator.clipboard.writeText(buildCaption(selected.seo_block, platformId))
+    navigator.clipboard.writeText(buildCaption(selected.seo_block, platformId, project.website, selected.public_url))
     setCopied(platformId)
     setTimeout(() => setCopied(''), 2000)
   }
@@ -241,8 +282,14 @@ export default function SocialPage() {
     setShareResult(null)
     try {
       const block = selected.seo_block
+      const postUrl = resolvePostUrl(block, project.website, selected.public_url)
+      if (!postUrl) {
+        setError('Publish this page first, or add your website URL in Onboarding.')
+        setApiLoading(false)
+        return
+      }
       const res = await shareToSocial({
-        post_url: block.wp_post_url || `https://example.com/${block.slug}`,
+        post_url: postUrl,
         title: block.title,
         meta_description: block.meta_description,
         city: block.city,
@@ -258,6 +305,7 @@ export default function SocialPage() {
   }
 
   const selectedBlock = selected?.seo_block
+  const selectedPostUrl = resolvePostUrl(selectedBlock, project.website, selected?.public_url)
 
   return (
     <div className="space-y-6 fade-in">
@@ -348,7 +396,7 @@ export default function SocialPage() {
               <div className="text-sm font-semibold text-white mb-1 line-clamp-2">{selectedBlock.title}</div>
               <div className="text-xs text-slate-400 leading-relaxed mb-2 line-clamp-3">{selectedBlock.meta_description}</div>
               <div className="text-xs text-indigo-400 truncate mb-3">
-                🔗 {selectedBlock.wp_post_url || `https://example.com/${selectedBlock.slug}`}
+                🔗 {selectedPostUrl || 'Publish or set website URL to share'}
               </div>
               <div className="flex flex-wrap gap-1">
                 {selectedBlock.keywords?.secondary?.slice(0, 4).map(kw => (

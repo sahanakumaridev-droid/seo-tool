@@ -2,10 +2,11 @@
 
 export const HERO = {
   brand: 'ZeOrbit',
+  eyebrow: 'San Diego · Nationwide',
   headline: 'Digital Solutions\nThat Drive Results.',
   line: 'Websites, apps, SEO, and design solutions that help ambitious brands stand out, get found, and grow faster across the U.S.',
   primaryCta: 'Get Started',
-  secondaryCta: 'View Our Work',
+  primaryHref: '#contact',
   scene: '/videos/hero-agency-poster.jpg',
   sceneAlt: 'ZeOrbit USA web design agency cinematic brand film',
   video: '/videos/hero-agency.mp4',
@@ -21,7 +22,7 @@ export const SERVICE_STRIPS = [
     line: 'Custom WordPress, Shopify, Wix, and Squarespace sites — clear offers, fast load, built to convert.',
     href: '/website-designing',
     cta: 'Explore websites',
-    image: '/showcase/web-macbook-clean.png',
+    image: '/showcase/pro/web-wide.jpg',
     flip: false,
   },
   {
@@ -32,7 +33,7 @@ export const SERVICE_STRIPS = [
     line: 'iOS and Android products with clean UX, solid backends, and store-ready delivery.',
     href: '/mobile-apps',
     cta: 'Explore apps',
-    image: '/showcase/mobile-phones-grid.png',
+    image: '/showcase/pro/ux-app-prototype.jpg',
     flip: true,
   },
   {
@@ -43,7 +44,7 @@ export const SERVICE_STRIPS = [
     line: 'Technical SEO, local visibility, and paid campaigns that bring qualified demand — not vanity traffic.',
     href: '/seo-ppc',
     cta: 'Explore SEO',
-    image: '/showcase/growth-dashboard-a.png',
+    image: '/showcase/growth-dashboard-b.png',
     flip: false,
   },
   {
@@ -54,7 +55,7 @@ export const SERVICE_STRIPS = [
     line: 'Visual systems and creative direction that make your brand unmistakable on every screen.',
     href: '/website-designing#ux',
     cta: 'Explore branding',
-    image: '/showcase/section-fashion.png',
+    image: '/showcase/pro/graphic-wide-4.jpg',
     flip: true,
   },
 ]
@@ -79,39 +80,146 @@ export const FILM_PANELS = {
     line: 'SEO, ads, and local growth strategies that put the right customers in front of your business.',
     href: '/seo-ppc',
     cta: 'Explore growth',
-    mediaType: 'video',
-    media: '/videos/section-agency.mp4',
-    poster: '/videos/section-agency-poster.jpg',
+    mediaType: 'image',
+    media: '/showcase/growth-dashboard-b.png',
+    poster: '/showcase/growth-dashboard-b.png',
   },
 }
 
 export const INDUSTRIES = {
   kicker: 'Industries We Serve',
-  title: "We're passionate about learning and leveling up.",
+  title: 'We understand your industry — and how to grow it.',
   line: 'Focused on digital growth and consumer engagement — helping U.S. brands transform how they show up online.',
-  image: '/showcase/ux-desk-tools.png',
-  items: [
-    { icon: 'UtensilsCrossed', label: 'Food & Beverage' },
-    { icon: 'Factory', label: 'Manufacturing' },
-    { icon: 'Scale', label: 'Law' },
-    { icon: 'Car', label: 'Automotive' },
-    { icon: 'MapPin', label: 'Local Commercial' },
-    { icon: 'Home', label: 'Real Estate' },
-    { icon: 'Dumbbell', label: 'Gym & Fitness' },
-    { icon: 'Leaf', label: 'CBD' },
-    { icon: 'LineChart', label: 'SaaS & Tech' },
-    { icon: 'Scissors', label: 'Beauty' },
-    { icon: 'MessagesSquare', label: 'Consultants' },
-    { icon: 'CalendarDays', label: 'Event Management' },
-    { icon: 'Music', label: 'Artists' },
-    { icon: 'Cpu', label: 'IT' },
-    { icon: 'Plane', label: 'Tour & Travel' },
-    { icon: 'Shield', label: 'Insurance' },
-    { icon: 'HeartPulse', label: 'Medical' },
-    { icon: 'HardHat', label: 'Construction' },
-    { icon: 'GraduationCap', label: 'Education' },
-    { icon: 'Smile', label: 'Dental' },
-    { icon: 'HandHeart', label: 'Non Profit' },
+  tabs: [
+    {
+      id: 'business',
+      label: 'Business',
+      items: [
+        {
+          icon: 'Factory',
+          label: 'Manufacturing',
+          blurb: 'Product sites, dealer portals, and lead systems that turn industrial demand into booked conversations.',
+        },
+        {
+          icon: 'Scale',
+          label: 'Law',
+          blurb: 'Authority-building websites, practice pages, and intake flows designed for trust and qualified case leads.',
+        },
+        {
+          icon: 'MapPin',
+          label: 'Local Commercial',
+          blurb: 'Local SEO, service-area pages, and conversion paths that help nearby customers find and choose you.',
+        },
+        {
+          icon: 'MessagesSquare',
+          label: 'Consultants',
+          blurb: 'Clear positioning, booking-ready sites, and content systems that turn expertise into pipeline.',
+        },
+        {
+          icon: 'HardHat',
+          label: 'Construction',
+          blurb: 'Project showcases, service pages, and mobile-first sites that win bids and inbound estimate requests.',
+        },
+        {
+          icon: 'HandHeart',
+          label: 'Non Profit',
+          blurb: 'Mission-led websites, donation paths, and storytelling that grows supporters and community impact.',
+        },
+      ],
+    },
+    {
+      id: 'consumer',
+      label: 'Consumer',
+      items: [
+        {
+          icon: 'UtensilsCrossed',
+          label: 'Food & Beverage',
+          blurb: 'Menus, locations, ordering paths, and brand sites that drive foot traffic and repeat customers.',
+        },
+        {
+          icon: 'Car',
+          label: 'Automotive',
+          blurb: 'Inventory-ready sites, service booking, and local visibility for dealerships and auto businesses.',
+        },
+        {
+          icon: 'Home',
+          label: 'Real Estate',
+          blurb: 'Listing-ready experiences, agent branding, and lead capture built for serious buyer and seller intent.',
+        },
+        {
+          icon: 'Scissors',
+          label: 'Beauty',
+          blurb: 'Booking-first sites, service menus, and polished branding that turns browsers into appointments.',
+        },
+        {
+          icon: 'Dumbbell',
+          label: 'Gym & Fitness',
+          blurb: 'Membership funnels, class schedules, and mobile experiences that convert trials into members.',
+        },
+        {
+          icon: 'Leaf',
+          label: 'CBD',
+          blurb: 'Compliant storefronts, education content, and ecommerce flows built for discovery and trust.',
+        },
+      ],
+    },
+    {
+      id: 'health',
+      label: 'Health',
+      items: [
+        {
+          icon: 'HeartPulse',
+          label: 'Medical',
+          blurb: 'Patient-first websites, specialty pages, and appointment paths that grow practice visibility.',
+        },
+        {
+          icon: 'Smile',
+          label: 'Dental',
+          blurb: 'Clean clinic sites, treatment pages, and booking UX that makes choosing your practice easy.',
+        },
+        {
+          icon: 'Shield',
+          label: 'Insurance',
+          blurb: 'Quote-ready pages, trust content, and local SEO that helps clients compare and convert.',
+        },
+      ],
+    },
+    {
+      id: 'tech',
+      label: 'Tech & Travel',
+      items: [
+        {
+          icon: 'LineChart',
+          label: 'SaaS & Tech',
+          blurb: 'Product sites, demo funnels, and growth systems that turn visitors into qualified product-led demand.',
+        },
+        {
+          icon: 'Cpu',
+          label: 'IT',
+          blurb: 'Service packaging, case studies, and lead engines for MSPs and technology providers.',
+        },
+        {
+          icon: 'Plane',
+          label: 'Tour & Travel',
+          blurb: 'Itinerary-led sites, booking journeys, and visuals that inspire travelers to reserve.',
+        },
+        {
+          icon: 'CalendarDays',
+          label: 'Event Management',
+          blurb: 'Event pages, registration flows, and brand systems that sell out experiences.',
+        },
+        {
+          icon: 'Music',
+          label: 'Artists',
+          blurb: 'Portfolio sites, release pages, and fan funnels that grow audiences and bookings.',
+        },
+        {
+          icon: 'GraduationCap',
+          label: 'Education',
+          blurb: 'Program pages, enrollment paths, and content hubs that help students take the next step.',
+        },
+      ],
+    },
   ],
 }
 
@@ -150,15 +258,15 @@ export const PORTFOLIO = {
     },
     {
       num: '03',
-      title: 'Commerce stores',
+      title: 'Ecommerce - stores',
       meta: 'Shopify · WooCommerce · Payments',
       copy: 'Ecommerce experiences that make browsing effortless — collections, product pages, and checkout flows designed to turn visitors into paying customers.',
       result: 'Built to convert on every device',
-      image: '/showcase/web-ecommerce-mac.png',
-      alt: 'Ecommerce fashion store on a MacBook',
+      image: '/showcase/pro/commerce-ui-a.jpg',
+      alt: 'Professional ecommerce store checkout and payments system',
       href: '/website-designing',
-      tone: 'light',
-      flip: false,
+      tone: 'dark',
+      flip: true,
     },
     {
       num: '04',
@@ -176,6 +284,6 @@ export const PORTFOLIO = {
 }
 
 export const FINAL_CTA = {
-  headline: 'Let’s build\nsomething exceptional.',
-  line: 'Tell us about your business and goals. We’ll scope a website, app, or full digital package built around what actually moves the needle for you — then follow up within one business day.',
+  headline: "WHEN YOU'RE READY\nFOR WHAT'S NEXT.",
+  line: 'It begins with a conversation. Tell us about your business and goals — we’ll scope a website, app, or full digital package, then follow up within one business day.',
 }

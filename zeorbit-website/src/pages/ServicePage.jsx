@@ -39,8 +39,27 @@ function FaqItem({ item, open, onToggle }) {
 }
 
 function ContactPageLayout({ page }) {
-  const [showMap, setShowMap] = useState(false)
+  const [showMaps, setShowMaps] = useState({ sanDiego: false, elCajon: false })
   useHashScroll()
+
+  const maps = [
+    {
+      key: 'sanDiego',
+      title: 'San Diego HQ',
+      address: `${SITE_CONTACT.address.line1}, ${SITE_CONTACT.address.line2}`,
+      mapsUrl: SITE_CONTACT.address.mapsUrl,
+      embed:
+        'https://www.google.com/maps?q=4231+Balboa+Avenue+Suite+1340+San+Diego+CA+92117&output=embed',
+    },
+    {
+      key: 'elCajon',
+      title: SITE_CONTACT.offices[0].label,
+      address: SITE_CONTACT.offices[0].lines.join(', '),
+      mapsUrl: SITE_CONTACT.offices[0].mapsUrl,
+      embed:
+        'https://www.google.com/maps?q=1860+Greenfield+Dr+El+Cajon+CA+92021&output=embed',
+    },
+  ]
 
   return (
     <div className="rv-page zo-contact-page">
@@ -150,24 +169,42 @@ function ContactPageLayout({ page }) {
 
       <section className="zo-contact-map" aria-label="Find ZeOrbit on the map">
         <div className="rv-shell">
-          <div className="zo-contact-map-frame">
-            {showMap ? (
-              <iframe
-                title="ZeOrbit San Diego office map"
-                src="https://www.google.com/maps?q=4231+Balboa+Avenue+Suite+1340+San+Diego+CA+92117&output=embed"
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                allowFullScreen
-              />
-            ) : (
-              <button type="button" className="zo-contact-map-gate" onClick={() => setShowMap(true)}>
-                <img src="/from-zeorbit/contact/map.jpg" alt="" loading="lazy" decoding="async" />
-                <span>
-                  <MapPin size={18} strokeWidth={2.2} />
-                  Load map
-                </span>
-              </button>
-            )}
+          <div className="zo-contact-maps-grid">
+            {maps.map((map) => (
+              <div key={map.key} className="zo-contact-map-card">
+                <div className="zo-contact-map-card-head">
+                  <h3>{map.title}</h3>
+                  <p>{map.address}</p>
+                </div>
+                <div className="zo-contact-map-frame">
+                  {showMaps[map.key] ? (
+                    <iframe
+                      title={`${map.title} map`}
+                      src={map.embed}
+                      loading="lazy"
+                      referrerPolicy="no-referrer-when-downgrade"
+                      allowFullScreen
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="zo-contact-map-gate"
+                      onClick={() => setShowMaps((prev) => ({ ...prev, [map.key]: true }))}
+                    >
+                      <img src="/from-zeorbit/contact/map.jpg" alt="" loading="lazy" decoding="async" />
+                      <span>
+                        <MapPin size={18} strokeWidth={2.2} />
+                        Load map
+                      </span>
+                    </button>
+                  )}
+                </div>
+                <a className="zo-contact-map-open" href={map.mapsUrl} target="_blank" rel="noreferrer">
+                  Open in Google Maps
+                  <ArrowRight size={14} strokeWidth={2.4} />
+                </a>
+              </div>
+            ))}
           </div>
         </div>
       </section>

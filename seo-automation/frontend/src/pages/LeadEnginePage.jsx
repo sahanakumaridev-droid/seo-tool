@@ -366,12 +366,12 @@ export default function LeadEnginePage() {
   const navigate = useNavigate()
 
   return (
-    <div className="space-y-6 fade-in">
+    <div className="space-y-5 fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-white">Lead Engine</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Free ZeOrbit playbook — marketplace platforms + owned funnels for web design & app development
+            Channel playbook + owned funnels — not an automatic lead marketplace.
           </p>
         </div>
         <div className="flex gap-2">
@@ -384,6 +384,16 @@ export default function LeadEnginePage() {
             Instant Quote
           </button>
         </div>
+      </div>
+
+      <div className="card p-4 border border-sky-500/20 bg-sky-500/5">
+        <h2 className="text-sm font-semibold text-sky-200 mb-1">How this works</h2>
+        <ul className="text-xs text-slate-400 space-y-1.5 list-disc pl-4">
+          <li><strong className="text-slate-200">Lead Engine</strong> is a strategy guide: channels, funnel pages, and budgets to test.</li>
+          <li><strong className="text-slate-200">Leads CRM</strong> stores inquiries from your SEO pages, forms, ads, and Places prospecting — you own the contacts.</li>
+          <li><strong className="text-slate-200">API Integrations</strong> wires Google Ads, Search Console, social tokens, and AI providers into this app.</li>
+          <li>This does <em>not</em> automatically purchase or resell consumer leads nationwide. Use the platforms list to generate demand yourself, then manage contacts in Leads.</li>
+        </ul>
       </div>
 
       <div className="flex flex-wrap gap-1 p-1 rounded-xl bg-white/3 border border-white/8 w-fit">

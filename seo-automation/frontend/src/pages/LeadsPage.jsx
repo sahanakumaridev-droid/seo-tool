@@ -180,16 +180,21 @@ export default function LeadsPage() {
   }
 
   return (
-    <div className="space-y-6 fade-in">
+    <div className="space-y-5 fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-white">Lead Generation</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Prospect new businesses, capture inbound leads, and manage your pipeline</p>
+          <p className="text-sm text-slate-500 mt-0.5">Your CRM for inbound + prospected contacts — not a purchased lead marketplace</p>
         </div>
         <button onClick={() => setShowAdd(true)}
           className="btn-primary flex items-center gap-1.5 px-4 py-2 rounded-lg text-white text-sm font-semibold">
           <Plus size={14} /> Add Lead
         </button>
+      </div>
+
+      <div className="card p-3 text-xs text-slate-400 border border-white/8">
+        Leads come from your published SEO/quote forms, manual entry, and Google Places prospecting.
+        Integrations (Ads, Search Console, social) help you generate demand; this page stores and works the contacts you capture.
       </div>
 
       {/* Stats */}

@@ -4,6 +4,7 @@ import {
   ArrowRight,
   CalendarDays,
   Car,
+  ChevronDown,
   Cpu,
   Dumbbell,
   Factory,
@@ -19,7 +20,6 @@ import {
   Music,
   Phone,
   Plane,
-  Play,
   Scale,
   Scissors,
   Shield,
@@ -81,17 +81,54 @@ function GoogleLogo({ size = 22 }) {
 }
 
 function usePreferMotionVideo() {
-  const [preferVideo, setPreferVideo] = useState(false)
+  const [preferVideo, setPreferVideo] = useState(true)
 
   useEffect(() => {
-    const mq = window.matchMedia('(min-width: 768px) and (prefers-reduced-motion: no-preference)')
-    const sync = () => setPreferVideo(mq.matches)
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const sync = () => setPreferVideo(!mq.matches)
     sync()
     mq.addEventListener('change', sync)
     return () => mq.removeEventListener('change', sync)
   }, [])
 
   return preferVideo
+}
+
+function HeroVideo({ preferVideo }) {
+  const videoRef = useRef(null)
+
+  useEffect(() => {
+    const el = videoRef.current
+    if (!preferVideo || !el) return undefined
+    const play = () => {
+      const p = el.play()
+      if (p && typeof p.catch === 'function') p.catch(() => {})
+    }
+    play()
+    el.addEventListener('loadeddata', play)
+    return () => el.removeEventListener('loadeddata', play)
+  }, [preferVideo])
+
+  return (
+    <div className="cz-hero-bg" aria-hidden="true">
+      {preferVideo ? (
+        <video
+          ref={videoRef}
+          className="cz-hero-video"
+          src={HERO.video}
+          poster={HERO.scene}
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="auto"
+        />
+      ) : (
+        <img className="cz-hero-poster" src={HERO.scene} alt="" loading="eager" decoding="async" fetchPriority="high" />
+      )}
+      <div className="cz-hero-scrim" />
+    </div>
+  )
 }
 
 function FilmPanel({ panel }) {
@@ -115,15 +152,7 @@ function FilmPanel({ panel }) {
   }, [preferVideo, panel.mediaType])
 
   return (
-    <section ref={rootRef} id={panel.id} className="cz-film-panel" aria-label={panel.label}>
-      <div className="cz-film-media" aria-hidden="true">
-        {showVideo ? (
-          <video src={panel.media} poster={panel.poster} autoPlay loop muted playsInline preload="metadata" />
-        ) : (
-          <img src={panel.poster || panel.media} alt="" loading="lazy" decoding="async" />
-        )}
-        <div className="cz-film-scrim" />
-      </div>
+    <section ref={rootRef} id={panel.id} className="cz-film-panel is-split" aria-label={panel.label}>
       <div className="cz-film-inner">
         <Reveal className="cz-film-copy" eager>
           <p className="cz-film-label">{panel.label}</p>
@@ -139,13 +168,37 @@ function FilmPanel({ panel }) {
           </Link>
         </Reveal>
       </div>
+      <div className="cz-film-media" aria-hidden="true">
+        {showVideo ? (
+          <video src={panel.media} poster={panel.poster} autoPlay loop muted playsInline preload="metadata" />
+        ) : (
+          <img src={panel.poster || panel.media} alt="" loading="lazy" decoding="async" />
+        )}
+      </div>
     </section>
+  )
+}
+
+function WireFrames({ className = '' }) {
+  return (
+    <div className={`cz-wireframes ${className}`} aria-hidden="true">
+      <svg viewBox="0 0 420 520" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect
+          width="250"
+          height="460"
+          rx="44"
+          stroke="currentColor"
+          strokeWidth="2"
+          transform="translate(80 40) rotate(-20 125 230)"
+        />
+      </svg>
+    </div>
   )
 }
 
 function ServiceStrip({ item }) {
   return (
-    <Reveal className={`cz-strip${item.flip ? ' is-flip' : ''}`} id={item.id}>
+    <Reveal eager className={`cz-strip${item.flip ? ' is-flip' : ''}`} id={item.id}>
       <div className="cz-strip-copy">
         <p className="cz-strip-label">{item.label}</p>
         <h2>{item.title}</h2>
@@ -181,24 +234,143 @@ function CaseCard({ item }) {
   )
 }
 
-function FinaleMap() {
-  const [loadMap, setLoadMap] = useState(false)
+function IndustriesExplorer() {
+  const tabs = INDUSTRIES.tabs
+  const [activeTab, setActiveTab] = useState(tabs[0]?.id || 'business')
+  const [openLabel, setOpenLabel] = useState(null)
+  const active = tabs.find((tab) => tab.id === activeTab) || tabs[0]
+  const openItem = active.items.find((item) => item.label === openLabel) || null
+
+  useEffect(() => {
+    setOpenLabel(null)
+  }, [activeTab])
+
   return (
-    <div className="cz-finale-map">
-      {loadMap ? (
-        <iframe
-          title="ZeOrbit San Diego office"
-          src="https://maps.google.com/maps?q=4231%20Balboa%20Avenue%20Suite%201340%20San%20Diego%20CA%2092117&t=&z=14&ie=UTF8&iwloc=&output=embed"
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-        />
-      ) : (
-        <button type="button" className="cz-finale-map-gate" onClick={() => setLoadMap(true)}>
-          <MapPin size={22} strokeWidth={2.2} />
-          <span>View map</span>
-          <small>{SITE_CONTACT.address.line1}, San Diego</small>
-        </button>
-      )}
+    <div className="cz-industries-explorer">
+      <div className="cz-industry-tabs" role="tablist" aria-label="Industry categories">
+        {tabs.map((tab) => {
+          const selected = tab.id === active.id
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              className={`cz-industry-tab${selected ? ' is-active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="cz-industry-chips" role="tabpanel" aria-label={`${active.label} industries`}>
+        {active.items.map((item) => {
+          const Icon = INDUSTRY_ICONS[item.icon]
+          const open = openLabel === item.label
+          return (
+            <button
+              key={item.label}
+              type="button"
+              className={`cz-industry-chip${open ? ' is-open' : ''}`}
+              aria-expanded={open}
+              onClick={() => setOpenLabel(open ? null : item.label)}
+            >
+              <span className="cz-industry-chip-icon" aria-hidden="true">
+                {Icon ? <Icon size={16} strokeWidth={2.2} /> : null}
+              </span>
+              <span>{item.label}</span>
+              <ChevronDown size={15} strokeWidth={2.4} className="cz-industry-chip-caret" />
+            </button>
+          )
+        })}
+      </div>
+
+      {openItem ? (
+        <div className="cz-industry-drawer is-open" aria-live="polite">
+          <div className="cz-industry-drawer-top">
+            <div>
+              <p className="cz-industry-drawer-kicker">{active.label}</p>
+              <h3>{openItem.label}</h3>
+            </div>
+            <button type="button" className="cz-industry-drawer-close" onClick={() => setOpenLabel(null)}>
+              Close
+              <ChevronDown size={15} strokeWidth={2.4} />
+            </button>
+          </div>
+          <p>{openItem.blurb}</p>
+          <Link to="/contact" className="cz-industry-drawer-cta">
+            Start a project
+            <ArrowRight size={15} strokeWidth={2.4} />
+          </Link>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function FinaleMaps() {
+  const [loaded, setLoaded] = useState({ sanDiego: false, elCajon: false })
+  const maps = [
+    {
+      key: 'sanDiego',
+      title: 'San Diego HQ',
+      lines: [SITE_CONTACT.address.line1, SITE_CONTACT.address.line2],
+      mapsUrl: SITE_CONTACT.address.mapsUrl,
+      embed:
+        'https://www.google.com/maps?q=4231+Balboa+Avenue+Suite+1340+San+Diego+CA+92117&output=embed',
+    },
+    {
+      key: 'elCajon',
+      title: SITE_CONTACT.offices[0].label,
+      lines: SITE_CONTACT.offices[0].lines,
+      mapsUrl: SITE_CONTACT.offices[0].mapsUrl,
+      embed: 'https://www.google.com/maps?q=1860+Greenfield+Dr+El+Cajon+CA+92021&output=embed',
+    },
+  ]
+
+  return (
+    <div className="cz-finale-maps">
+      {maps.map((map) => (
+        <article key={map.key} className="cz-finale-map-card">
+          <header className="cz-finale-map-head">
+            <span className="cz-finale-map-pin" aria-hidden="true">
+              <MapPin size={16} strokeWidth={2.2} />
+            </span>
+            <div>
+              <h3>{map.title}</h3>
+              {map.lines.map((line) => (
+                <p key={line}>{line}</p>
+              ))}
+            </div>
+          </header>
+          <div className="cz-finale-map">
+            {loaded[map.key] ? (
+              <iframe
+                title={`${map.title} map`}
+                src={map.embed}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              />
+            ) : (
+              <button
+                type="button"
+                className="cz-finale-map-gate"
+                onClick={() => setLoaded((prev) => ({ ...prev, [map.key]: true }))}
+              >
+                <MapPin size={22} strokeWidth={2.2} />
+                <span>View map</span>
+                <small>{map.lines.join(', ')}</small>
+              </button>
+            )}
+          </div>
+          <a className="cz-finale-map-link" href={map.mapsUrl} target="_blank" rel="noreferrer">
+            Open in Google Maps
+            <ArrowRight size={14} strokeWidth={2.4} />
+          </a>
+        </article>
+      ))}
     </div>
   )
 }
@@ -208,29 +380,15 @@ export default function PremiumHome() {
   const preferHeroVideo = usePreferMotionVideo()
 
   return (
-    <div className="cz-page">
+    <div className="cz-page" id="main">
       <RevampHeader />
 
-      {/* 1. HERO — video on desktop, poster on mobile */}
+      {/* 1. HERO — full-bleed video (~70% visual) + content */}
       <section className="cz-hero cz-hero-film" aria-label="Introduction">
-        <div className="cz-hero-bg" aria-hidden="true">
-          {preferHeroVideo ? (
-            <video
-              src={HERO.video}
-              poster={HERO.scene}
-              autoPlay
-              loop
-              muted
-              playsInline
-              preload="metadata"
-            />
-          ) : (
-            <img src={HERO.scene} alt="" loading="eager" decoding="async" fetchPriority="high" />
-          )}
-          <div className="cz-hero-scrim" />
-        </div>
+        <HeroVideo preferVideo={preferHeroVideo} />
         <div className="cz-hero-inner cz-hero-film-inner">
           <Reveal className="cz-hero-copy" eager>
+            <p className="cz-hero-eyebrow">{HERO.eyebrow}</p>
             <h1 className="cz-hero-title">
               <span className="cz-hero-title-line">Digital Solutions</span>
               <span className="cz-hero-title-line">That Drive Results.</span>
@@ -240,10 +398,6 @@ export default function PremiumHome() {
               <button type="button" className="cz-btn-solid" onClick={() => scrollTo('contact')}>
                 {HERO.primaryCta}
                 <ArrowRight size={18} strokeWidth={2.4} />
-              </button>
-              <button type="button" className="cz-btn-ghost" onClick={() => scrollTo('work')}>
-                {HERO.secondaryCta}
-                <Play size={13} strokeWidth={2.4} fill="currentColor" />
               </button>
             </div>
           </Reveal>
@@ -255,6 +409,7 @@ export default function PremiumHome() {
 
       {/* 2. Content | image strips — not an immediate full-bleed film */}
       <section className="cz-strips" aria-label="What we build">
+        <WireFrames />
         <div className="cz-strips-rail">
           {SERVICE_STRIPS.map((item) => (
             <ServiceStrip key={item.id} item={item} />
@@ -284,32 +439,65 @@ export default function PremiumHome() {
         ))}
       </section>
 
-      {/* 6. VIDEO panel — before industries */}
-      <FilmPanel panel={FILM_PANELS.beforeReviews} />
+      {/* 6. Growth band — no video; premium visual division */}
+      <section id="growth" className="cz-growth-band" aria-label="Digital Marketing">
+        <div className="cz-growth-band-glow" aria-hidden="true" />
+        <div className="cz-growth-band-inner">
+          <Reveal className="cz-growth-band-copy">
+            <p className="cz-growth-band-kicker">Digital Marketing</p>
+            <h2>
+              Get found.
+              <span>Get chosen.</span>
+            </h2>
+            <p>
+              SEO, ads, and local growth strategies that put the right customers in front of your
+              business — with reporting you can actually act on.
+            </p>
+            <div className="cz-growth-band-stats" aria-hidden="true">
+              <div>
+                <strong>SEO</strong>
+                <span>Technical + local</span>
+              </div>
+              <div>
+                <strong>Ads</strong>
+                <span>Qualified demand</span>
+              </div>
+              <div>
+                <strong>Analytics</strong>
+                <span>Clear reporting</span>
+              </div>
+            </div>
+            <Link to="/seo-ppc" className="cz-growth-band-cta">
+              Explore growth
+              <ArrowRight size={16} strokeWidth={2.4} />
+            </Link>
+          </Reveal>
+          <Reveal className="cz-growth-band-visual">
+            <div className="cz-growth-band-frame">
+              <img
+                src="/showcase/growth-dashboard-b.png"
+                alt="SEO and ads growth dashboard"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+            <div className="cz-growth-band-chip cz-growth-band-chip-a">Local SEO</div>
+            <div className="cz-growth-band-chip cz-growth-band-chip-b">Paid Media</div>
+          </Reveal>
+        </div>
+      </section>
 
       {/* 7. INDUSTRIES */}
       <section id="industries" className="cz-industries" aria-label="Industries we serve">
-        <div className="cz-industries-bg" aria-hidden="true">
-          <img src={INDUSTRIES.image} alt="" loading="lazy" decoding="async" />
-          <div className="cz-industries-shade" />
-        </div>
         <div className="cz-industries-inner">
           <Reveal className="cz-industries-head">
             <p className="cz-industries-kicker">{INDUSTRIES.kicker}</p>
             <h2>{INDUSTRIES.title}</h2>
             <p>{INDUSTRIES.line}</p>
           </Reveal>
-          <div className="cz-industries-grid">
-            {INDUSTRIES.items.map((item) => {
-              const Icon = INDUSTRY_ICONS[item.icon]
-              return (
-                <div key={item.label} className="cz-industry">
-                  {Icon ? <Icon size={22} strokeWidth={2.2} aria-hidden="true" /> : null}
-                  <span>{item.label}</span>
-                </div>
-              )
-            })}
-          </div>
+          <Reveal>
+            <IndustriesExplorer />
+          </Reveal>
         </div>
       </section>
 
@@ -344,11 +532,12 @@ export default function PremiumHome() {
         </div>
       </section>
 
-      {/* 6. FINAL CTA */}
+      {/* 9. CONTACT */}
       <section id="contact" className="cz-finale">
+        <WireFrames className="is-finale" />
         <div className="cz-finale-inner">
           <Reveal className="cz-finale-copy">
-            <p className="cz-kicker is-light">Let's talk</p>
+            <p className="cz-kicker is-light">Contact Us</p>
             <h2>
               {FINAL_CTA.headline.split('\n').map((line) => (
                 <span key={line}>{line}</span>
@@ -380,7 +569,7 @@ export default function PremiumHome() {
                 <ContactForm />
               </div>
             ) : (
-              <FinaleMap />
+              <FinaleMaps />
             )}
           </Reveal>
         </div>

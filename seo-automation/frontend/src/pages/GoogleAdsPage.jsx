@@ -461,9 +461,14 @@ export default function GoogleAdsPage() {
             {adsAccount.auto_enable ? ' and enables it from ZeOrbit (can spend).' : ' — approve it here to go live.'}
             {llmProvider ? ` Free AI copy via ${llmProvider}.` : ''}
             <div style={{ marginTop: 8, fontSize: 12.5, lineHeight: 1.5 }}>
-              Account <strong>{adsAccount.customer_id || '—'}</strong>
-              {adsAccount.login_customer_id ? <> under manager <strong>{adsAccount.login_customer_id}</strong></> : null}
-              . Use <strong>Approve</strong> below — no Google Ads login needed to enable.
+              Connected Ads account: <strong>{adsAccount.customer_id || '—'}</strong>
+              {adsAccount.login_customer_id ? <> (manager <strong>{adsAccount.login_customer_id}</strong>)</> : null}
+              . Use <strong>Approve</strong> below to go live from this tool, or{' '}
+              <a href={adsAccount.campaigns_url || 'https://ads.google.com/aw/campaigns'} target="_blank" rel="noreferrer"
+                style={{ color: 'inherit', fontWeight: 700, textDecoration: 'underline' }}>
+                open the Google Ads dashboard
+              </a>
+              {adsAccount.open_hint ? <> — {adsAccount.open_hint}</> : null}
             </div>
           </div>
         </div>

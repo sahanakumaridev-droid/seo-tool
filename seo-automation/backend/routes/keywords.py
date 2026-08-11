@@ -16,7 +16,10 @@ async def get_keywords(
 
 @router.get("/research", response_model=KeywordResearchResult)
 async def research_keywords(
-    keyword: str = Query(...),
+    keyword: str = Query(..., min_length=1, description="Keyword to research (required)"),
     location: str = Query(default="US"),
 ):
-    return await _keyword_data_provider.research(keyword, location)
+    if not (keyword or "").strip():
+        from fastapi import HTTPException
+        raise HTTPException(status_code=422, detail="Keyword search is required")
+    return await _keyword_data_provider.research(keyword.strip(), location)
