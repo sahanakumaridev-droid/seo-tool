@@ -24,9 +24,9 @@ export const SITE_CONTACT = {
   ],
   social: [
     { label: 'Facebook', href: 'https://www.facebook.com/zeorbit.zeorbit' },
-    { label: 'LinkedIn', href: 'https://www.linkedin.com/company/zeorbit/' },
     { label: 'Instagram', href: 'https://www.instagram.com/zeorbit/' },
-    { label: 'YouTube', href: 'https://www.youtube.com/@ZeOrbit-Firm/about' },
+    { label: 'LinkedIn', href: 'https://www.linkedin.com/company/zeorbit/' },
+    { label: 'YouTube', href: 'https://www.youtube.com/@ZeOrbit-Firm' },
     { label: 'X', href: 'https://twitter.com/orbit_ze' },
     { label: 'Pinterest', href: 'https://www.pinterest.com/zeorbitsd/' },
   ],
@@ -74,10 +74,11 @@ export const PRIMARY_NAV = [
       { label: 'Content SEO', href: '/seo-ppc#content' },
       { label: 'Google Ads', href: '/seo-ppc#ads' },
       { label: 'Social Ads', href: '/seo-ppc#social-ads' },
+      { label: 'Blog & Insights', href: '/seo-ppc#blog' },
     ],
   },
   {
-    label: 'Software',
+    label: 'Custom Software',
     href: '/custom-software',
     children: [
       { label: 'Dashboards', href: '/custom-software#platforms' },
@@ -86,7 +87,6 @@ export const PRIMARY_NAV = [
       { label: 'Automation', href: '/custom-software#automation' },
     ],
   },
-  { label: 'Blog', href: '/blog' },
   {
     label: 'Contact',
     href: '/contact',
@@ -116,7 +116,7 @@ export const TRUST_ITEMS = [
 export const STATS = [
   { value: 'Websites', label: 'WordPress · Shopify · Wix · Squarespace' },
   { value: 'Mobile', label: 'iOS · Android' },
-  { value: 'U.S. based', label: 'San Diego headquarters' },
+  { value: 'Global', label: 'Serving clients worldwide' },
   { value: 'Growth', label: 'SEO · GEO · PPC · Ads' },
 ]
 

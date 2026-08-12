@@ -2,23 +2,6 @@ import { Link } from 'react-router-dom'
 import { Mail, MapPin, Phone } from 'lucide-react'
 import { SITE_CONTACT } from '../data/revampContent'
 
-function FooterWireFrames() {
-  return (
-    <div className="zo-footer-wireframes" aria-hidden="true">
-      <svg viewBox="0 0 420 520" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect
-          width="250"
-          height="460"
-          rx="44"
-          stroke="currentColor"
-          strokeWidth="2"
-          transform="translate(70 30) rotate(-18 125 230)"
-        />
-      </svg>
-    </div>
-  )
-}
-
 const OFFER_LINKS = [
   { label: 'Custom Websites', to: '/website-designing#business' },
   { label: 'Shopify & Ecommerce', to: '/website-designing#ecommerce' },
@@ -36,9 +19,9 @@ const SPECIAL_LINKS = [
   { label: 'SEO & PPC Tactics', to: '/seo-ppc' },
   { label: 'App Timeline', to: '/mobile-apps#timeline' },
   { label: 'UI / UX Design', to: '/website-designing#ux' },
-  { label: 'Portfolios', to: '/#work' },
+  { label: 'Portfolios', to: '/#solutions' },
   { label: "Let's Talk", to: '/contact' },
-  { label: 'Blogs', to: '/blog' },
+  { label: 'Blogs', to: '/seo-ppc#blog' },
 ]
 
 export const SOCIAL_ICONS = {
@@ -72,90 +55,89 @@ export default function SiteFooter() {
   const year = new Date().getFullYear()
 
   return (
-    <footer id="about" className="zo-site-footer zo-wire-surface">
-      <FooterWireFrames />
-      <div className="zo-site-footer-rule" aria-hidden="true" />
-      <div className="rv-shell zo-site-footer-main">
-        <div className="zo-site-footer-brand">
-          <p className="zo-site-footer-mark">ZeOrbit</p>
-          <p>
-            ZeOrbit builds websites on WordPress, Shopify, Wix, and Squarespace — and mobile apps for
-            iOS and Android. Based in San Diego, serving clients nationwide across the United States.
-          </p>
-          <div className="zo-site-footer-social">
-            {SITE_CONTACT.social.map((s) => (
-              <a
-                key={s.label}
-                href={s.href}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={s.label}
-                className={`zo-social is-${s.label.toLowerCase()}`}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d={SOCIAL_ICONS[s.label] || SOCIAL_ICONS.X} />
-                </svg>
+    <footer id="about" className="zo-site-footer">
+      <div className="zo-site-footer-stage">
+        <div className="rv-shell zo-site-footer-main">
+          <div className="zo-site-footer-brand">
+            <p>
+              ZeOrbit builds websites on WordPress, Shopify, Wix, and Squarespace — and mobile apps for
+              iOS and Android. Serving clients worldwide with hands-on strategy from first sketch to launch.
+            </p>
+            <div className="zo-site-footer-social">
+              {SITE_CONTACT.social.map((s) => (
+                <a
+                  key={s.label}
+                  href={s.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={s.label}
+                  className={`zo-social is-${s.label.toLowerCase()}`}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d={SOCIAL_ICONS[s.label] || SOCIAL_ICONS.X} />
+                  </svg>
+                </a>
+              ))}
+            </div>
+            <div className="zo-site-footer-quick">
+              <a href={`tel:${SITE_CONTACT.phoneTel}`}>
+                <Phone size={15} strokeWidth={2.2} />
+                {SITE_CONTACT.phone}
               </a>
-            ))}
-          </div>
-          <div className="zo-site-footer-quick">
-            <a href={`tel:${SITE_CONTACT.phoneTel}`}>
-              <Phone size={15} strokeWidth={2.2} />
-              {SITE_CONTACT.phone}
-            </a>
-            <a href={`mailto:${SITE_CONTACT.email}`}>
-              <Mail size={15} strokeWidth={2.2} />
-              {SITE_CONTACT.email}
-            </a>
-          </div>
-        </div>
-
-        <div className="zo-site-footer-col">
-          <h4>What We Offer</h4>
-          <ul className="zo-site-footer-list">
-            {OFFER_LINKS.map((item) => (
-              <li key={item.label}>
-                <Link to={item.to}>{item.label}</Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="zo-site-footer-col">
-          <h4>Special Links</h4>
-          <ul className="zo-site-footer-list">
-            {SPECIAL_LINKS.map((item) => (
-              <li key={item.label}>
-                <Link to={item.to}>{item.label}</Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="zo-site-footer-col">
-          <h4>Office Locations</h4>
-          <div className="zo-site-footer-addresses">
-            {FOOTER_OFFICES.map((office) => (
-              <a
-                key={office.label}
-                href={office.mapsUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="zo-site-footer-address-card"
-              >
-                <span className="zo-site-footer-address-icon" aria-hidden="true">
-                  <MapPin size={16} strokeWidth={2.2} />
-                </span>
-                <span>
-                  <strong>{office.label}</strong>
-                  {office.lines.map((line) => (
-                    <span key={line} className="zo-site-footer-office-line">
-                      {line}
-                    </span>
-                  ))}
-                </span>
+              <a href={`mailto:${SITE_CONTACT.email}`}>
+                <Mail size={15} strokeWidth={2.2} />
+                {SITE_CONTACT.email}
               </a>
-            ))}
+            </div>
+          </div>
+
+          <div className="zo-site-footer-col">
+            <h4>What We Offer</h4>
+            <ul className="zo-site-footer-list">
+              {OFFER_LINKS.map((item) => (
+                <li key={item.label}>
+                  <Link to={item.to}>{item.label}</Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="zo-site-footer-col">
+            <h4>Special Links</h4>
+            <ul className="zo-site-footer-list">
+              {SPECIAL_LINKS.map((item) => (
+                <li key={item.label}>
+                  <Link to={item.to}>{item.label}</Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="zo-site-footer-col zo-site-footer-col-offices">
+            <h4>Office Locations</h4>
+            <div className="zo-site-footer-addresses">
+              {FOOTER_OFFICES.map((office) => (
+                <a
+                  key={office.label}
+                  href={office.mapsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="zo-site-footer-office"
+                >
+                  <span className="zo-site-footer-office-pin" aria-hidden="true">
+                    <MapPin size={15} strokeWidth={2.2} />
+                  </span>
+                  <span>
+                    <strong>{office.label}</strong>
+                    {office.lines.map((line) => (
+                      <span key={line} className="zo-site-footer-office-line">
+                        {line}
+                      </span>
+                    ))}
+                  </span>
+                </a>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -163,9 +145,6 @@ export default function SiteFooter() {
       <div className="zo-site-footer-bottom">
         <div className="rv-shell zo-site-footer-bottom-inner">
           <p>© {year} ZeOrbit. All Rights Reserved.</p>
-          <p className="zo-site-footer-disclaimer">
-            Images and content are the property of their respective owners.
-          </p>
         </div>
       </div>
     </footer>

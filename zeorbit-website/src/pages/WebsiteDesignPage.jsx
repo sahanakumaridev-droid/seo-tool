@@ -42,10 +42,21 @@ function useHashScroll() {
   const { hash, pathname } = useLocation()
   useEffect(() => {
     if (!hash) return undefined
-    const id = hash.replace('#', '')
-    const timer = window.setTimeout(() => {
-      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }, 80)
+    const id = decodeURIComponent(hash.replace('#', ''))
+    let tries = 0
+    let timer = 0
+
+    const go = () => {
+      const el = document.getElementById(id)
+      if (el) {
+        el.scrollIntoView({ behavior: 'auto', block: 'start' })
+        return
+      }
+      tries += 1
+      if (tries < 16) timer = window.setTimeout(go, 20)
+    }
+
+    timer = window.setTimeout(go, 0)
     return () => window.clearTimeout(timer)
   }, [hash, pathname])
 }

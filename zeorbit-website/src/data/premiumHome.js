@@ -2,94 +2,116 @@
 
 export const HERO = {
   brand: 'ZeOrbit',
-  eyebrow: 'San Diego · Nationwide',
+  eyebrow: 'Web · Apps · Growth',
   headline: 'Digital Solutions\nThat Drive Results.',
-  line: 'Websites, apps, SEO, and design solutions that help ambitious brands stand out, get found, and grow faster across the U.S.',
+  line: 'Websites, apps, SEO, and custom software that help ambitious brands stand out, get found, and grow — wherever your customers are.',
   primaryCta: 'Get Started',
   primaryHref: '#contact',
   scene: '/videos/hero-agency-poster.jpg',
-  sceneAlt: 'ZeOrbit USA web design agency cinematic brand film',
+  sceneAlt: 'ZeOrbit web design agency cinematic brand film',
   video: '/videos/hero-agency.mp4',
 }
 
-/** Alternating content | image strips right after hero (not an immediate full-bleed film). */
-export const SERVICE_STRIPS = [
-  {
-    id: 'websites',
-    num: '01',
-    label: 'Web Design',
-    title: 'Websites that turn visitors into customers.',
-    line: 'Custom WordPress, Shopify, Wix, and Squarespace sites — clear offers, fast load, built to convert.',
-    href: '/website-designing',
-    cta: 'Explore websites',
-    image: '/showcase/pro/web-wide.jpg',
-    flip: false,
-  },
-  {
-    id: 'apps',
-    num: '02',
-    label: 'App Design',
-    title: 'Mobile apps ready for real users.',
-    line: 'iOS and Android products with clean UX, solid backends, and store-ready delivery.',
-    href: '/mobile-apps',
-    cta: 'Explore apps',
-    image: '/showcase/pro/ux-app-prototype.jpg',
-    flip: true,
-  },
-  {
-    id: 'seo',
-    num: '03',
-    label: 'SEO & Ads',
-    title: 'SEO that gets you found.',
-    line: 'Technical SEO, local visibility, and paid campaigns that bring qualified demand — not vanity traffic.',
-    href: '/seo-ppc',
-    cta: 'Explore SEO',
-    image: '/showcase/growth-dashboard-b.png',
-    flip: false,
-  },
-  {
-    id: 'branding',
-    num: '04',
-    label: 'Graphic Design',
-    title: 'Identity that moves people.',
-    line: 'Visual systems and creative direction that make your brand unmistakable on every screen.',
-    href: '/website-designing#ux',
-    cta: 'Explore branding',
-    image: '/showcase/pro/graphic-wide-4.jpg',
-    flip: true,
-  },
-]
+/**
+ * Premium service flow after hero.
+ * Clear alternating story (websites → apps → SEO → software) — no numbers.
+ */
+export const SERVICE_FLOW = {
+  kicker: 'What we build',
+  title: 'A clear path from idea to growth.',
+  line: 'Four focused capabilities — so you always know what ZeOrbit delivers next.',
+  items: [
+    {
+      id: 'websites',
+      label: 'Web Design',
+      title: 'Beautiful. Fast. Built to convert.',
+      line: 'Custom WordPress, Shopify, and high-converting sites — clear offers, fast load, SEO ready from day one.',
+      href: '/website-designing',
+      cta: 'Explore websites',
+      mediaType: 'video',
+      media: '/videos/section-agency.mp4',
+      poster: '/videos/section-agency-poster.jpg',
+      tone: 'light',
+      flip: false,
+    },
+    {
+      id: 'apps',
+      label: 'App Design',
+      title: 'Mobile experiences customers love using.',
+      line: 'iOS and Android products with polished UX, solid backends, and store-ready delivery.',
+      href: '/mobile-apps',
+      cta: 'Explore apps',
+      mediaType: 'image',
+      media: '/showcase/mobile-phones-fan.webp',
+      poster: '/showcase/mobile-phones-fan.webp',
+      tone: 'snow',
+      flip: true,
+    },
+    {
+      id: 'seo',
+      label: 'SEO & Ads',
+      title: 'SEO that gets you found.',
+      line: 'Higher rankings, more traffic, more customers — with paid campaigns when you need demand faster.',
+      href: '/seo-ppc',
+      cta: 'Explore SEO',
+      mediaType: 'image',
+      media: '/showcase/growth-charts-blue.png',
+      poster: '/showcase/growth-charts-blue.png',
+      tone: 'light',
+      flip: false,
+    },
+    {
+      id: 'software',
+      label: 'Custom Software',
+      title: 'Systems that run the business.',
+      line: 'Dashboards, CRM workflows, APIs, and automation tailored to how your teams actually work.',
+      href: '/custom-software',
+      cta: 'Explore software',
+      mediaType: 'video',
+      media: '/videos/hero-devices.mp4',
+      poster: '/showcase/hero-devices-product.webp',
+      tone: 'dark',
+      flip: true,
+    },
+  ],
+}
 
-/** Studio 3–style full-bleed story panels — used mid-page, never right after hero. */
+/** @deprecated — prefer SERVICE_FLOW */
+export const CAPABILITY_STAGE = SERVICE_FLOW
+
+/** @deprecated */
+export const SERVICE_STRIPS = []
+
+/** Studio story panels — used mid-page, never right after hero. */
 export const FILM_PANELS = {
   afterWork: {
     id: 'craft',
-    label: 'Website Design',
+    label: 'Website Craft',
     title: 'Designed to convert.\nBuilt to last.',
     line: 'Premium WordPress, Shopify, and custom websites for brands that need to look sharp and sell.',
     href: '/website-designing',
     cta: 'See website craft',
-    mediaType: 'video',
-    media: '/videos/section-animation.mp4',
-    poster: '/videos/section-website-poster.jpg',
+    mediaType: 'image',
+    media: '/showcase/pro/web-design-mac.jpg',
+    poster: '/showcase/pro/web-design-mac.jpg',
   },
   beforeReviews: {
     id: 'growth',
     label: 'Digital Marketing',
     title: 'Get found.\nGet chosen.',
-    line: 'SEO, ads, and local growth strategies that put the right customers in front of your business.',
+    line: 'SEO, ads, and growth strategies that put the right customers in front of your business.',
     href: '/seo-ppc',
     cta: 'Explore growth',
     mediaType: 'image',
-    media: '/showcase/growth-dashboard-b.png',
-    poster: '/showcase/growth-dashboard-b.png',
+    media: '/showcase/growth-charts-blue.png',
+    poster: '/showcase/growth-charts-blue.png',
   },
 }
 
 export const INDUSTRIES = {
   kicker: 'Industries We Serve',
   title: 'We understand your industry — and how to grow it.',
-  line: 'Focused on digital growth and consumer engagement — helping U.S. brands transform how they show up online.',
+  line: 'Focused on digital growth and consumer engagement — helping brands transform how they show up online.',
   tabs: [
     {
       id: 'business',
@@ -224,8 +246,8 @@ export const INDUSTRIES = {
 }
 
 export const INTRO = {
-  headline: 'San Diego based.\nNationwide reach.',
-  line: 'ZeOrbit builds websites, apps, and growth systems for ambitious brands across the United States — with hands-on strategy from first sketch to launch.',
+  headline: 'Built for brands\nthat mean business.',
+  line: 'ZeOrbit builds websites, apps, and growth systems for ambitious companies — with hands-on strategy from first sketch to launch.',
 }
 
 export const PORTFOLIO = {
@@ -238,8 +260,8 @@ export const PORTFOLIO = {
       meta: 'WordPress · Shopify · Custom web',
       copy: 'High-converting sites with clear structure, fast load times, and SEO baked in from day one — built for brands that need to look premium and sell.',
       result: 'Launch-ready in weeks, not months',
-      image: '/showcase/hero-mac-ipad-product.webp',
-      alt: 'Premium website shown on MacBook and iPad',
+      image: '/showcase/pro/web-design-mac.jpg',
+      alt: 'Premium website shown on MacBook',
       href: '/website-designing',
       tone: 'dark',
       flip: false,
@@ -258,12 +280,12 @@ export const PORTFOLIO = {
     },
     {
       num: '03',
-      title: 'Ecommerce - stores',
+      title: 'Ecommerce stores',
       meta: 'Shopify · WooCommerce · Payments',
       copy: 'Ecommerce experiences that make browsing effortless — collections, product pages, and checkout flows designed to turn visitors into paying customers.',
       result: 'Built to convert on every device',
-      image: '/showcase/pro/commerce-ui-a.jpg',
-      alt: 'Professional ecommerce store checkout and payments system',
+      image: '/showcase/pro/commerce-devices.jpg',
+      alt: 'Professional ecommerce store on multiple devices',
       href: '/website-designing',
       tone: 'dark',
       flip: true,
@@ -274,7 +296,7 @@ export const PORTFOLIO = {
       meta: 'SEO · Ads · Analytics',
       copy: 'Technical SEO, paid media, and reporting dashboards that show what is working — so you can double down on channels that bring qualified leads.',
       result: 'Traffic you can measure and scale',
-      image: '/showcase/growth-systems-04.webp',
+      image: '/showcase/growth-charts-blue.png',
       alt: 'SEO and analytics growth dashboard',
       href: '/seo-ppc',
       tone: 'dark',
@@ -287,3 +309,201 @@ export const FINAL_CTA = {
   headline: "WHEN YOU'RE READY\nFOR WHAT'S NEXT.",
   line: 'It begins with a conversation. Tell us about your business and goals — we’ll scope a website, app, or full digital package, then follow up within one business day.',
 }
+
+/**
+ * Solution-based agency band (SeekNEO-style wings section, below specializations).
+ */
+export const AGENCY_BAND = {
+  title: 'Solution-Based Digital Marketing Agency',
+  line: 'ZeOrbit is a top-notch digital partner for ambitious brands — websites, SEO, paid media, and growth systems tailored to your goals at clear, fair pricing.',
+  cta: 'Know More',
+  href: '/seo-ppc',
+  image: '/showcase/agency-wings.webp',
+}
+
+/**
+ * Why choose us — black band above Google reviews.
+ */
+export const WHY_CHOOSE = {
+  titleLead: 'Why to',
+  titleAccent: 'choose US?',
+  line: 'We focus on delivering industry-feasible web applications, mobile apps, and websites. Our branding and growth work has helped many businesses hit their sales goals — and we keep adding more.',
+  cta: 'Request Quote!',
+  image: '/showcase/why-choose-bulbs.webp',
+}
+
+/**
+ * Founded / impact band — below Why Choose Us.
+ */
+export const IMPACT_BAND = {
+  titleLead: '2010',
+  titleRest: 'ZeOrbit was founded',
+  line: 'ZeOrbit represents the connected world — innovative, customer-centric digital experiences that help enterprises, teams, and communities rise.',
+  cta: 'Request Quote!',
+  stats: [
+    { value: '16+', label: 'Years running successfully' },
+    { value: 'Global', label: 'Client presence' },
+    { value: '600+', label: 'Happy clients' },
+    { value: '05', label: 'Recognitions' },
+  ],
+}
+
+/**
+ * Culture / explore band — cinematic people story.
+ */
+export const EXPLORE_BAND = {
+  title: 'We explore and become more',
+  tagLead: '#LoveToBe',
+  tagBrand: 'ZeOrbit',
+  line: 'We truly believe that technology makes it possible — but it’s people who make it happen.',
+  cta: 'Explore',
+  href: '/contact',
+  image: '/videos/explore-cinematic-poster.jpg',
+  video: '/videos/explore-cinematic.mp4',
+  poster: '/videos/explore-cinematic-poster.jpg',
+}
+
+/**
+ * OUR SPECIALIZATIONS — SeekNEO-style carousel (above Our Solutions).
+ */
+export const OUR_SPECIALIZATIONS = {
+  titleLead: 'Our',
+  titleRest: 'Specializations',
+  line: 'ZeOrbit builds WordPress, Shopify, and custom digital products for ambitious brands — clear strategy, sharp craft, and hands-on delivery from first sketch through launch and scale.',
+  cta: 'Request Quote',
+  ctaHref: '#contact',
+  items: [
+    {
+      id: 'web',
+      title: 'Website Design',
+      line: 'High-converting custom sites — clear offers, fast load, and SEO-ready structure from day one.',
+      href: '/website-designing',
+      image: '/showcase/pro/web-design-mac.jpg',
+    },
+    {
+      id: 'wordpress',
+      title: 'WordPress Development',
+      line: 'Custom WordPress sites built for growth and lead generation — fast, SEO-ready, and easy for your team to manage.',
+      href: '/website-designing#business',
+      image: '/from-zeorbit/services/wordpress.jpg',
+    },
+    {
+      id: 'app',
+      title: 'Mobile App Development',
+      line: 'Android & iOS products with polished UX, solid backends, and store-ready delivery your customers love using.',
+      href: '/mobile-apps',
+      image: '/showcase/mobile-phones-fan.webp',
+    },
+    {
+      id: 'seo',
+      title: 'SEO & Paid Ads',
+      line: 'Search, answer engines, generative visibility, and paid media — so the right customers find you and convert.',
+      href: '/seo-ppc',
+      image: '/showcase/growth-charts-blue.png',
+    },
+    {
+      id: 'ai',
+      title: 'Gen AI Integration',
+      line: 'Copilots, automation, and AI systems wired into your workflows — practical, secure, and built for real ops.',
+      href: '/custom-software#automation',
+      image: '/showcase/ai-chatbot-laptop.png',
+    },
+    {
+      id: 'design',
+      title: 'Graphic Design & Figma',
+      line: 'Brand systems, UI kits, and production-ready Figma / Stitch files that keep product and marketing aligned.',
+      href: '/website-designing#ux',
+      image: '/showcase/ux-figma-system.png',
+    },
+    {
+      id: 'software',
+      title: 'Custom Software',
+      line: 'APIs, platforms, and internal tools engineered around your process — not a one-size template.',
+      href: '/custom-software',
+      image: '/showcase/web-dashboard-product.webp',
+    },
+    {
+      id: 'ecommerce',
+      title: 'E-commerce Solutions',
+      line: 'Shopify and custom storefronts built to sell — fast checkout, clear merchandising, and growth-ready foundations.',
+      href: '/website-designing',
+      image: '/showcase/web-shopify-mac.png',
+    },
+    {
+      id: 'fullstack',
+      title: 'Full Stack Applications',
+      line: 'End-to-end product builds — frontend, backend, data, and launch — with ownership from blueprint to scale.',
+      href: '/custom-software',
+      image: '/showcase/hero-devices-product.webp',
+    },
+  ],
+}
+
+/**
+ * OUR SOLUTIONS — industry solution cards (above Google reviews).
+ * Light grid with dark hover highlight.
+ */
+export const OUR_SOLUTIONS = {
+  title: 'Our Solutions',
+  line: 'Custom websites, mobile apps, and digital platforms built for the industries we know best — visually sharp, seamless to use, and designed to grow engagement wherever your customers are.',
+  items: [
+    {
+      id: 'bfsi',
+      title: 'BFSI',
+      line: 'Secure, conversion-focused banking and insurance experiences — from advisory sites to client portals that build trust online.',
+      href: '/custom-software',
+      icon: 'Landmark',
+    },
+    {
+      id: 'crowdfunding',
+      title: 'Crowdfunding',
+      line: 'Campaign platforms and pitch sites that tell the story clearly, build momentum, and make contributing feel effortless.',
+      href: '/website-designing',
+      icon: 'Users',
+    },
+    {
+      id: 'dating',
+      title: 'Dating',
+      line: 'Mobile-first dating products with polished profiles, smart matching UX, and the trust signals users need to stay engaged.',
+      href: '/mobile-apps',
+      icon: 'Heart',
+    },
+    {
+      id: 'elearning',
+      title: 'Elearning',
+      line: 'Learning platforms and course websites that keep students focused — clear navigation, progress, and content that feels premium.',
+      href: '/custom-software',
+      icon: 'GraduationCap',
+    },
+    {
+      id: 'fintech',
+      title: 'Fintech',
+      line: 'Fintech products and dashboards with crisp UI, reliable workflows, and the clarity money decisions demand.',
+      href: '/custom-software',
+      icon: 'Cpu',
+    },
+    {
+      id: 'fitness',
+      title: 'Fitness App',
+      line: 'Workout and wellness apps that feel motivating day one — tracking, plans, and coaching flows people actually stick with.',
+      href: '/mobile-apps',
+      icon: 'Dumbbell',
+    },
+    {
+      id: 'food',
+      title: 'Food Delivery',
+      line: 'Ordering and delivery experiences built for speed — menus, carts, and live status that keep hungry customers coming back.',
+      href: '/mobile-apps',
+      icon: 'Bike',
+    },
+    {
+      id: 'healthcare',
+      title: 'Healthcare',
+      line: 'Patient-friendly websites and apps for clinics and care brands — clear booking, trusted design, and accessible journeys.',
+      href: '/website-designing',
+      icon: 'HeartPulse',
+    },
+  ],
+}
+
+

@@ -70,7 +70,7 @@ export default function SiteDock() {
     const q = query.trim()
     setSearchOpen(false)
     if (!q) return
-    navigate(`/blog?q=${encodeURIComponent(q)}`)
+    navigate(`/seo-ppc#blog`)
   }
 
   const toggleFlag = (id) => {
@@ -89,7 +89,7 @@ export default function SiteDock() {
         <Link to="/" className="zo-site-dock-btn" aria-label="Home" title="Home">
           <Home size={18} strokeWidth={2.1} />
         </Link>
-        <a href="/#work" className="zo-site-dock-btn" aria-label="Sitemap" title="Sitemap">
+        <a href="/#solutions" className="zo-site-dock-btn" aria-label="Sitemap" title="Sitemap">
           <LayoutGrid size={18} strokeWidth={2.1} />
         </a>
         <button

@@ -95,7 +95,7 @@ export default function SeoHead({
       url: SITE_URL,
       potentialAction: {
         '@type': 'SearchAction',
-        target: `${SITE_URL}/blog`,
+        target: `${SITE_URL}/seo-ppc#blog`,
         'query-input': 'required name:search_term_string',
       },
     })

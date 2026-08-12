@@ -7,6 +7,7 @@ import SiteFooter from '../components/SiteFooter'
 import { Reveal } from '../components/premium/Reveal'
 import { SITE_CONTACT } from '../data/revampContent'
 import { NAV_PAGES } from '../data/navPages'
+import { ZEORBIT_BLOG_POSTS } from '../data/zeorbitBlog'
 import '../components/premium/premium-home.css'
 import './website-design-page.css'
 
@@ -18,10 +19,21 @@ function useHashScroll() {
   const { hash, pathname } = useLocation()
   useEffect(() => {
     if (!hash) return undefined
-    const id = hash.replace('#', '')
-    const timer = window.setTimeout(() => {
-      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }, 80)
+    const id = decodeURIComponent(hash.replace('#', ''))
+    let tries = 0
+    let timer = 0
+
+    const go = () => {
+      const el = document.getElementById(id)
+      if (el) {
+        el.scrollIntoView({ behavior: 'auto', block: 'start' })
+        return
+      }
+      tries += 1
+      if (tries < 16) timer = window.setTimeout(go, 20)
+    }
+
+    timer = window.setTimeout(go, 0)
     return () => window.clearTimeout(timer)
   }, [hash, pathname])
 }
@@ -67,12 +79,19 @@ function ContactPageLayout({ page }) {
 
       <section className="zo-contact-banner" aria-label="Contact">
         <div className="zo-contact-banner-bg" aria-hidden="true">
-          <img src="/from-zeorbit/contact/banner.jpg" alt="" loading="eager" decoding="async" />
+          <img
+            src="/showcase/contact-us-hero.png"
+            alt=""
+            loading="eager"
+            decoding="async"
+            fetchPriority="high"
+          />
           <div className="zo-contact-banner-shade" />
+          <div className="zo-contact-banner-embers" />
         </div>
         <div className="rv-shell zo-contact-banner-inner">
-          <p className="zo-contact-eyebrow is-light">Get in touch</p>
-          <h1>Contact</h1>
+          <h1>Contact Us</h1>
+          <p className="zo-contact-banner-line">{page.lead}</p>
         </div>
       </section>
 
@@ -213,7 +232,7 @@ function ContactPageLayout({ page }) {
         <section id="areas" className="zo-contact-areas" aria-label="Areas we serve">
           <div className="rv-shell">
             <p className="zo-contact-eyebrow">{page.areas.title}</p>
-            <h2>San Diego based. Nationwide reach.</h2>
+            <h2>Built for brands that mean business.</h2>
             <p className="zo-contact-lead">{page.areas.lead}</p>
             <div className="zo-contact-area-tags">
               {page.areas.items.map((area) => (
@@ -372,6 +391,49 @@ function ServiceLanding({ page }) {
             <Reveal className="wds-growth-media">
               <img src={page.growth.image} alt="" loading="lazy" decoding="async" />
             </Reveal>
+          </div>
+        </section>
+      ) : null}
+
+      {page.slug === 'seo-ppc' ? (
+        <section id="blog" className="wds-section wds-blog-section" aria-label="Blog and insights">
+          <div className="cz-rail">
+            <Reveal className="wds-section-head">
+              <p className="cz-kicker">Blog & insights</p>
+              <h2>Ideas that help you get found.</h2>
+              <p className="cz-whisper">
+                Practical notes on SEO, ads, websites, and growth — kept inside SEO & Ads so strategy and
+                content stay in one place.
+              </p>
+            </Reveal>
+            <div className="wds-blog-grid">
+              {ZEORBIT_BLOG_POSTS.slice(0, 6).map((post) => (
+                <Reveal key={post.id || post.title} className="wds-blog-card">
+                  <a
+                    href={post.url || post.public_url || '#'}
+                    className="wds-blog-card-link"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <div className="wds-blog-card-media">
+                      {post.featured_image_url ? (
+                        <img src={post.featured_image_url} alt="" loading="lazy" decoding="async" />
+                      ) : (
+                        <div className="wds-blog-card-fallback" aria-hidden="true" />
+                      )}
+                    </div>
+                    <div className="wds-blog-card-body">
+                      {post.category ? <p className="wds-blog-card-cat">{post.category}</p> : null}
+                      <h3>{post.title}</h3>
+                      {post.excerpt ? <p>{post.excerpt}</p> : null}
+                      <span>
+                        Read article <ArrowRight size={14} strokeWidth={2.2} />
+                      </span>
+                    </div>
+                  </a>
+                </Reveal>
+              ))}
+            </div>
           </div>
         </section>
       ) : null}

@@ -1,10 +1,10 @@
 /** Website Design page — copy & imagery sourced from zeorbit.com (not homepage assets). */
 
 export const WDS_HERO = {
-  eyebrow: 'Web Development · California',
+  eyebrow: 'Web Development',
   brand: 'ZeOrbit',
   title: 'Custom websites built for SEO, AI search & growth.',
-  lead: 'ZeOrbit builds fast, modern, conversion-focused websites for small businesses, startups, ecommerce brands, and growing companies across California.',
+  lead: 'ZeOrbit builds fast, modern, conversion-focused websites for small businesses, startups, ecommerce brands, and growing companies worldwide.',
   image: '/from-zeorbit/services/service-web.jpg',
   imageAlt: 'ZeOrbit website design and development',
   video: '/videos/section-agency.mp4',
@@ -20,7 +20,7 @@ export const WDS_PROOF = [
   'Webflow',
   'WooCommerce',
   'BigCommerce',
-  'San Diego HQ',
+  'Global delivery',
 ]
 
 export const WDS_SERVICES = {

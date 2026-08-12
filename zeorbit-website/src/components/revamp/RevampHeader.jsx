@@ -10,7 +10,7 @@ function isActive(pathname, href) {
 }
 
 const HEADER_SOCIAL = SITE_CONTACT.social.filter((s) =>
-  ['Facebook', 'Instagram', 'YouTube', 'X', 'LinkedIn'].includes(s.label),
+  ['Facebook', 'Instagram', 'LinkedIn', 'YouTube', 'X', 'Pinterest'].includes(s.label),
 )
 
 const SOCIAL_PATHS = {
@@ -22,21 +22,22 @@ const SOCIAL_PATHS = {
   X: 'M18.244 2H21.5l-7.23 8.26L22.5 22h-6.59l-5.16-6.74L5.2 22H1.94l7.73-8.83L1.5 2h6.75l4.66 6.16L18.244 2zm-1.16 18h1.82L7.08 3.94H5.12L17.084 20z',
   LinkedIn:
     'M6.94 6.5a1.94 1.94 0 1 1-1.94-1.94A1.94 1.94 0 0 1 6.94 6.5zM7 9.25H3V21h4zm6.5 0h-3.8V21h3.8v-6.1c0-2.3 2.9-2.5 2.9 0V21H20v-7.1c0-5.1-5.5-4.9-6.5-2.4z',
+  Pinterest:
+    'M12 2C6.48 2 2 6.27 2 11.64c0 4.1 2.56 7.62 6.17 8.96-.09-.76-.16-1.93.03-2.76.18-.76 1.14-4.84 1.14-4.84s-.29-.58-.29-1.44c0-1.35.78-2.36 1.76-2.36.83 0 1.23.62 1.23 1.37 0 .83-.53 2.08-.8 3.24-.23.97.48 1.76 1.43 1.76 1.72 0 3.04-1.81 3.04-4.43 0-2.32-1.67-3.94-4.05-3.94-2.76 0-4.38 2.07-4.38 4.21 0 .83.32 1.72.72 2.2.08.1.09.18.07.28l-.27 1.1c-.04.18-.14.22-.32.13-1.2-.56-1.95-2.32-1.95-3.74 0-3.05 2.22-5.85 6.39-5.85 3.35 0 5.96 2.39 5.96 5.58 0 3.33-2.1 6.01-5.01 6.01-.98 0-1.9-.51-2.21-1.11l-.6 2.29c-.22.84-.81 1.89-1.21 2.53A9.9 9.9 0 0 0 12 21.28c5.52 0 10-4.27 10-9.64C22 6.27 17.52 2 12 2z',
 }
 
 export default function RevampHeader() {
   const [open, setOpen] = useState(false)
   const [openMenu, setOpenMenu] = useState(null)
   const [mobilePanel, setMobilePanel] = useState(null)
-  const [scrolled, setScrolled] = useState(false)
   const headerRef = useRef(null)
-  const { pathname } = useLocation()
+  const { pathname, hash } = useLocation()
 
   useEffect(() => {
     setOpen(false)
     setOpenMenu(null)
     setMobilePanel(null)
-  }, [pathname])
+  }, [pathname, hash])
 
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : ''
@@ -44,13 +45,6 @@ export default function RevampHeader() {
       document.body.style.overflow = ''
     }
   }, [open])
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24)
-    onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
 
   useEffect(() => {
     if (!openMenu) return undefined
@@ -77,22 +71,39 @@ export default function RevampHeader() {
     setMobilePanel(null)
   }
 
-  const headerClass = [
-    'zo-site-header',
-    'is-transparent',
-    scrolled || open ? 'is-scrolled' : '',
-    open ? 'is-menu-open' : '',
-  ]
-    .filter(Boolean)
-    .join(' ')
+  const headerClass = ['zo-site-header', 'is-solid', open ? 'is-menu-open' : ''].filter(Boolean).join(' ')
 
   return (
     <header ref={headerRef} className={headerClass}>
+      <div className="zo-topbar" aria-label="Social links">
+        <div className="zo-topbar-inner">
+          <a className="zo-topbar-tagline" href={`mailto:${SITE_CONTACT.email}`}>
+            {SITE_CONTACT.email}
+          </a>
+          <div className="zo-topbar-social">
+            {HEADER_SOCIAL.map((item) => (
+              <a
+                key={item.label}
+                href={item.href}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={item.label}
+                className={`zo-topbar-social-link is-${item.label.toLowerCase()}`}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="currentColor" d={SOCIAL_PATHS[item.label] || SOCIAL_PATHS.X} />
+                </svg>
+              </a>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <div className="zo-navbar">
         <div className="zo-navbar-inner">
           <div className="zo-brand">
             <Link to="/" className="zo-logo" aria-label="ZeOrbit home" onClick={closeMobile}>
-              <Logo size={48} onDark={!scrolled && !open} />
+              <Logo size={48} onDark={false} />
             </Link>
           </div>
 
@@ -113,24 +124,43 @@ export default function RevampHeader() {
               }
 
               return (
-                <div key={item.label} className={`zo-nav-item${isOpen ? ' is-open' : ''}`}>
-                  <button
-                    type="button"
-                    className={`zo-nav-trigger${active || isOpen ? ' active' : ''}`}
-                    aria-expanded={isOpen}
-                    aria-haspopup="true"
-                    onClick={() => toggleMenu(item.label)}
-                  >
-                    {item.label}
-                    <ChevronDown size={13} className="zo-nav-caret" aria-hidden />
-                  </button>
+                <div
+                  key={item.label}
+                  className={`zo-nav-item has-children${isOpen ? ' is-open' : ''}`}
+                  onMouseEnter={() => setOpenMenu(item.label)}
+                  onMouseLeave={() => setOpenMenu(null)}
+                >
+                  <div className="zo-nav-parent">
+                    <Link
+                      to={item.href}
+                      className={`zo-nav-parent-link${active ? ' active' : ''}`}
+                      onClick={() => setOpenMenu(null)}
+                    >
+                      {item.label}
+                    </Link>
+                    <button
+                      type="button"
+                      className={`zo-nav-caret-btn${active || isOpen ? ' active' : ''}`}
+                      aria-expanded={isOpen}
+                      aria-label={`${item.label} sections`}
+                      onClick={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        toggleMenu(item.label)
+                      }}
+                    >
+                      <ChevronDown size={13} className="zo-nav-caret" aria-hidden />
+                    </button>
+                  </div>
                   {isOpen ? (
                     <div className="zo-dropdown" role="menu">
-                      <Link to={item.href} className="zo-dropdown-parent" onClick={() => setOpenMenu(null)}>
-                        Overview
-                      </Link>
                       {item.children.map((child) => (
-                        <Link key={child.label} to={child.href} role="menuitem" onClick={() => setOpenMenu(null)}>
+                        <Link
+                          key={child.label}
+                          to={child.href}
+                          role="menuitem"
+                          onClick={() => setOpenMenu(null)}
+                        >
                           {child.label}
                         </Link>
                       ))}
@@ -177,9 +207,6 @@ export default function RevampHeader() {
                 Back
               </button>
               <p className="zo-mobile-panel-title">{mobilePanel.label}</p>
-              <Link to={mobilePanel.href} className="zo-mobile-panel-link" onClick={closeMobile}>
-                Overview
-              </Link>
               {mobilePanel.children.map((child) => (
                 <Link key={child.label} to={child.href} className="zo-mobile-panel-link" onClick={closeMobile}>
                   {child.label}
@@ -205,13 +232,20 @@ export default function RevampHeader() {
                 }
 
                 return (
-                  <div key={item.label} className="zo-mobile-group">
+                  <div key={item.label} className="zo-mobile-group is-split">
+                    <Link
+                      to={item.href}
+                      className={`zo-mobile-parent-link${isActive(pathname, item.href) ? ' active' : ''}`}
+                      onClick={closeMobile}
+                    >
+                      {item.label}
+                    </Link>
                     <button
                       type="button"
-                      className={`zo-mobile-parent${isActive(pathname, item.href) ? ' active' : ''}`}
+                      className="zo-mobile-parent-more"
+                      aria-label={`${item.label} sections`}
                       onClick={() => setMobilePanel(item)}
                     >
-                      <span>{item.label}</span>
                       <ChevronDown size={16} className="zo-mobile-caret is-forward" aria-hidden />
                     </button>
                   </div>
