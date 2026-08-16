@@ -33,9 +33,9 @@ const CONTENT_AUTOMATION_NAV = [
 ]
 
 const navItemStyle = {
-  display: 'flex', alignItems: 'center', gap: 10,
-  padding: '7px 10px',
-  fontSize: 13,
+  display: 'flex', alignItems: 'center', gap: 8,
+  padding: '5px 8px',
+  fontSize: 12.5,
   textDecoration: 'none', transition: 'all 0.15s',
 }
 
@@ -45,7 +45,7 @@ function NavItem({ to, icon: Icon, label, indent }) {
       style={{ ...navItemStyle, paddingLeft: indent ? 30 : 10 }}>
       {({ isActive }) => (
         <>
-          {Icon && <Icon size={15} style={{ color: isActive ? 'var(--brand)' : 'var(--text-2)', flexShrink: 0 }} />}
+      {Icon && <Icon size={14} style={{ color: isActive ? 'var(--brand)' : 'var(--text-2)', flexShrink: 0 }} />}
           {label}
         </>
       )}
@@ -61,13 +61,13 @@ export default function Sidebar({ open = false }) {
   return (
     <aside className={`sidebar${open ? ' open' : ''}`}>
       {/* Logo */}
-      <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ padding: '12px 12px 10px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         <Logo size={32} />
-        <div style={{ color: 'var(--text-3)', fontSize: 10, marginTop: 8, letterSpacing: '0.06em', fontWeight: 600, textTransform: 'uppercase' }}>SEO Intelligence</div>
+        <div style={{ color: 'var(--text-3)', fontSize: 10, marginTop: 6, fontWeight: 600, textTransform: 'uppercase' }}>SEO Intelligence</div>
       </div>
 
       {/* Workspace / project info */}
-      <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         <div style={{
           padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
           background: 'var(--bg-raised)', border: '1px solid var(--border)',
@@ -82,22 +82,22 @@ export default function Sidebar({ open = false }) {
       </div>
 
       {/* Nav */}
-      <nav style={{ flex: 1, padding: '8px 8px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <nav style={{ flex: 1, minHeight: 0, padding: '6px 6px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
         {SEO_NAV.map(item => <NavItem key={item.to} {...item} />)}
 
-        <div style={{ color: 'var(--text-3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '14px 10px 4px' }}>
+        <div style={{ color: 'var(--text-3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', padding: '10px 8px 2px' }}>
           Content Automation
         </div>
         {CONTENT_AUTOMATION_NAV.map(item => <NavItem key={item.to} {...item} />)}
 
-        <div style={{ color: 'var(--text-3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '14px 10px 4px' }}>
+        <div style={{ color: 'var(--text-3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', padding: '10px 8px 2px' }}>
           Admin
         </div>
         <NavItem to="/admin" icon={Shield} label="Admin Panel" />
       </nav>
 
       {/* Bottom */}
-      <div style={{ padding: '8px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <div style={{ padding: '6px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
         {[{ Icon: HelpCircle, label: 'Help & Docs' }].map(({ Icon, label }) => (
           <button key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: 13, width: '100%', textAlign: 'left' }}>
             <Icon size={14} /> {label}

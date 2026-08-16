@@ -22,10 +22,6 @@ const GOALS = [
   { key: 'ai',           label: 'Improve AI visibility',          icon: Sparkles },
 ]
 
-function FieldLabel({ children }) {
-  return <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-2)', marginBottom: 8 }}>{children}</label>
-}
-
 export default function OnboardingPage() {
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
@@ -65,15 +61,18 @@ export default function OnboardingPage() {
 
   if (step === 0) {
     return (
-      <StepShell step={0} total={totalSteps} title="What's your website?" subtitle="We'll use this to run your first SEO analysis."
+      <StepShell
+        step={0} total={totalSteps}
+        title="What's your website?" subtitle="We'll use this to run your first SEO analysis."
         onNext={() => setStep(1)} nextDisabled={!form.website.trim()}>
-        <FieldLabel>Website URL</FieldLabel>
-        <div style={{ position: 'relative' }}>
-          <Globe2 size={16} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-4)' }} />
+        <label className="ob-label" htmlFor="ob-website">Website URL</label>
+        <div className="ob-field">
+          <Globe2 size={16} className="ob-field-icon" />
           <input
+            id="ob-website"
+            className="ob-input-icon"
             type="text" value={form.website} onChange={e => set({ website: e.target.value })}
             placeholder="example.com" autoFocus
-            style={{ width: '100%', padding: '11px 14px 11px 38px' }}
           />
         </div>
       </StepShell>
@@ -82,13 +81,15 @@ export default function OnboardingPage() {
 
   if (step === 1) {
     return (
-      <StepShell step={1} total={totalSteps} title="What's your business name?" subtitle="This appears on your reports and dashboard."
-        onBack={() => setStep(0)} onNext={() => setStep(2)} nextDisabled={!form.business_name.trim()}>
-        <FieldLabel>Business name</FieldLabel>
+      <StepShell
+        step={1} total={totalSteps}
+        title="What's your business name?" subtitle="This appears on your reports and dashboard."
+        onBack={() => setStep(0)} onSelectStep={setStep} onNext={() => setStep(2)} nextDisabled={!form.business_name.trim()}>
+        <label className="ob-label" htmlFor="ob-business">Business name</label>
         <input
+          id="ob-business"
           type="text" value={form.business_name} onChange={e => set({ business_name: e.target.value })}
           placeholder="Acme Plumbing Co." autoFocus
-          style={{ width: '100%', padding: '11px 14px' }}
         />
       </StepShell>
     )
@@ -96,16 +97,20 @@ export default function OnboardingPage() {
 
   if (step === 2) {
     return (
-      <StepShell step={2} total={totalSteps} title="Where's your business based?" subtitle="Enter your city and state so we can accurately baseline local search data and nearby locations."
-        onBack={() => setStep(1)} onNext={() => setStep(3)} nextDisabled={!form.city.trim()}>
-        <FieldLabel>City, State</FieldLabel>
-        <input
-          type="text" value={form.city} onChange={e => set({ city: e.target.value })}
-          placeholder="e.g. San Diego, CA" autoFocus
-          style={{ width: '100%', padding: '11px 14px', marginBottom: 16 }}
-        />
-        <FieldLabel>Country</FieldLabel>
-        <select value={form.country} onChange={e => set({ country: e.target.value })} style={{ width: '100%', padding: '11px 14px' }}>
+      <StepShell
+        step={2} total={totalSteps}
+        title="Where's your business based?" subtitle="We'll use this to baseline local search data around you."
+        onBack={() => setStep(1)} onSelectStep={setStep} onNext={() => setStep(3)} nextDisabled={!form.city.trim()}>
+        <label className="ob-label" htmlFor="ob-city">City, State</label>
+        <div className="ob-field">
+          <input
+            id="ob-city"
+            type="text" value={form.city} onChange={e => set({ city: e.target.value })}
+            placeholder="e.g. San Diego, CA" autoFocus
+          />
+        </div>
+        <label className="ob-label" htmlFor="ob-country">Country</label>
+        <select id="ob-country" value={form.country} onChange={e => set({ country: e.target.value })}>
           {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
       </StepShell>
@@ -114,19 +119,19 @@ export default function OnboardingPage() {
 
   if (step === 3) {
     return (
-      <StepShell step={3} total={totalSteps} title="What type of business is this?" subtitle="This helps us tailor recommendations."
-        onBack={() => setStep(2)} onNext={() => setStep(4)} nextDisabled={!form.business_type}>
-        <FieldLabel>Business type</FieldLabel>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <StepShell
+        step={3} total={totalSteps}
+        title="What type of business is this?" subtitle="This helps us tailor recommendations."
+        onBack={() => setStep(2)} onSelectStep={setStep} onNext={() => setStep(4)} nextDisabled={!form.business_type}>
+        <p className="ob-label">Business type</p>
+        <div className="ob-stack">
           {BUSINESS_TYPES.map(bt => (
-            <button key={bt} type="button" onClick={() => set({ business_type: bt })}
-              className="btn"
-              style={{
-                justifyContent: 'flex-start', width: '100%', padding: '11px 14px',
-                background: form.business_type === bt ? 'var(--brand-soft)' : 'var(--bg-raised)',
-                border: `1px solid ${form.business_type === bt ? 'var(--brand)' : 'var(--border-bright)'}`,
-                color: form.business_type === bt ? 'var(--brand-dark)' : 'var(--text-2)',
-              }}>
+            <button
+              key={bt}
+              type="button"
+              onClick={() => set({ business_type: bt })}
+              className={`btn ob-choice${form.business_type === bt ? ' is-selected' : ''}`}
+            >
               {bt}
             </button>
           ))}
@@ -135,22 +140,22 @@ export default function OnboardingPage() {
     )
   }
 
-  // Step 4 — goal + run analysis
   return (
-    <StepShell step={4} total={totalSteps} title="What's your main SEO goal?" subtitle="We'll prioritize your dashboard around this."
-      onBack={() => setStep(3)} onNext={finish} nextDisabled={!form.goal} loading={analyzing}
-      nextLabel="Run Initial SEO Analysis">
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+    <StepShell
+      step={4} total={totalSteps}
+      title="What's your main SEO goal?" subtitle="We'll prioritize your dashboard around this."
+      onBack={() => setStep(3)} onSelectStep={setStep} onNext={finish} nextDisabled={!form.goal} loading={analyzing}
+      nextLabel="Run analysis">
+      <div className="ob-choice-grid">
         {GOALS.map(g => (
-          <button key={g.key} type="button" onClick={() => set({ goal: g.key })}
-            className="btn"
-            style={{
-              flexDirection: 'column', alignItems: 'flex-start', gap: 8, height: 'auto', padding: '14px',
-              background: form.goal === g.key ? 'var(--brand-soft)' : 'var(--bg-raised)',
-              border: `1px solid ${form.goal === g.key ? 'var(--brand)' : 'var(--border-bright)'}`,
-            }}>
-            <g.icon size={18} style={{ color: form.goal === g.key ? 'var(--brand)' : 'var(--text-3)' }} />
-            <span style={{ fontSize: 12.5, fontWeight: 600, color: form.goal === g.key ? 'var(--brand-dark)' : 'var(--text-2)', textAlign: 'left' }}>{g.label}</span>
+          <button
+            key={g.key}
+            type="button"
+            onClick={() => set({ goal: g.key })}
+            className={`btn ob-choice${form.goal === g.key ? ' is-selected' : ''}`}
+          >
+            <g.icon size={18} />
+            <span className="ob-choice-copy">{g.label}</span>
           </button>
         ))}
       </div>

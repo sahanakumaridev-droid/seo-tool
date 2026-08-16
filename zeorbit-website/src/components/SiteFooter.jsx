@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
-import { Mail, MapPin, Phone } from 'lucide-react'
+import { Mail, Phone } from 'lucide-react'
+import Logo from './Logo'
 import { SITE_CONTACT } from '../data/revampContent'
 
 const OFFER_LINKS = [
@@ -19,9 +20,9 @@ const SPECIAL_LINKS = [
   { label: 'SEO & PPC Tactics', to: '/seo-ppc' },
   { label: 'App Timeline', to: '/mobile-apps#timeline' },
   { label: 'UI / UX Design', to: '/website-designing#ux' },
-  { label: 'Portfolios', to: '/#solutions' },
+  { label: 'Portfolios', to: '/#work' },
   { label: "Let's Talk", to: '/contact' },
-  { label: 'Blogs', to: '/seo-ppc#blog' },
+  { label: 'Blogs', to: '/blog' },
 ]
 
 export const SOCIAL_ICONS = {
@@ -38,19 +39,6 @@ export const SOCIAL_ICONS = {
     'M12 3a9 9 0 0 0-3.3 17.4c-.1-.7-.2-1.8 0-2.6l1.2-5.1s-.3-.6-.3-1.5c0-1.4.8-2.4 1.8-2.4.9 0 1.3.6 1.3 1.4 0 .9-.6 2.2-.9 3.4-.2.9.5 1.7 1.5 1.7 1.8 0 3.1-2.3 3.1-5.1 0-2.1-1.4-3.7-4-3.7-2.9 0-4.7 2.2-4.7 4.6 0 .9.3 1.8.7 2.3.1.1.1.2.1.3l-.3 1c0 .2-.2.2-.3.1-1.3-.6-2-2.2-2-3.6 0-2.7 2.3-5.9 6.7-5.9 3.6 0 6 2.6 6 5.4 0 3.7-2.1 6.5-5.1 6.5-1 0-2-.6-2.3-1.2l-.6 2.4c-.2.9-.8 2-1.2 2.7A9 9 0 1 0 12 3z',
 }
 
-const FOOTER_OFFICES = [
-  {
-    label: 'San Diego HQ',
-    lines: [SITE_CONTACT.address.line1, SITE_CONTACT.address.line2],
-    mapsUrl: SITE_CONTACT.address.mapsUrl,
-  },
-  {
-    label: SITE_CONTACT.offices[0].label,
-    lines: SITE_CONTACT.offices[0].lines,
-    mapsUrl: SITE_CONTACT.offices[0].mapsUrl,
-  },
-]
-
 export default function SiteFooter() {
   const year = new Date().getFullYear()
 
@@ -59,6 +47,9 @@ export default function SiteFooter() {
       <div className="zo-site-footer-stage">
         <div className="rv-shell zo-site-footer-main">
           <div className="zo-site-footer-brand">
+            <Link to="/" className="zo-site-footer-logo" aria-label="ZeOrbit home">
+              <Logo size={40} onDark />
+            </Link>
             <p>
               ZeOrbit builds websites on WordPress, Shopify, Wix, and Squarespace — and mobile apps for
               iOS and Android. Serving clients worldwide with hands-on strategy from first sketch to launch.
@@ -111,33 +102,6 @@ export default function SiteFooter() {
                 </li>
               ))}
             </ul>
-          </div>
-
-          <div className="zo-site-footer-col zo-site-footer-col-offices">
-            <h4>Office Locations</h4>
-            <div className="zo-site-footer-addresses">
-              {FOOTER_OFFICES.map((office) => (
-                <a
-                  key={office.label}
-                  href={office.mapsUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="zo-site-footer-office"
-                >
-                  <span className="zo-site-footer-office-pin" aria-hidden="true">
-                    <MapPin size={15} strokeWidth={2.2} />
-                  </span>
-                  <span>
-                    <strong>{office.label}</strong>
-                    {office.lines.map((line) => (
-                      <span key={line} className="zo-site-footer-office-line">
-                        {line}
-                      </span>
-                    ))}
-                  </span>
-                </a>
-              ))}
-            </div>
           </div>
         </div>
       </div>

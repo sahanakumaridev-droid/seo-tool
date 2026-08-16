@@ -1,13 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 
-function isPastOrInView(el, bottomMargin = 0.12) {
-  if (!el || typeof window === 'undefined') return false
-  const rect = el.getBoundingClientRect()
-  const view = window.innerHeight || 1
-  // Already on screen, or scrolled past (so fast jumps don't leave blank holes)
-  return rect.top < view * (1 - bottomMargin)
-}
-
 /** Intersection reveal with optional eager / scrub styles */
 export function useReveal(options = {}) {
   const ref = useRef(null)
@@ -27,44 +19,21 @@ export function useReveal(options = {}) {
       return undefined
     }
 
-    const show = () => {
-      el.classList.add('is-visible')
-    }
-
-    // Catch elements already in / above the viewport (hash jumps, fast scroll)
-    if (isPastOrInView(el)) {
-      show()
-      return undefined
-    }
-
     const io = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting || isPastOrInView(el)) {
-          show()
+        if (entry.isIntersecting) {
+          el.classList.add('is-visible')
           io.disconnect()
         }
       },
-      {
-        threshold: options.threshold ?? 0.01,
-        rootMargin: options.rootMargin ?? '180px 0px 25% 0px',
-      },
+      { threshold: options.threshold ?? 0.08, rootMargin: options.rootMargin ?? '80px 0px 20% 0px' },
     )
 
     io.observe(el)
-
-    // Fallback: if user skips past via hash / programmatic scroll, reveal leftovers
-    const onScroll = () => {
-      if (isPastOrInView(el)) {
-        show()
-        io.disconnect()
-        window.removeEventListener('scroll', onScroll)
-      }
-    }
-    window.addEventListener('scroll', onScroll, { passive: true })
-
+    const failSafe = window.setTimeout(() => el.classList.add('is-visible'), 1200)
     return () => {
+      window.clearTimeout(failSafe)
       io.disconnect()
-      window.removeEventListener('scroll', onScroll)
     }
   }, [options.threshold, options.rootMargin, options.eager])
 

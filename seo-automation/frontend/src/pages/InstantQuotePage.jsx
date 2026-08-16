@@ -62,7 +62,7 @@ export default function InstantQuotePage() {
     <div style={{ minHeight: '100vh', background: 'var(--bg-base)', color: 'var(--text-1)' }}>
       <div className="max-w-lg mx-auto px-4 py-10">
         <div className="flex items-center justify-between mb-8">
-          <Logo size={28} />
+          <Logo size={36} onDark />
           <Link to="/lead-engine" className="text-xs text-slate-500 hover:text-slate-300">
             Lead Engine
           </Link>

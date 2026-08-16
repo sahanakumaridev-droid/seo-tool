@@ -1,14 +1,14 @@
 /** Website Design page — copy & imagery sourced from zeorbit.com (not homepage assets). */
 
 export const WDS_HERO = {
-  eyebrow: 'Web Development',
+  eyebrow: 'Web Development · California',
   brand: 'ZeOrbit',
   title: 'Custom websites built for SEO, AI search & growth.',
-  lead: 'ZeOrbit builds fast, modern, conversion-focused websites for small businesses, startups, ecommerce brands, and growing companies worldwide.',
-  image: '/from-zeorbit/services/service-web.jpg',
-  imageAlt: 'ZeOrbit website design and development',
-  video: '/videos/section-agency.mp4',
-  poster: '/from-zeorbit/services/service-web.jpg',
+  lead: 'ZeOrbit builds fast, modern, conversion-focused websites for small businesses, startups, ecommerce brands, and growing companies across California.',
+  image: '/showcase/work-layouts.png',
+  imageAlt: 'Custom website shown on a laptop',
+  video: '',
+  poster: '/showcase/work-layouts.png',
   tone: 'pro',
 }
 
@@ -20,7 +20,7 @@ export const WDS_PROOF = [
   'Webflow',
   'WooCommerce',
   'BigCommerce',
-  'Global delivery',
+  'San Diego HQ',
 ]
 
 export const WDS_SERVICES = {
@@ -74,44 +74,50 @@ export const WDS_SERVICES = {
 }
 
 export const WDS_WORK = {
-  kicker: 'Selected work',
+  kicker: 'Our Work',
   title: 'Website portfolio designed for every business.',
   lead: 'Real WordPress and ecommerce builds from ZeOrbit — sites that look professional, rank better, and generate leads.',
   items: [
     {
       title: 'My Home LLC',
       meta: 'Business · WordPress',
-      image: '/from-zeorbit/work/myhome.png',
+      image: '/showcase/pro/web-laptop-desk.jpg',
+      alt: 'Laptop and monitor on a desk during a custom website build',
       href: 'https://myhomellcnc.com/',
     },
     {
       title: 'Compass Rose International',
       meta: 'Corporate · WordPress',
-      image: '/from-zeorbit/work/compass.png',
+      image: '/showcase/pro/commerce-mac-shop.jpg',
+      alt: 'Team reviewing a website on a laptop',
       href: 'https://compassrose-international.com/',
     },
     {
       title: 'Diamond Beauty Lounge',
       meta: 'Beauty · Ecommerce',
-      image: '/from-zeorbit/work/diamond.png',
+      image: '/showcase/section-fashion.png',
+      alt: 'Editorial fashion photography for a premium brand site',
       href: 'https://thediamondbeautylounge.com/',
     },
     {
       title: 'Botani Pizzeria',
       meta: 'Restaurant · Local SEO',
-      image: '/from-zeorbit/work/botani.jpg',
+      image: '/showcase/pro/commerce-workspace.jpg',
+      alt: 'Collaborative workspace for a local restaurant website',
       href: 'https://www.botanipizzeria.com/',
     },
     {
       title: 'iSuperClean',
       meta: 'Services · Booking',
-      image: '/from-zeorbit/work/isuperclean.png',
+      image: '/showcase/pro/ux-office-monitors.jpg',
+      alt: 'Tablet wireframes for a service booking website',
       href: 'https://isuperclean.com/',
     },
     {
       title: 'AeroShield USA',
       meta: 'Product · Brand site',
-      image: '/from-zeorbit/work/aeroshield.jpg',
+      image: '/showcase/pro/graphic-brand.jpg',
+      alt: 'Brand color and identity work for a product website',
       href: 'https://aeroshieldusa.com/',
     },
   ],

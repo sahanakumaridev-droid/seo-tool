@@ -7,6 +7,8 @@ export const SITE_CONTACT = {
     line2: 'San Diego, CA 92117',
     mapsUrl:
       'https://www.google.com/maps/search/?api=1&query=4231+Balboa+Avenue+Suite+1340+San+Diego+CA+92117',
+    streetEmbed:
+      'https://maps.google.com/maps?q=4231+Balboa+Avenue+San+Diego+CA+92117&z=17&hl=en&t=m&output=embed',
   },
   offices: [
     {
@@ -14,6 +16,8 @@ export const SITE_CONTACT = {
       lines: ['1860 Greenfield Dr', 'El Cajon, CA 92021, USA'],
       mapsUrl:
         'https://www.google.com/maps/search/?api=1&query=1860+Greenfield+Dr+El+Cajon+CA+92021',
+      streetEmbed:
+        'https://maps.google.com/maps?q=1860+Greenfield+Dr+El+Cajon+CA+92021&z=17&hl=en&t=m&output=embed',
     },
     {
       label: 'Los Angeles',

@@ -624,9 +624,9 @@ def resolve_campaign_niche(business_type: str, industry: str = "") -> str:
         bt = re.sub(rf"\b{re.escape(typo)}\b", fixed, bt, flags=re.I)
     ind_raw = (industry or "").strip().lower()
     industry_niche = _INDUSTRY_NICHE_MAP.get(ind_raw)
-    if not industry_niche:
+    if not industry_niche and ind_raw:
         for key, mapped in _INDUSTRY_NICHE_MAP.items():
-            if key in ind_raw or ind_raw in key:
+            if key in ind_raw or (len(ind_raw) >= 4 and ind_raw in key):
                 industry_niche = mapped
                 break
 
@@ -735,28 +735,48 @@ def _with_unsplash_params(url: str) -> str:
     return url
 
 
+def _all_curated_urls() -> List[str]:
+    """Every curated Unsplash URL we ship — used when a niche pool is exhausted."""
+    seen: List[str] = []
+    keys = set()
+    for pool in (_WEB_DESIGN_IMAGES, _SOFTWARE_IMAGES, _FINANCE_IMAGES, _GENERIC_CURATED):
+        for u in pool:
+            k = normalize_image_key(u)
+            if k and k not in keys:
+                keys.add(k)
+                seen.append(u)
+    for urls in _CURATED_TOPIC_IMAGES.values():
+        for u in urls:
+            k = normalize_image_key(u)
+            if k and k not in keys:
+                keys.add(k)
+                seen.append(u)
+    return seen
+
+
 def _curated_image_url(
     topic: str,
     seed: str,
     exclude: Optional[Iterable[str]] = None,
 ) -> str:
-    """Pick an on-topic curated photo, skipping any already-used URLs when possible."""
-    pool = _curated_pool_for_topic(topic)
+    """Pick an unused photo. Niche pool first, then any curated URL, then a unique fallback."""
     exclude_keys = {normalize_image_key(u) for u in (exclude or []) if u}
-    available = [u for u in pool if normalize_image_key(u) not in exclude_keys]
-    if available:
-        idx = _stable_index(seed, len(available))
-        return _with_unsplash_params(available[idx])
-    # Pool exhausted for this exclude set — walk the pool from the seed
-    # index looking for any unused key (handles key-normalization mismatches).
-    start = _stable_index(seed, len(pool)) if pool else 0
-    for offset in range(len(pool)):
-        cand = pool[(start + offset) % len(pool)]
-        if normalize_image_key(cand) not in exclude_keys:
-            return _with_unsplash_params(cand)
-    # Truly exhausted: still return a deterministic pick (caller should prefer
-    # Unsplash/Pexels first so this is rare).
-    return _with_unsplash_params(pool[start] if pool else "")
+
+    def _pick(pool: List[str]) -> str:
+        unused = [u for u in pool if normalize_image_key(u) not in exclude_keys]
+        if not unused:
+            return ""
+        unused.sort(key=lambda u: hashlib.md5(f"{seed}|{normalize_image_key(u)}".encode("utf-8")).hexdigest())
+        return _with_unsplash_params(unused[0])
+
+    url = _pick(_curated_pool_for_topic(topic))
+    if url:
+        return url
+    url = _pick(_all_curated_urls())
+    if url:
+        return url
+    digest = hashlib.md5((seed or "seo").encode("utf-8")).hexdigest()[:16]
+    return f"https://picsum.photos/seed/{digest}/1200/675"
 
 
 def _openverse_relevance(result: dict, topic_words: List[str]) -> int:
@@ -777,20 +797,23 @@ async def _hosted_image_url(
     query: str,
     seed: str,
     exclude: Optional[Iterable[str]] = None,
+    location: str = "",
 ) -> str:
-    """Return an on-topic hosted image URL. Never use random picsum/Flickr junk."""
+    """Return an on-topic hosted image URL unique to this seed/location."""
     exclude_keys = {normalize_image_key(u) for u in (exclude or []) if u}
+    place = " ".join(re.findall(r"[a-zA-Z]+", (location or "").lower())[:3])
+    search = f"{query} {place}".strip() if place else query
+    page = (_stable_index(seed, 20) + 1)
     if settings.UNSPLASH_ACCESS_KEY:
         try:
             async with httpx.AsyncClient(timeout=12) as client:
-                # Fetch a wider page so large location batches can stay unique
                 resp = await client.get(
                     "https://api.unsplash.com/search/photos",
                     params={
-                        "query": query,
+                        "query": search,
                         "per_page": 30,
                         "orientation": "landscape",
-                        "page": (_stable_index(seed, 5) + 1),
+                        "page": page,
                     },
                     headers={"Authorization": f"Client-ID {settings.UNSPLASH_ACCESS_KEY}"},
                 )
@@ -802,7 +825,6 @@ async def _hosted_image_url(
                     ]
                     if fresh:
                         pick = fresh[_stable_index(seed, len(fresh))]
-                        # Prefer regular (stable path) so exclude keys match across locations
                         return pick["urls"].get("regular") or pick["urls"].get("full") or ""
         except Exception as e:
             print(f"[Image] Unsplash search error: {e}")
@@ -812,10 +834,10 @@ async def _hosted_image_url(
                 resp = await client.get(
                     "https://api.pexels.com/v1/search",
                     params={
-                        "query": query,
+                        "query": search,
                         "per_page": 30,
                         "orientation": "landscape",
-                        "page": (_stable_index(seed, 5) + 1),
+                        "page": page,
                     },
                     headers={"Authorization": settings.PEXELS_API_KEY},
                 )
@@ -926,7 +948,7 @@ async def generate_article_images(
             if key and key in used:
                 url = ""
         if not url:
-            url = await _hosted_image_url(query, seed=seed, exclude=used)
+            url = await _hosted_image_url(query, seed=seed, exclude=used, location=location)
         key = normalize_image_key(url)
         # Hard uniqueness: if we still collided, force another curated pick with a new seed
         if key and key in used:
@@ -940,6 +962,11 @@ async def generate_article_images(
                 if alt_key and alt_key not in used:
                     url, key = alt, alt_key
                     break
+            if key in used:
+                url = await _hosted_image_url(
+                    query, seed=f"{seed}|retry-host", exclude=used, location=location,
+                )
+                key = normalize_image_key(url)
         if key:
             used.add(key)
         meta = build_image_metadata(focus_keyword, location, business_name, i, is_featured)

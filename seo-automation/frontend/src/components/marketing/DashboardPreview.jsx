@@ -1,100 +1,138 @@
-import { TrendingUp, Search, ShieldCheck, Sparkles } from 'lucide-react'
-import { HERO_METRICS } from '../../data/mockData'
+import { ArrowUpRight, Globe, MapPin, Sparkles } from 'lucide-react'
 
-const MINI_TRAFFIC = [38, 44, 41, 52, 58, 55, 64, 70, 66, 78, 84, 92]
+const TRAFFIC = [32, 38, 36, 48, 54, 51, 62, 70, 66, 78, 86, 94]
+const KEYWORDS = [
+  { kw: 'seo services san diego', pos: 2, vol: '12.1K', delta: '+3' },
+  { kw: 'local seo agency', pos: 4, vol: '8.4K', delta: '+6' },
+  { kw: 'near me plumber', pos: 1, vol: '18.2K', delta: '+1' },
+  { kw: 'website design la jolla', pos: 7, vol: '4.6K', delta: '+4' },
+]
 
-function MiniChart() {
-  const max = Math.max(...MINI_TRAFFIC)
-  const points = MINI_TRAFFIC.map((v, i) => {
-    const x = (i / (MINI_TRAFFIC.length - 1)) * 100
-    const y = 100 - (v / max) * 100
-    return `${x},${y}`
-  }).join(' ')
+function Sparkline() {
+  const max = Math.max(...TRAFFIC)
+  const pts = TRAFFIC.map((v, i) => {
+    const x = (i / (TRAFFIC.length - 1)) * 240
+    const y = 86 - (v / max) * 72
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  })
+  const line = pts.join(' ')
+  const area = `0,88 ${line} 240,88`
   return (
-    <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: '100%', height: 72 }}>
-      <polyline points={`0,100 ${points} 100,100`} fill="rgba(255,90,78,0.10)" stroke="none" />
-      <polyline points={points} fill="none" stroke="var(--brand)" strokeWidth="2.2" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+    <svg viewBox="0 0 240 88" preserveAspectRatio="none" className="rv-dash-spark" aria-hidden>
+      <defs>
+        <linearGradient id="rvSparkFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#3D8BFF" stopOpacity="0.38" />
+          <stop offset="100%" stopColor="#3D8BFF" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id="rvSparkStroke" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#3D8BFF" />
+          <stop offset="100%" stopColor="#6EC8FF" />
+        </linearGradient>
+      </defs>
+      <polygon points={area} fill="url(#rvSparkFill)" />
+      <polyline points={line} fill="none" stroke="url(#rvSparkStroke)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
 
-const TOP_KEYWORDS = [
-  { kw: 'seo services', pos: 3, vol: '12.1K' },
-  { kw: 'local seo', pos: 6, vol: '8.1K' },
-  { kw: 'seo agency', pos: 8, vol: '6.6K' },
-]
-
-function FloatingCard({ icon: Icon, label, value, style, tone = 'brand', floatClass }) {
-  const toneColor = { brand: 'var(--brand)', green: 'var(--green)', violet: 'var(--purple)' }[tone]
+function HealthRing({ score = 94 }) {
+  const r = 28
+  const c = 2 * Math.PI * r
+  const offset = c * (1 - score / 100)
   return (
-    <div
-      className={`fade-in ${floatClass}`}
-      style={{
-        position: 'absolute', display: 'flex', alignItems: 'center', gap: 10,
-        background: '#fff', border: '1px solid var(--border)', borderRadius: 14,
-        padding: '10px 14px', boxShadow: '0 12px 32px rgba(16,24,40,0.10)',
-        ...style,
-      }}
-    >
-      <div style={{ width: 32, height: 32, borderRadius: 9, background: `${toneColor}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <Icon size={15} style={{ color: toneColor }} />
-      </div>
-      <div>
-        <div style={{ fontSize: 10, color: 'var(--text-3)', lineHeight: 1.2 }}>{label}</div>
-        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-1)', lineHeight: 1.2 }}>{value}</div>
-      </div>
+    <div className="rv-dash-ring">
+      <svg viewBox="0 0 72 72" width="72" height="72">
+        <defs>
+          <linearGradient id="rvRing" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#3D8BFF" />
+            <stop offset="100%" stopColor="#6EC8FF" />
+          </linearGradient>
+        </defs>
+        <circle cx="36" cy="36" r={r} fill="none" stroke="#243044" strokeWidth="6" />
+        <circle
+          cx="36" cy="36" r={r} fill="none" stroke="url(#rvRing)" strokeWidth="6"
+          strokeLinecap="round" strokeDasharray={c} strokeDashoffset={offset}
+          transform="rotate(-90 36 36)"
+        />
+      </svg>
+      <strong>{score}</strong>
     </div>
   )
 }
 
 export default function DashboardPreview() {
   return (
-    <div style={{ position: 'relative', maxWidth: 760, margin: '0 auto', padding: '0 8px' }}>
-      {/* Browser-style frame */}
-      <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 16, boxShadow: '0 24px 64px rgba(16,24,40,0.12)', overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderBottom: '1px solid var(--border)', background: 'var(--bg-raised)' }}>
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#F2988D' }} />
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#F4CB85' }} />
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#9BD3A8' }} />
-          <span style={{ marginLeft: 12, fontSize: 11.5, color: 'var(--text-4)' }}>app.zeorbit.com/dashboard</span>
+    <div className="rv-dash" aria-hidden="true">
+      <div className="rv-dash-chrome">
+        <span className="rv-dash-dot" />
+        <span className="rv-dash-dot" />
+        <span className="rv-dash-dot" />
+        <div className="rv-dash-url">
+          <Globe size={11} />
+          app.zeorbit.com/dashboard
         </div>
+      </div>
 
-        <div style={{ padding: '20px 24px', textAlign: 'left' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+      <div className="rv-dash-body">
+        <aside className="rv-dash-side">
+          <div className="rv-dash-side-mark">Z</div>
+          {['Overview', 'Keywords', 'Content', 'Local', 'Ads'].map((item, i) => (
+            <span key={item} className={i === 0 ? 'active' : ''}>{item}</span>
+          ))}
+        </aside>
+
+        <div className="rv-dash-main">
+          <div className="rv-dash-head">
             <div>
-              <div style={{ fontSize: 11, color: 'var(--text-3)' }}>example.com · Last 30 Days</div>
-              <div className="font-display" style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-1)' }}>SEO Performance</div>
+              <p>Pacific Dental · Last 30 days</p>
+              <h3>Visibility command center</h3>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--green)', background: 'var(--green-soft)', padding: '4px 10px', borderRadius: 999 }}>▲ 18.4%</span>
+            <span className="rv-dash-live"><span /> Live</span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 16 }}>
-            {[
-              { label: 'Organic Traffic', value: '48,291' },
-              { label: 'Organic Keywords', value: '3,482' },
-              { label: 'Average Position', value: '12.6' },
-              { label: 'Backlinks', value: '18,420' },
-            ].map(s => (
-              <div key={s.label} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px' }}>
-                <div style={{ fontSize: 10, color: 'var(--text-3)' }}>{s.label}</div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-1)', marginTop: 2 }}>{s.value}</div>
+          <div className="rv-dash-kpis">
+            <div>
+              <span>Organic traffic</span>
+              <b>48,291</b>
+              <em>+18.4%</em>
+            </div>
+            <div>
+              <span>Keywords in top 10</span>
+              <b>1,284</b>
+              <em>+92</em>
+            </div>
+            <div>
+              <span>AI citations</span>
+              <b>76</b>
+              <em>+14</em>
+            </div>
+            <div className="rv-dash-health">
+              <HealthRing />
+              <div>
+                <span>Site health</span>
+                <b>Excellent</b>
               </div>
-            ))}
+            </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 14 }}>
-            <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px' }}>
-              <MiniChart />
+          <div className="rv-dash-split">
+            <div className="rv-dash-chart">
+              <div className="rv-dash-chart-label">
+                <span>Organic growth</span>
+                <strong>+124%</strong>
+              </div>
+              <Sparkline />
             </div>
-            <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Top Keywords</div>
-              {TOP_KEYWORDS.map(k => (
-                <div key={k.kw} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 0', fontSize: 12 }}>
-                  <span style={{ color: 'var(--text-2)' }}>{k.kw}</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontWeight: 700, color: 'var(--green)' }}>#{k.pos}</span>
-                    <span style={{ color: 'var(--text-4)', fontSize: 11 }}>{k.vol}</span>
-                  </span>
+            <div className="rv-dash-keys">
+              <div className="rv-dash-chart-label">
+                <span>Winning keywords</span>
+                <Sparkles size={12} />
+              </div>
+              {KEYWORDS.map((k) => (
+                <div key={k.kw} className="rv-dash-key">
+                  <span>{k.kw}</span>
+                  <b>#{k.pos}</b>
+                  <em>{k.delta}</em>
                 </div>
               ))}
             </div>
@@ -102,15 +140,20 @@ export default function DashboardPreview() {
         </div>
       </div>
 
-      {/* Floating metric cards — each bobs on its own loop (see index.css .float-bob-*) */}
-      <FloatingCard icon={TrendingUp} label={HERO_METRICS[0].label} value={HERO_METRICS[0].value} tone="green"
-        floatClass="float-bob-1" style={{ top: -30, left: -28 }} />
-      <FloatingCard icon={Search} label={HERO_METRICS[1].label} value={HERO_METRICS[1].value} tone="brand"
-        floatClass="float-bob-2" style={{ top: 76, right: -36 }} />
-      <FloatingCard icon={ShieldCheck} label={HERO_METRICS[2].label} value={HERO_METRICS[2].value} tone="green"
-        floatClass="float-bob-3" style={{ bottom: 54, left: -40 }} />
-      <FloatingCard icon={Sparkles} label={HERO_METRICS[3].label} value={HERO_METRICS[3].value} tone="violet"
-        floatClass="float-bob-4" style={{ bottom: -20, right: -18 }} />
+      <div className="rv-dash-float rv-dash-float-a">
+        <MapPin size={14} />
+        <div>
+          <span>Local pack</span>
+          <b>#1 in 18 cities</b>
+        </div>
+      </div>
+      <div className="rv-dash-float rv-dash-float-b">
+        <ArrowUpRight size={14} />
+        <div>
+          <span>Indexed pages</span>
+          <b>214 live</b>
+        </div>
+      </div>
     </div>
   )
 }

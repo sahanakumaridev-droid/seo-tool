@@ -5,12 +5,13 @@ import { PRIMARY_NAV } from '../../data/revampContent'
 
 export default function RevampHeader() {
   const [open, setOpen] = useState(false)
+  const authed = typeof window !== 'undefined' && localStorage.getItem('seo_auth') === 'true'
 
   return (
     <header className="rv-header">
       <div className="rv-header-inner">
         <a href="/" className="rv-logo-wrap" aria-label="ZeOrbit home">
-          <Logo size={32} />
+          <Logo size={28} onDark />
         </a>
 
         <nav className="rv-desktop-nav" aria-label="Primary">
@@ -20,8 +21,14 @@ export default function RevampHeader() {
         </nav>
 
         <div className="rv-header-actions">
-          <a className="rv-link-button" href="/login">LOG IN</a>
-          <a className="btn btn-primary" href="/register">TRY FREE FOR 7 DAYS</a>
+          {authed ? (
+            <a className="btn btn-primary" href="/content">Dashboard</a>
+          ) : (
+            <>
+              <a className="rv-link-button" href="/login">Log in</a>
+              <a className="btn btn-primary" href="/register">Get started</a>
+            </>
+          )}
           <button
             type="button"
             className="rv-mobile-toggle"
@@ -38,8 +45,14 @@ export default function RevampHeader() {
           {PRIMARY_NAV.map((item) => (
             <a key={item.label} href={item.href} onClick={() => setOpen(false)}>{item.label}</a>
           ))}
-          <a href="/login" onClick={() => setOpen(false)}>LOG IN</a>
-          <a className="btn btn-primary" href="/register" onClick={() => setOpen(false)}>TRY FREE FOR 7 DAYS</a>
+          {authed ? (
+            <a className="btn btn-primary" href="/content" onClick={() => setOpen(false)}>Dashboard</a>
+          ) : (
+            <>
+              <a href="/login" onClick={() => setOpen(false)}>Log in</a>
+              <a className="btn btn-primary" href="/register" onClick={() => setOpen(false)}>Get started</a>
+            </>
+          )}
         </nav>
       ) : null}
     </header>

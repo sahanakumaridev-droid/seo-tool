@@ -11,7 +11,7 @@ export const NAV_PAGES = {
       'From first wireframe to App Store and Google Play. ZeOrbit designs and builds mobile products U.S. teams can launch, measure, and grow.',
     image: '/showcase/mobile-lifestyle.webp',
     heroTone: 'light',
-    proof: ['iOS', 'Android', 'Flutter', 'React Native', 'Store launch', 'Global delivery'],
+    proof: ['iOS', 'Android', 'Flutter', 'React Native', 'Store launch', 'San Diego HQ'],
     services: [
       {
         id: 'native',
@@ -38,7 +38,7 @@ export const NAV_PAGES = {
         id: 'timeline',
         title: 'App development timeline',
         copy: 'A clear schedule from discovery to store submission — so stakeholders always know what’s next.',
-        image: '/showcase/growth-dashboard-b.png',
+        image: '/from-zeorbit/work/aeroshield.jpg',
         cta: 'See a sample timeline',
       },
       {
@@ -52,7 +52,7 @@ export const NAV_PAGES = {
         id: 'care',
         title: 'Updates & care',
         copy: 'OS updates, crash monitoring, feature iterations, and store compliance after launch.',
-        image: '/showcase/growth-saas.png',
+        image: '/showcase/pro/web-design-mac.jpg',
         cta: 'Keep my app healthy',
       },
     ],
@@ -70,7 +70,7 @@ export const NAV_PAGES = {
       {
         title: 'Launch dashboards',
         meta: 'Analytics · Retention',
-        image: '/showcase/growth-dashboard-c.png',
+        image: '/showcase/work-minimal.png',
       },
       {
         title: 'Store-ready packaging',
@@ -88,7 +88,7 @@ export const NAV_PAGES = {
       kicker: 'Built to iterate',
       title: 'Instrumentation from the first release.',
       lead: 'Events, funnels, and crash reporting so product decisions stay evidence-based — not guesswork.',
-      image: '/showcase/growth-charts-blue.png',
+      image: '/from-zeorbit/work/compass.png',
       points: [
         'Analytics & funnel tracking',
         'Crash & performance monitoring',
@@ -137,8 +137,8 @@ export const NAV_PAGES = {
     eyebrow: 'SEO · GEO · Paid Media',
     title: 'Get found. Get chosen. Get measured.',
     lead:
-      'Technical SEO, local visibility, content systems, and paid ads — built so businesses attract qualified demand, not vanity traffic.',
-    image: '/service-seo.webp',
+      'Technical SEO, local visibility, content systems, and paid ads — built so U.S. businesses attract qualified demand, not vanity traffic.',
+    image: '/showcase/pro/commerce-laptop.jpg',
     heroTone: 'light',
     proof: ['SEO', 'Local SEO', 'Google Ads', 'Meta Ads', 'YouTube', 'AEO / GEO'],
     services: [
@@ -146,42 +146,42 @@ export const NAV_PAGES = {
         id: 'seo',
         title: 'Technical & on-page SEO',
         copy: 'Crawl health, structure, Core Web Vitals, and pages built to rank and convert.',
-        image: '/showcase/pro/ux-office-monitors.jpg',
+        image: '/showcase/pro/web-ui-desk.jpg',
         cta: 'Audit my site',
       },
       {
         id: 'local',
-        title: 'Local & multi-market SEO',
+        title: 'Local & nationwide SEO',
         copy: 'Maps, entities, and multi-location visibility for service brands that need nearby demand.',
-        image: '/showcase/growth-charts-blue.png',
+        image: '/showcase/pro/commerce-ui-b.jpg',
         cta: 'Grow local search',
       },
       {
         id: 'content',
         title: 'Blog & content SEO',
         copy: 'Topic clusters and publish workflows that compound — not random posts.',
-        image: '/showcase/pro/web-laptop-desk.jpg',
+        image: '/showcase/pro/graphic-palette.jpg',
         cta: 'Plan content SEO',
       },
       {
         id: 'ads',
         title: 'Google & YouTube ads',
         copy: 'Search and video campaigns with clean tracking tied to leads and revenue.',
-        image: '/showcase/pro/commerce-dashboard.jpg',
+        image: '/showcase/work-ui.png',
         cta: 'Launch paid search',
       },
       {
         id: 'social-ads',
         title: 'Meta, TikTok & Pinterest ads',
         copy: 'Creative testing and audience systems for social demand generation.',
-        image: '/showcase/mobile-phones-grid.png',
+        image: '/showcase/work-hand.png',
         cta: 'Scale social ads',
       },
       {
         id: 'aeo',
         title: 'AEO / AI search readiness',
         copy: 'Structured content and markup so your brand shows up in answer-style discovery.',
-        image: '/showcase/ai-chatbot-laptop.png',
+        image: '/showcase/ux-paper-wireframes.png',
         cta: 'Prepare for AI search',
       },
     ],
@@ -189,22 +189,22 @@ export const NAV_PAGES = {
       {
         title: 'Performance reporting',
         meta: 'SEO · Ads · Dashboards',
-        image: '/showcase/growth-charts-blue.png',
+        image: '/showcase/ux-designer-desk.png',
       },
       {
         title: 'Local growth systems',
         meta: 'Maps · Landing pages',
-        image: '/showcase/pro/ux-office-monitors.jpg',
+        image: '/from-zeorbit/work/compass.png',
       },
       {
         title: 'Conversion landing pages',
         meta: 'PPC · CRO',
-        image: '/showcase/pro/web-design-screen.jpg',
+        image: '/showcase/pro/commerce-ui-a.jpg',
       },
       {
         title: 'Content engines',
         meta: 'Blog · Clusters',
-        image: '/showcase/pro/web-laptop-desk.jpg',
+        image: '/showcase/web-browser-cases.png',
       },
     ],
     process: [
@@ -217,7 +217,7 @@ export const NAV_PAGES = {
       kicker: 'Accountable growth',
       title: 'Reporting that answers “what next?”',
       lead: 'Rankings, traffic quality, leads, and revenue signals — so budget follows what works.',
-      image: '/showcase/growth-charts-blue.png',
+      image: '/showcase/work-minimal.png',
       points: [
         'Keyword & ranking systems',
         'Conversion tracking',
@@ -261,21 +261,21 @@ export const NAV_PAGES = {
 
   'custom-software': {
     slug: 'custom-software',
-    navLabel: 'Custom Software',
+    navLabel: 'Software',
     brand: 'ZeOrbit',
     eyebrow: 'Custom Software · Automation',
     title: 'Software that matches how your business actually runs.',
     lead:
       'CRMs, dashboards, integrations, and practical automation — built around your workflows so teams stop forcing work into tools that were never meant for them.',
-    image: '/showcase/hero-devices-product.webp',
-    heroTone: 'light',
+    image: '/showcase/work-mac-stone.png',
+    heroTone: 'dark',
     proof: ['Dashboards', 'CRM / ERP', 'APIs', 'Automation', 'Cloud', 'AI when needed'],
     services: [
       {
         id: 'platforms',
         title: 'Dashboards & internal tools',
         copy: 'Live visibility for operators and leaders — without spreadsheet chaos.',
-        image: '/showcase/growth-dashboard-b.png',
+        image: '/from-zeorbit/work/aeroshield.jpg',
         cta: 'Build a dashboard',
       },
       {
@@ -289,7 +289,7 @@ export const NAV_PAGES = {
         id: 'integrations',
         title: 'API integrations',
         copy: 'Payments, CRMs, ERPs, and data sources connected into one reliable flow.',
-        image: '/showcase/ai-automation.png',
+        image: '/showcase/pro/ux-app-prototype.jpg',
         cta: 'Connect my stack',
       },
       {
@@ -318,22 +318,22 @@ export const NAV_PAGES = {
       {
         title: 'Operator dashboards',
         meta: 'Data · Role-based access',
-        image: '/showcase/growth-dashboard-a.png',
+        image: '/showcase/ux-designer-desk.png',
       },
       {
         title: 'Automation systems',
         meta: 'APIs · Workflows',
-        image: '/showcase/ai-automation.png',
+        image: '/showcase/pro/ux-app-prototype.jpg',
       },
       {
         title: 'Customer portals',
         meta: 'Auth · Self-serve',
-        image: '/showcase/web-dashboard-product.png',
+        image: '/showcase/hero-devices-product.webp',
       },
       {
         title: 'Internal SaaS tools',
         meta: 'Cloud · Integrations',
-        image: '/showcase/growth-saas.png',
+        image: '/showcase/pro/web-design-mac.jpg',
       },
     ],
     process: [
@@ -393,22 +393,22 @@ export const NAV_PAGES = {
     navLabel: 'Contact',
     eyebrow: 'Get in touch',
     title: 'Contact',
-    lead: 'Our main focus is to achieve a good reputation amongst our clients. We work on Website Design, software development and marketing projects.',
+    lead: 'Feel free to contact us. ZeOrbit is a U.S.-based web design and IT company in San Diego — serving clients nationwide.',
     isContact: true,
     areas: {
       title: 'Areas we serve',
-      lead: 'Offices in California — partnering with brands across the U.S. and internationally.',
+      lead: 'San Diego HQ — working with brands across California and nationwide.',
       items: [
-        'United States',
+        'San Diego, CA',
+        'Los Angeles, CA',
+        'El Cajon, CA',
+        'Orange County',
         'California',
         'Texas',
         'Florida',
         'New York',
         'Arizona',
-        'Canada',
-        'United Kingdom',
-        'Australia',
-        'Remote / Global',
+        'Nationwide U.S.',
       ],
     },
   },

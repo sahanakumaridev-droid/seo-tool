@@ -84,6 +84,11 @@ export default function InsightsFeed({
               href={href}
               {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
             >
+              {item.featured_image_url ? (
+                <div className="rv-insight-thumb">
+                  <img src={item.featured_image_url} alt="" />
+                </div>
+              ) : null}
               <p className="rv-eyebrow">{item.category || 'Insights'}</p>
               <h3>{item.title}</h3>
               <p>{item.excerpt}</p>

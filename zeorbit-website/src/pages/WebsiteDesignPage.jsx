@@ -206,7 +206,7 @@ export default function WebsiteDesignPage() {
                     rel="noreferrer"
                   >
                     <div className="wds-work-media">
-                      <img src={item.image} alt="" loading="lazy" decoding="async" />
+                      <img src={item.image} alt={item.alt || item.title} loading="lazy" decoding="async" />
                     </div>
                     <div className="wds-work-meta">
                       <h3>{item.title}</h3>
@@ -216,7 +216,7 @@ export default function WebsiteDesignPage() {
                 ) : (
                   <>
                     <div className="wds-work-media">
-                      <img src={item.image} alt="" loading="lazy" decoding="async" />
+                      <img src={item.image} alt={item.alt || item.title} loading="lazy" decoding="async" />
                     </div>
                     <div className="wds-work-meta">
                       <h3>{item.title}</h3>

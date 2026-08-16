@@ -13,18 +13,18 @@ const HIGHLIGHTS = [
 export default function AuthLayout({ title, subtitle, children, footer }) {
   const navigate = useNavigate()
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-base)', fontFamily: 'var(--font-sans)' }}>
+    <div style={{ display: 'flex', minHeight: '100dvh', height: '100dvh', background: 'var(--bg-base)', fontFamily: 'var(--font-sans)', overflow: 'hidden' }}>
       {/* Left — brand panel */}
       <div className="hide-mobile" style={{
-        flex: '0 0 44%', background: 'var(--text-1)', color: '#fff',
+        flex: '0 0 min(420px, 40%)', background: 'var(--text-1)', color: '#fff',
         display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-        padding: '48px 52px', position: 'relative', overflow: 'hidden',
+        padding: '32px 36px', position: 'relative', overflow: 'auto', minHeight: 0,
       }}>
         <div style={{ position: 'absolute', top: -100, right: -100, width: 340, height: 340, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,90,78,0.25) 0%, transparent 70%)', filter: 'blur(40px)' }} />
 
         <div style={{ position: 'relative', zIndex: 1 }}>
           <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-            <Logo size={34} onDark />
+            <Logo size={40} onDark />
           </button>
         </div>
 
@@ -48,10 +48,10 @@ export default function AuthLayout({ title, subtitle, children, footer }) {
       </div>
 
       {/* Right — form panel */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 24px' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 24px', overflow: 'auto', minHeight: 0 }}>
         <div style={{ width: '100%', maxWidth: 380 }}>
           <div className="mobile-only" style={{ marginBottom: 28 }}>
-            <Logo size={30} />
+            <Logo size={36} />
           </div>
           <div style={{ marginBottom: 30 }}>
             <h1 style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-1)', margin: '0 0 8px', letterSpacing: '-0.5px' }}>{title}</h1>

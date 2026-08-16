@@ -15,6 +15,12 @@ function GoogleMark({ size = 18 }) {
   )
 }
 
+function Face({ review }) {
+  const [failed, setFailed] = useState(false)
+  if (failed || !review.avatar) return null
+  return <img src={review.avatar} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} />
+}
+
 function Avatar({ review }) {
   const [failed, setFailed] = useState(false)
   const initial = review.author.trim().charAt(0).toUpperCase()
@@ -41,7 +47,7 @@ function ReviewCard({ review }) {
       <div className="cz-gr-card-bottom">
         <div>
           <strong>{review.author}</strong>
-          <span>GOOGLE REVIEW · {review.when}</span>
+          <span>GOOGLE REVIEW</span>
         </div>
         <div className="cz-gr-rating-pill" aria-label={`${review.rating} out of 5 stars`}>
           {review.rating.toFixed(1)}★
@@ -126,13 +132,13 @@ export default function PremiumGoogleReviews() {
             <a className="cz-gr-google-meta" href={GOOGLE_PROFILE.reviewsUrl} target="_blank" rel="noreferrer">
               <GoogleMark size={18} />
               <strong>{GOOGLE_PROFILE.rating}</strong>
-              <span>on Google · {GOOGLE_PROFILE.reviewCount} reviews</span>
+              <span>on Google</span>
             </a>
           </div>
           <div className="cz-gr-head-side">
             <div className="cz-gr-faces" aria-hidden="true">
               {faceAvatars.map((r) => (
-                <img key={r.author} src={r.avatar} alt="" loading="lazy" decoding="async" />
+                <Face key={r.author} review={r} />
               ))}
             </div>
             <p>We create digital experiences that solve real business problems.</p>

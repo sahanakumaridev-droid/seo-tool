@@ -1,24 +1,27 @@
 /**
- * Logo — the real ZeOrbit brand mark (frontend/public/zeorbit-logo.png).
- * `size` sets the rendered height in px (width follows the image's aspect ratio).
- * Pass `onDark` when placing it on a dark surface — the mark's navy/red
- * linework has low contrast on dark backgrounds, so this wraps it in a
- * small white pill instead of trying to recolor a raster image.
+ * Logo — official ZeOrbit mark.
+ * Light surfaces: original navy lockup.
+ * Dark surfaces: bright official mark (no white plate).
  */
-export default function Logo({ size = 18, onDark = false }) {
-  const img = (
-    <img
-      src="/zeorbit-logo.png"
-      alt="ZeOrbit"
-      style={{ height: size, width: 'auto', display: 'block' }}
-    />
-  )
-
-  if (!onDark) return img
+export default function Logo({ size = 40, onDark = false }) {
+  const src = onDark ? '/zeorbit-logo-nav.png?v=8' : '/zeorbit-logo.png?v=9'
+  const aspect = onDark ? 632 / 180 : 1010 / 293
 
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', background: '#fff', borderRadius: 8, padding: '4px 8px' }}>
-      {img}
-    </span>
+    <img
+      src={src}
+      alt="ZeOrbit"
+      width={Math.round(size * aspect)}
+      height={size}
+      loading="eager"
+      decoding="async"
+      style={{
+        height: size,
+        width: 'auto',
+        display: 'block',
+        maxWidth: 'min(220px, 48vw)',
+        objectFit: 'contain',
+      }}
+    />
   )
 }

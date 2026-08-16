@@ -123,7 +123,7 @@ function ServiceSeo() {
       <rect x="372" y="116" width="48" height="8" rx="4" fill="#4ade80" />
       <rect x="372" y="134" width="36" height="8" rx="4" fill="#64748b" />
       <rect x="372" y="152" width="48" height="8" rx="4" fill="#38bdf8" />
-      <text x="396" y="182" textAnchor="middle" fill="#fff" fontSize="11" fontWeight="700" fontFamily="system-ui,sans-serif">
+      <text x="396" y="182" textAnchor="middle" fill="#fff" fontSize="11" fontWeight="700" fontFamily="-apple-system, BlinkMacSystemFont, sans-serif">
         SEO
       </text>
     </svg>

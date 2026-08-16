@@ -15,7 +15,7 @@ export default function BrandLoader({ label = 'Loading…' }) {
       }}
     >
       <div style={{ animation: 'zoPulse 1.2s ease-in-out infinite' }}>
-        <Logo size={28} />
+        <Logo size={36} />
       </div>
       <div style={{ fontSize: 13, fontWeight: 500 }}>{label}</div>
       <style>{`

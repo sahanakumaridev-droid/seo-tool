@@ -10,10 +10,10 @@
 /* ── Hero (premium split) ── */
 .wds-hero {
   position: relative;
-  min-height: min(88vh, 820px);
+  min-height: 0;
   display: flex;
   align-items: center;
-  padding: clamp(132px, 15vw, 168px) 0 clamp(64px, 8vw, 96px);
+  padding: clamp(108px, 12vw, 128px) 0 28px;
   overflow: hidden;
   background: #070b14;
   color: #f5f5f7;
@@ -170,7 +170,7 @@
 
 .wds-hero-copy h1 {
   margin: 0;
-  font-family: Outfit, Manrope, system-ui, sans-serif;
+  font-family: var(--font-display);
   font-size: clamp(36px, 5.2vw, 58px);
   line-height: 1.02;
   letter-spacing: -0.04em;
@@ -332,127 +332,23 @@
 /* ── Sections ── */
 .wds-section {
   background: #ffffff;
-  padding: clamp(72px, 10vw, 120px) 0;
+  padding: 8px 0 24px;
 }
 
 .wds-section-snow {
   background: #f5f5f7;
-}
-
-.wds-blog-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(20px, 3vw, 28px);
-  margin-top: clamp(28px, 4vw, 40px);
-}
-
-.wds-blog-card {
-  min-width: 0;
-}
-
-.wds-blog-card-link {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  text-decoration: none;
-  color: inherit;
-  background: #ffffff;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 18px;
-  overflow: hidden;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.wds-blog-card-link:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
-}
-
-.wds-blog-card-media {
-  aspect-ratio: 16 / 10;
-  background: #0f172a;
-  overflow: hidden;
-}
-
-.wds-blog-card-media img,
-.wds-blog-card-fallback {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.wds-blog-card-fallback {
-  background: linear-gradient(135deg, #1e293b, #0f172a 60%, #ff5a4e33);
-}
-
-.wds-blog-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 22px 22px 24px;
-  flex: 1;
-}
-
-.wds-blog-card-cat {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #ff5a4e;
-}
-
-.wds-blog-card-body h3 {
-  margin: 0;
-  font-size: 1.05rem;
-  line-height: 1.35;
-  letter-spacing: -0.02em;
-}
-
-.wds-blog-card-body p {
-  margin: 0;
-  color: #64748b;
-  font-size: 0.92rem;
-  line-height: 1.55;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.wds-blog-card-body span {
-  margin-top: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding-top: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  color: #18417a;
-}
-
-@media (max-width: 960px) {
-  .wds-blog-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 640px) {
-  .wds-blog-grid {
-    grid-template-columns: 1fr;
-  }
+  padding: 5px 0 24px;
 }
 
 .wds-section-head {
   width: min(720px, 100%);
-  margin: 0 auto var(--cz-block);
+  margin: 0 auto 8px;
   text-align: center;
 }
 
 .wds-section-head h2 {
   margin: 0;
-  font-family: Outfit, Manrope, system-ui, sans-serif;
+  font-family: var(--font-display);
   font-size: clamp(28px, 4.4vw, 46px);
   line-height: 1.05;
   letter-spacing: -0.03em;
@@ -487,7 +383,7 @@
   overflow: hidden;
   background: #f5f5f7;
   transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease;
-  scroll-margin-top: 110px;
+  scroll-margin-top: 96px;
 }
 
 .wds-service:hover {
@@ -587,12 +483,14 @@
   overflow: hidden;
   background: #e8eef6;
   aspect-ratio: 16 / 10;
+  isolation: isolate;
 }
 
 .wds-work-media img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
   display: block;
   transition: transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -720,7 +618,7 @@
 
 .wds-growth-copy h2 {
   margin: 0;
-  font-family: Outfit, Manrope, system-ui, sans-serif;
+  font-family: var(--font-display);
   font-size: clamp(28px, 4vw, 44px);
   line-height: 1.05;
   letter-spacing: -0.03em;
@@ -824,7 +722,7 @@
 
 .wds-support-copy h2 {
   margin: 0;
-  font-family: Outfit, Manrope, system-ui, sans-serif;
+  font-family: var(--font-display);
   font-size: clamp(28px, 3.8vw, 40px);
   line-height: 1.08;
   letter-spacing: -0.03em;
@@ -954,7 +852,7 @@
 
 .wds-final-copy h2 {
   margin: 0;
-  font-family: Outfit, Manrope, system-ui, sans-serif;
+  font-family: var(--font-display);
   font-size: clamp(30px, 4vw, 44px);
   line-height: 1.05;
   letter-spacing: -0.03em;
@@ -1009,7 +907,7 @@
 
 .wds-final-form-head h3 {
   margin: 0;
-  font-family: Outfit, Manrope, system-ui, sans-serif;
+  font-family: var(--font-display);
   font-size: 24px;
   letter-spacing: -0.02em;
   color: #0b1220;
@@ -1026,7 +924,8 @@
 /* ── Responsive ── */
 @media (max-width: 980px) {
   .wds-page {
-    overflow-x: hidden;
+    overflow-x: clip;
+    max-width: 100%;
   }
 
   .wds-hero {
@@ -1037,8 +936,19 @@
   }
 
   .wds-hero-split {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 28px;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .wds-hero-copy,
+  .wds-hero-visual,
+  .wds-section-head,
+  .wds-service,
+  .wds-work-card {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .wds-hero-visual {
@@ -1072,7 +982,7 @@
 
   .wds-hero-copy h1 {
     font-size: clamp(30px, 7.5vw, 44px);
-    max-width: 16ch;
+    max-width: 100%;
   }
 
   .wds-hero-lead {
@@ -1101,7 +1011,8 @@
   }
 
   .wds-section-head h2 {
-    font-size: clamp(26px, 6vw, 36px);
+    font-size: clamp(24px, 6.4vw, 32px);
+    max-width: 100%;
   }
 
   .wds-proof-row {
@@ -1121,9 +1032,8 @@
 
 @media (max-width: 640px) {
   .wds-hero {
-    min-height: min(72vh, 620px);
-    padding-left: 0;
-    padding-right: 0;
+    min-height: 0;
+    padding: 84px 0 24px;
   }
 
   .wds-hero-inner {
@@ -1131,9 +1041,33 @@
     padding-right: 16px;
   }
 
+  .wds-hero-copy,
+  .wds-hero-copy h1,
+  .wds-hero-lead,
+  .wds-section-head,
+  .wds-section-head h2,
+  .wds-section-head p,
+  .wds-section-head .cz-whisper {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    white-space: normal;
+  }
+
   .wds-hero-copy h1 {
-    font-size: clamp(28px, 8.4vw, 36px);
-    line-height: 1.08;
+    font-size: clamp(26px, 7.4vw, 34px);
+    line-height: 1.12;
+  }
+
+  .wds-scroll-hint {
+    display: none;
+  }
+
+  #wds-contact,
+  .wds-service,
+  .wds-section {
+    scroll-margin-top: 72px;
   }
 
   .wds-hero-lead {
@@ -1179,11 +1113,15 @@
   }
 
   .wds-section {
-    padding: clamp(40px, 10vw, 64px) 0;
+    padding: 8px 0 20px;
   }
 
   .wds-final-inner {
     gap: 28px;
+  }
+
+  .wds-final {
+    padding-bottom: calc(28px + 64px + env(safe-area-inset-bottom));
   }
 
   .wds-faq-q {

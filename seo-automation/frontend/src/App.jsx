@@ -91,11 +91,8 @@ export default function App() {
       {/* Premium Dashboard - Full screen, no sidebar */}
       <Route path="/premium" element={<PremiumDashboard />} />
       
-      {/* Root shows the marketing homepage to signed-out visitors, and sends
-          already-signed-in users straight into the tool. */}
-      <Route path="/" element={
-        authed ? <Navigate to="/content" replace /> : <LandingPage />
-      } />
+      {/* Marketing homepage — always public so the product can be sold from `/`. */}
+      <Route path="/" element={<LandingPage />} />
 
       {/* Marketing landing page — also reachable directly at these aliases */}
       <Route path="/revamp-preview" element={<LandingPage />} />

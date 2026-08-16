@@ -1,7 +1,6 @@
 export const PRIMARY_NAV = [
-  { label: 'FEATURES', href: '#features' },
-  { label: 'PLATFORM', href: '#platform' },
-  { label: 'CONTACT', href: '#contact' },
+  { label: 'Product', href: '#features' },
+  { label: 'Pricing', href: '#pricing' },
   { label: 'FAQ', href: '#faq' },
 ]
 
