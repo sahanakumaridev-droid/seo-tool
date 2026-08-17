@@ -92,11 +92,11 @@ export const WDS_WORK = {
       href: 'https://myhomellcnc.com/',
     },
     {
-      title: 'Compass Rose International',
-      meta: 'Corporate · WordPress',
-      image: '/from-zeorbit/portfolio/compass-rose-work.png',
-      alt: 'Compass Rose International website',
-      href: 'https://compassrose-international.com/',
+      title: 'Always Ride On Time',
+      meta: 'Transport · WordPress',
+      image: '/from-zeorbit/portfolio/always-ride.png',
+      alt: 'Always Ride On Time website',
+      href: 'https://alwaysrideontime.com/',
     },
     {
       title: 'Diamond Beauty Lounge',
@@ -106,11 +106,11 @@ export const WDS_WORK = {
       href: 'https://thediamondbeautylounge.com/',
     },
     {
-      title: 'Botani Pizzeria',
-      meta: 'Restaurant · Local SEO',
-      image: '/from-zeorbit/portfolio/botani.jpg',
-      alt: 'Botani Pizzeria website',
-      href: 'https://www.botanipizzeria.com/',
+      title: 'Clairemont Vacuum Repair',
+      meta: 'Local service · WordPress',
+      image: '/from-zeorbit/portfolio/clairemont.png',
+      alt: 'Clairemont Vacuum Repair website',
+      href: 'https://clairemontvacuumrepair.com/',
     },
     {
       title: 'iSuperClean',

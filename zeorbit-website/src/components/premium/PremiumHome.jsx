@@ -13,6 +13,7 @@ import {
   HardHat,
   HeartPulse,
   Home,
+  Hotel,
   LineChart,
   MapPin,
   MessagesSquare,
@@ -63,6 +64,7 @@ const INDUSTRY_ICONS = {
   GraduationCap,
   Smile,
   Handshake,
+  Hotel,
 }
 
 function usePreferMotionVideo() {
@@ -171,31 +173,33 @@ function ServiceStrip({ item }) {
 
   return (
     <Reveal eager className={`cz-strip${item.flip ? ' is-flip' : ''}`} id={item.id}>
-      <div className="cz-strip-copy">
-        <p className="cz-strip-label">{item.label}</p>
-        <h2>{item.title}</h2>
-        <p>{item.line}</p>
-        <Link to={item.href} className="cz-strip-cta">
-          {item.cta}
-          <ArrowRight size={16} strokeWidth={2.4} />
-        </Link>
-      </div>
-      <div className="cz-strip-media">
-        {showVideo ? (
-          <video
-            ref={videoRef}
-            src={item.video}
-            poster={item.image}
-            autoPlay
-            loop
-            muted
-            playsInline
-            preload="auto"
-            onError={() => setVideoFailed(true)}
-          />
-        ) : (
-          <img src={item.image} alt="" loading="lazy" decoding="async" />
-        )}
+      <div className="cz-strip-inner">
+        <div className="cz-strip-copy">
+          <p className="cz-strip-label">{item.label}</p>
+          <h2>{item.title}</h2>
+          <p>{item.line}</p>
+          <Link to={item.href} className="cz-btn-solid">
+            {item.cta}
+            <ArrowRight size={16} strokeWidth={2.4} />
+          </Link>
+        </div>
+        <div className="cz-strip-media">
+          {showVideo ? (
+            <video
+              ref={videoRef}
+              src={item.video}
+              poster={item.image}
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="auto"
+              onError={() => setVideoFailed(true)}
+            />
+          ) : (
+            <img src={item.image} alt="" loading="lazy" decoding="async" />
+          )}
+        </div>
       </div>
     </Reveal>
   )

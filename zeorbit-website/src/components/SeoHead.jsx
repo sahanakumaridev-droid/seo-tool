@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 
-const SITE_URL = 'https://zeorbit.159.198.79.219.nip.io'
+const SITE_URL = 'https://zeorbit.com'
 
 function upsertMeta(attr, key, content) {
   if (!content) return
@@ -45,8 +45,9 @@ export default function SeoHead({
   type = 'website',
 }) {
   useEffect(() => {
-    const url = `${SITE_URL}${path === '/' ? '' : path}`
-    const absImage = image.startsWith('http') ? image : `${SITE_URL}${image}`
+    const origin = window.location.origin
+    const url = `${origin}${path === '/' ? '' : path}`
+    const absImage = image.startsWith('http') ? image : `${origin}${image}`
 
     document.title = title
     upsertMeta('name', 'description', description)
@@ -68,14 +69,17 @@ export default function SeoHead({
       '@context': 'https://schema.org',
       '@type': 'Organization',
       name: 'ZeOrbit',
-      url: SITE_URL,
-      logo: `${SITE_URL}/zeorbit-logo.png`,
+      url: origin,
+      logo: `${origin}/zeorbit-logo.png`,
       email: 'info@zeorbit.com',
       telephone: '+1-619-724-9517',
       areaServed: 'US',
       sameAs: [
         'https://www.facebook.com/zeorbit.web.designers.mobileapp.developers',
         'https://www.linkedin.com/company/zeorbit/',
+        'https://maps.apple/p/VA-_LREgJ5PzDV',
+        'https://maps.app.goo.gl/teVefHUc3yycwkcA7',
+        'https://www.yelp.com/biz/zeorbit-san-diego-2',
         'https://zeorbit.com',
       ],
       address: {
@@ -92,10 +96,10 @@ export default function SeoHead({
       '@context': 'https://schema.org',
       '@type': 'WebSite',
       name: 'ZeOrbit',
-      url: SITE_URL,
+      url: origin,
       potentialAction: {
         '@type': 'SearchAction',
-        target: `${SITE_URL}/seo-ppc#blog`,
+        target: `${origin}/seo-ppc#blog`,
         'query-input': 'required name:search_term_string',
       },
     })

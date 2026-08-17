@@ -268,6 +268,10 @@ class LeadCreate(BaseModel):
     location: str = ""
     budget: Optional[str] = None
     message: Optional[str] = None
+    captcha_id: str = ""
+    captcha_answer: str = ""
+    website_url: str = ""
+    started_at: int = 0
 
 class ProspectRequest(BaseModel):
     industry: str = Field(..., example="roofing")

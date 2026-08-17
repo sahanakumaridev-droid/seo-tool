@@ -131,6 +131,8 @@ app.include_router(images.router,    prefix="/api/images",    tags=["Images"])
 app.include_router(seo_audit.router, prefix="/api/seo-audit", tags=["Site Audit"])
 app.include_router(google_ads.router, prefix="/api/google-ads", tags=["Google Ads"])
 app.include_router(gbp.router,        prefix="/api/gbp",        tags=["Google Business Profile"])
+from routes import google_reviews
+app.include_router(google_reviews.router, prefix="/api/google-reviews", tags=["Google Reviews"])
 if google_live is not None:
     app.include_router(google_live.router, prefix="/api/google",     tags=["Google Live Automation"])
 

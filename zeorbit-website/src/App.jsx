@@ -1,10 +1,11 @@
-import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import ScrollToTop from './components/ScrollToTop'
 import SiteDock from './components/SiteDock'
 import LandingPage from './pages/LandingPage'
 import ServicePage from './pages/ServicePage'
 import WebsiteDesignPage from './pages/WebsiteDesignPage'
 import PortfolioPage from './pages/PortfolioPage'
+import BlogPage from './pages/BlogPage'
 
 export default function App() {
   return (
@@ -13,7 +14,7 @@ export default function App() {
       <SiteDock />
       <Routes>
         <Route path="/" element={<LandingPage />} />
-        <Route path="/blog" element={<Navigate to="/seo-ppc#blog" replace />} />
+        <Route path="/blog" element={<BlogPage />} />
         <Route path="/website-designing" element={<WebsiteDesignPage />} />
         <Route path="/mobile-apps" element={<ServicePage slug="mobile-apps" />} />
         <Route path="/custom-software" element={<ServicePage slug="custom-software" />} />

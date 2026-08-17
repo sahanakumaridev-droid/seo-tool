@@ -6,11 +6,11 @@ export const NAV_PAGES = {
     navLabel: 'Mobile Apps',
     brand: 'ZeOrbit',
     eyebrow: 'Mobile Apps · iOS & Android',
-    title: 'Apps that feel native — and ship store-ready.',
+    title: 'Apps that feel native and ship store-ready.',
     lead:
       'From first wireframe to App Store and Google Play. ZeOrbit designs and builds mobile products U.S. teams can launch, measure, and grow.',
-    image: '/showcase/mobile-lifestyle.webp',
-    heroTone: 'light',
+    image: '/from-zeorbit/portfolio/app-1.jpg',
+    heroTone: 'pro',
     proof: ['iOS', 'Android', 'Flutter', 'React Native', 'Store launch', 'San Diego HQ'],
     manifesto: {
       title: 'We’re building the future of applications — smart, interconnected, and designed to simplify your life.',
@@ -78,7 +78,7 @@ export const NAV_PAGES = {
         title: 'Native iOS and Android apps.',
         copy: 'Store-ready apps with native performance, clear UX, and a release process U.S. teams can trust — from TestFlight and Play Console through launch.',
         points: ['Swift / Kotlin or high-quality native shells', 'App Store and Google Play submission', 'Push, payments, and device APIs', 'Crash monitoring after launch'],
-        image: '/showcase/mobile-phones-grid.png',
+        image: '/from-zeorbit/portfolio/app-4.jpg',
         cta: 'Start an iOS / Android brief',
       },
       {
@@ -87,7 +87,7 @@ export const NAV_PAGES = {
         title: 'One codebase for both stores.',
         copy: 'Flutter or React Native when you need iOS and Android without shipping two generic apps. Shared logic, platform-aware UI.',
         points: ['Flutter or React Native', 'Shared design system', 'Native modules where it matters', 'One QA and release cadence'],
-        image: '/showcase/mobile-phones-fan.webp',
+        image: '/from-zeorbit/portfolio/app-8.jpg',
         cta: 'Discuss cross-platform',
       },
       {
@@ -96,7 +96,7 @@ export const NAV_PAGES = {
         title: 'A clear path from brief to store.',
         copy: 'Discovery, design, build, and launch on a schedule stakeholders can follow — with demos you can tap, not slide decks.',
         points: ['Week-by-week milestones', 'Design and engineering overlap', 'TestFlight / internal testing', 'Store listing and launch week'],
-        image: '/showcase/mobile-phones-grid.png',
+        image: '/from-zeorbit/portfolio/app-6.jpg',
         cta: 'See a sample timeline',
       },
       {
@@ -105,7 +105,7 @@ export const NAV_PAGES = {
         title: 'Interfaces built for thumbs.',
         copy: 'Flows, visual system, and prototypes designed around the one action that matters — fast, readable, and easy to ship.',
         points: ['User flows and wireframes', 'High-fidelity UI', 'Clickable prototypes', 'Handoff ready for engineering'],
-        image: '/showcase/hero-ui-float.png',
+        image: '/from-zeorbit/portfolio/app-7.jpg',
         cta: 'Improve app UX',
       },
       {
@@ -129,22 +129,22 @@ export const NAV_PAGES = {
       {
         title: 'Consumer mobile products',
         meta: 'iOS · Android · UX',
-        image: '/showcase/mobile-single.png',
+        image: '/from-zeorbit/portfolio/app-4.jpg',
       },
       {
         title: 'Service & field apps',
         meta: 'Offline-ready · APIs',
-        image: '/showcase/mobile-dark-phone.png',
+        image: '/from-zeorbit/portfolio/app-6.jpg',
       },
       {
         title: 'Launch dashboards',
         meta: 'Analytics · Retention',
-        image: '/showcase/work-minimal.png',
+        image: '/from-zeorbit/portfolio/app-1.jpg',
       },
       {
         title: 'Store-ready packaging',
         meta: 'Listing · Screenshots',
-        image: '/showcase/cta-phone.png',
+        image: '/from-zeorbit/portfolio/app-7.jpg',
       },
     ],
     process: [
@@ -299,6 +299,67 @@ export const NAV_PAGES = {
       { num: '03', title: 'Execute', copy: 'Technical work, content, and campaign launches.' },
       { num: '04', title: 'Optimize', copy: 'Iterate with shared reporting — not vanity charts.' },
     ],
+    pricing: {
+      kicker: 'Pricing',
+      title: 'SEO retainers that match the work.',
+      lead: 'Monthly SEO packages for U.S. businesses. Google Ads and social ads are quoted separately — you keep the ad spend.',
+      note: 'Ad spend is billed by Google, Meta, and other platforms. PPC management is scoped after a short campaign brief.',
+      plans: [
+        {
+          name: 'Standard',
+          price: '$599',
+          period: '/mo',
+          copy: 'Local visibility and a clean technical baseline.',
+          cta: 'Start with Standard',
+          features: [
+            'Competitor analysis and keyword research',
+            'Basic website audit',
+            'Up to 15 pages on-page SEO',
+            'Speed, crawl, sitemap, and basic schema',
+            'Monthly blog content',
+            'Backlinks and Google Business Profile',
+            'Social sharing on 2 platforms',
+            'Monthly report plus email, chat, and call support',
+          ],
+        },
+        {
+          name: 'Ultimate',
+          price: '$999',
+          period: '/mo',
+          badge: 'Most popular',
+          featured: true,
+          copy: 'The working retainer for most growing brands.',
+          cta: 'Choose Ultimate',
+          features: [
+            'Advanced keyword research and competitor analysis',
+            'Full website audit',
+            'Up to 30 pages on-page SEO',
+            'Monthly content — blogs, articles, press',
+            'Technical SEO and internal linking',
+            'Off-page SEO and local profile work',
+            'Monthly SEO and work report',
+            'Email, chat, and call support',
+          ],
+        },
+        {
+          name: 'Deluxe',
+          price: '$1,299',
+          period: '/mo',
+          copy: 'Advanced SEO plus site care for competitive markets.',
+          cta: 'Go Deluxe',
+          features: [
+            'Deep competitor analysis and keyword mapping',
+            'Full technical audit and market analysis',
+            'Up to 50 pages plus landing-page SEO',
+            'Content calendar and monthly content',
+            'Core Web Vitals, advanced schema, security',
+            'Guest posts and high-authority outreach',
+            '7+ social platforms and branded graphics',
+            'Quarterly strategy call and priority support',
+          ],
+        },
+      ],
+    },
     growth: {
       kicker: 'Accountable growth',
       title: 'Reporting that answers “what next?”',
@@ -321,6 +382,10 @@ export const NAV_PAGES = {
       {
         q: 'How soon can SEO show results?',
         a: 'Technical fixes can help quickly; durable ranking growth usually compounds over months. We set expectations by competitive landscape.',
+      },
+      {
+        q: 'What do SEO packages cost?',
+        a: 'Monthly retainers start at $599. Standard is $599, Ultimate $999, and Deluxe $1,299. Google Ads and social ads are quoted separately — you pay the platforms for ad spend.',
       },
       {
         q: 'Do you manage Google Ads?',

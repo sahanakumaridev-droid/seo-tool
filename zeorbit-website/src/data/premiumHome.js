@@ -34,7 +34,7 @@ export const SERVICE_STRIPS = [
     line: 'iOS and Android products with clean UX, solid backends, and store-ready delivery.',
     href: '/mobile-apps',
     cta: 'Explore apps',
-    image: '/showcase/pro/ux-app-prototype.jpg',
+    image: '/from-zeorbit/portfolio/app-6.jpg',
     flip: true,
   },
   {
@@ -89,7 +89,7 @@ export const FILM_PANELS = {
 
 export const INDUSTRIES = {
   kicker: 'Industries We Serve',
-  title: 'We understand your industry — and how to grow it.',
+  title: 'We understand your industry and how to grow it.',
   line: 'Focused on digital growth and consumer engagement — helping U.S. brands transform how they show up online.',
   items: [
     { icon: 'UtensilsCrossed', label: 'Food & Beverage', blurb: 'Menus, locations, ordering paths, and brand sites that drive foot traffic and repeat customers.' },
@@ -113,6 +113,7 @@ export const INDUSTRIES = {
     { icon: 'GraduationCap', label: 'Education', blurb: 'Program pages, enrollment paths, and content hubs that help students take the next step.' },
     { icon: 'Smile', label: 'Dental', blurb: 'Clean clinic sites, treatment pages, and booking UX that makes choosing your practice easy.' },
     { icon: 'Handshake', label: 'Non Profit', blurb: 'Mission-led websites, donation paths, and storytelling that grows supporters and community impact.' },
+    { icon: 'Hotel', label: 'Hospitality', blurb: 'Hotel, restaurant, and guest-experience sites with booking paths that turn browsers into reservations.' },
   ],
 }
 
@@ -143,8 +144,8 @@ export const PORTFOLIO = {
       meta: 'iOS · Android · Cross-platform',
       copy: 'Native and cross-platform apps with real backends, clean UX, and App Store–ready delivery — so your product feels as polished as the brand behind it.',
       result: 'From wireframe to store listing',
-      image: '/showcase/mobile-lifestyle.webp',
-      alt: 'Mobile app and website on phone and laptop',
+      image: '/from-zeorbit/portfolio/app-1.jpg',
+      alt: 'Store-ready mobile app screens designed by ZeOrbit',
       href: '/mobile-apps',
       tone: 'light',
       flip: true,

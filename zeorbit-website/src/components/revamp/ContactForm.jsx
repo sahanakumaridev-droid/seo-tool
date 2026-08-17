@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { RefreshCw } from 'lucide-react'
 
 const SERVICE_OPTIONS = [
   { value: 'Website Design & Development', label: 'Website (WordPress / Shopify / Wix / Squarespace)' },
@@ -24,10 +25,10 @@ const CONTACT_PAGE_SERVICES = [
 
 const BUDGET_OPTIONS = [
   { value: '', label: 'Select budget (optional)' },
-  { value: '<$5k', label: 'Under $5k' },
+  { value: '<$2k', label: 'Under $2k' },
+  { value: '$2k-$5k', label: '$2k–$5k' },
   { value: '$5k-$15k', label: '$5k–$15k' },
-  { value: '$15k-$50k', label: '$15k–$50k' },
-  { value: '$50k+', label: '$50k+' },
+  { value: '$15k+', label: '$15k+' },
 ]
 
 function isValidEmail(email) {
@@ -50,8 +51,12 @@ export default function ContactForm({
     budget: '',
     service: isContactPage ? '' : (SERVICE_OPTIONS[0]?.value ?? ''),
     message: '',
+    website_url: '',
+    captcha_answer: '',
   })
 
+  const [captcha, setCaptcha] = useState({ id: '', image: '' })
+  const [startedAt] = useState(() => Date.now())
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState({ type: 'idle', message: '' })
   const [touched, setTouched] = useState({})
@@ -70,9 +75,13 @@ export default function ContactForm({
     return {
       source: isContactPage ? 'contact_page' : 'landing_page',
       contact_name: trimmed.name,
+      captcha_id: captcha.id,
+      captcha_answer: form.captcha_answer.trim(),
+      website_url: form.website_url,
+      started_at: startedAt,
       ...trimmed,
     }
-  }, [form, isContactPage])
+  }, [form, isContactPage, captcha.id, startedAt])
 
   const errors = useMemo(() => {
     const next = {}
@@ -82,6 +91,7 @@ export default function ContactForm({
       else if (!isValidEmail(payload.email)) next.email = 'Enter a valid email'
     }
     if (touched.message && !payload.message) next.message = 'Tell us a bit about the project'
+    if (touched.captcha_answer && !payload.captcha_answer) next.captcha_answer = 'Enter the code from the image'
     return next
   }, [payload, touched])
 
@@ -89,6 +99,7 @@ export default function ContactForm({
     if (!payload.name) return false
     if (!payload.email || !isValidEmail(payload.email)) return false
     if (!payload.message) return false
+    if (!payload.captcha_id || !payload.captcha_answer) return false
     return true
   }, [payload])
 
@@ -96,9 +107,26 @@ export default function ContactForm({
     setTouched((p) => ({ ...p, [field]: true }))
   }
 
+  async function loadCaptcha() {
+    const apiBase = (import.meta.env.VITE_API_URL || '/api').trim().replace(/\/$/, '')
+    try {
+      const res = await fetch(`${apiBase}/leads/captcha`)
+      if (!res.ok) throw new Error('captcha')
+      const data = await res.json()
+      setCaptcha({ id: data.id || '', image: data.image || '' })
+      setForm((p) => ({ ...p, captcha_answer: '' }))
+    } catch {
+      setCaptcha({ id: '', image: '' })
+    }
+  }
+
+  useEffect(() => {
+    loadCaptcha()
+  }, [])
+
   async function onSubmit(e) {
     e.preventDefault()
-    setTouched({ name: true, email: true, message: true })
+    setTouched({ name: true, email: true, message: true, captcha_answer: true })
     if (!canSubmit || loading) return
 
     setLoading(true)
@@ -137,12 +165,16 @@ export default function ContactForm({
         budget: '',
         service: isContactPage ? '' : (SERVICE_OPTIONS[0]?.value ?? ''),
         message: '',
+        website_url: '',
+        captcha_answer: '',
       })
+      loadCaptcha()
     } catch (err) {
       setStatus({
         type: 'error',
         message: err?.message ? `Could not submit: ${err.message}` : 'Could not submit. Please try again.',
       })
+      loadCaptcha()
     } finally {
       setLoading(false)
     }
@@ -307,6 +339,51 @@ export default function ContactForm({
           />
           {errors.message ? <span className="rv-field-error">{errors.message}</span> : null}
         </label>
+
+        <div className="rv-hp" aria-hidden="true">
+          <label>
+            Website
+            <input
+              tabIndex={-1}
+              autoComplete="off"
+              value={form.website_url}
+              onChange={(e) => setForm((p) => ({ ...p, website_url: e.target.value }))}
+            />
+          </label>
+        </div>
+
+        <div className="rv-captcha">
+          <div className="rv-captcha-image">
+            {captcha.image ? (
+              <img src={captcha.image} alt="Captcha code" width={188} height={58} />
+            ) : (
+              <span>Loading code…</span>
+            )}
+            <button type="button" className="rv-captcha-refresh" onClick={loadCaptcha} aria-label="Refresh captcha">
+              <RefreshCw size={16} strokeWidth={2.3} />
+            </button>
+          </div>
+          <label className="rv-label rv-captcha-field">
+            <span className="rv-label-row">
+              Type the code <em className="rv-req">*</em>
+            </span>
+            <input
+              className={`rv-input${errors.captcha_answer ? ' is-invalid' : ''}`}
+              value={form.captcha_answer}
+              onChange={(e) => setForm((p) => ({ ...p, captcha_answer: e.target.value.toUpperCase() }))}
+              onBlur={() => markTouched('captcha_answer')}
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              inputMode="text"
+              maxLength={8}
+              placeholder="5-character code"
+              required
+              aria-invalid={Boolean(errors.captcha_answer)}
+            />
+            {errors.captcha_answer ? <span className="rv-field-error">{errors.captcha_answer}</span> : null}
+          </label>
+        </div>
 
         {status.type !== 'idle' ? (
           <div

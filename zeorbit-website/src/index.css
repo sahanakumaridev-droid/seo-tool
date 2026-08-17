@@ -410,6 +410,21 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
 .zo-topbar-social-link.is-youtube { background: #ff0000; }
 .zo-topbar-social-link.is-x { background: #111111; border: 1px solid rgba(255, 255, 255, 0.2); }
 .zo-topbar-social-link.is-pinterest { background: #e60023; }
+.zo-topbar-social-link.is-apple-maps { background: #000000; }
+.zo-topbar-social-link.is-google-maps {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+.zo-topbar-social-link.is-yelp { background: #d32323; }
+.zo-topbar-social-link.is-apple-maps svg,
+.zo-topbar-social-link.is-yelp svg {
+  width: 13px;
+  height: 13px;
+}
+.zo-topbar-social-link.is-google-maps svg {
+  width: 15px;
+  height: 15px;
+}
 
 .zo-topbar-social-link:hover {
   transform: translateY(-1px);
@@ -492,7 +507,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
 .zo-header-social-link.is-instagram,
 .zo-header-social-link.is-youtube,
 .zo-header-social-link.is-x,
-.zo-header-social-link.is-pinterest {
+.zo-header-social-link.is-pinterest,
+.zo-header-social-link.is-apple-maps,
+.zo-header-social-link.is-google-maps,
+.zo-header-social-link.is-yelp {
   background: transparent;
   color: #111111;
   border: 0;
@@ -883,6 +901,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
 .zo-mobile-social {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 14px 4px 6px;
 }
@@ -918,6 +937,28 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
 .zo-mobile-social a.is-x {
   background: #111111;
   border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.zo-mobile-social a.is-pinterest {
+  background: #e60023;
+}
+
+.zo-mobile-social a.is-apple-maps {
+  background: #000000;
+}
+
+.zo-mobile-social a.is-google-maps {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.zo-mobile-social a.is-yelp {
+  background: #d32323;
+}
+
+.zo-mobile-social a.is-google-maps svg.zo-social-logo {
+  width: 18px;
+  height: 18px;
 }
 
 .zo-mobile-social svg {
@@ -2679,6 +2720,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
   display: flex;
   flex-direction: column;
   gap: 16px;
+  position: relative;
 }
 
 .rv-form-grid {
@@ -2805,6 +2847,75 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
   font-weight: 600;
 }
 
+.rv-hp {
+  position: absolute;
+  left: -10000px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.rv-captcha {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px 16px;
+  align-items: end;
+}
+
+.rv-captcha-image {
+  position: relative;
+  width: 188px;
+  height: 58px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #0b1220;
+  flex-shrink: 0;
+}
+
+.rv-captcha-image img {
+  display: block;
+  width: 188px;
+  height: 58px;
+}
+
+.rv-captcha-image span {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rv-captcha-refresh {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  cursor: pointer;
+  transition: background 160ms ease, transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.rv-captcha-refresh:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.rv-captcha-refresh:active {
+  transform: scale(0.97);
+}
+
+.rv-captcha-field {
+  min-width: 0;
+}
+
 .rv-contact-actions {
   margin-top: 4px;
   display: flex;
@@ -2900,6 +3011,11 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
 
   .rv-submit-btn {
     width: 100%;
+  }
+
+  .rv-captcha {
+    grid-template-columns: 1fr;
+    justify-items: start;
   }
 }
 
@@ -3630,10 +3746,13 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
 
 .zo-contact-map-frame iframe {
   position: absolute;
-  inset: 0;
+  top: -88px;
+  right: -40px;
+  bottom: -108px;
+  left: -120px;
   z-index: 0;
-  width: 100%;
-  height: 100%;
+  width: calc(100% + 160px);
+  height: calc(100% + 196px);
   border: 0;
   display: block;
   pointer-events: none;
@@ -4986,6 +5105,29 @@ html.zo-a11y-dark body {
   background: #e60023;
 }
 
+.zo-site-footer-social a.is-apple-maps,
+.zo-footer-social a.is-apple-maps {
+  background: #000000;
+}
+
+.zo-site-footer-social a.is-google-maps,
+.zo-footer-social a.is-google-maps {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.zo-site-footer-social a.is-yelp,
+.zo-footer-social a.is-yelp {
+  background: #d32323;
+}
+
+.zo-site-footer-social a.is-google-maps svg.zo-social-logo,
+.zo-footer-social a.is-google-maps svg.zo-social-logo {
+  fill: none;
+  width: 18px;
+  height: 18px;
+}
+
 .zo-site-footer-social a:hover {
   transform: translateY(-2px);
   filter: brightness(1.08);
@@ -4994,6 +5136,9 @@ html.zo-a11y-dark body {
 .zo-site-footer-social svg {
   width: 15px;
   height: 15px;
+}
+
+.zo-site-footer-social svg:not(.zo-social-logo) {
   fill: currentColor;
 }
 

@@ -67,6 +67,8 @@ server {
         add_header Content-Type text/plain;
     }
 
+    include /etc/nginx/snippets/zeorbit-redirects.conf;
+
     # SPA fallback — do not cache HTML shells
     location / {
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;

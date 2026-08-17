@@ -1,6 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Star } from 'lucide-react'
+import { fetchGoogleReviews } from '../../api'
 import { GOOGLE_PROFILE, GOOGLE_REVIEWS } from '../../data/googleReviews'
+
+const STAR_GOLD = '#fbbc04'
+
+function Stars({ size = 16, count = 5 }) {
+  return (
+    <span className="cz-gr-stars" aria-hidden="true">
+      {Array.from({ length: count }).map((_, i) => (
+        <Star key={i} size={size} fill={STAR_GOLD} color={STAR_GOLD} strokeWidth={1.25} />
+      ))}
+    </span>
+  )
+}
 
 const AUTOPLAY_MS = 4200
 
@@ -47,10 +60,11 @@ function ReviewCard({ review }) {
       <div className="cz-gr-card-bottom">
         <div>
           <strong>{review.author}</strong>
-          <span>GOOGLE REVIEW</span>
+          <span className="cz-gr-source">GOOGLE REVIEW</span>
         </div>
         <div className="cz-gr-rating-pill" aria-label={`${review.rating} out of 5 stars`}>
-          {review.rating.toFixed(1)}★
+          <Stars size={13} count={Math.round(review.rating)} />
+          <span className="cz-gr-rating-num">{review.rating.toFixed(1)}</span>
         </div>
       </div>
     </article>
@@ -58,13 +72,36 @@ function ReviewCard({ review }) {
 }
 
 export default function PremiumGoogleReviews() {
-  const reviews = GOOGLE_REVIEWS
+  const [reviews, setReviews] = useState(GOOGLE_REVIEWS)
+  const [profile, setProfile] = useState(GOOGLE_PROFILE)
   const [index, setIndex] = useState(0)
   const [perView, setPerView] = useState(2)
   const [stepPx, setStepPx] = useState(0)
   const [paused, setPaused] = useState(false)
   const viewportRef = useRef(null)
   const trackRef = useRef(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetchGoogleReviews()
+      .then((res) => {
+        const data = res.data
+        if (cancelled || !data?.live) return
+        const nextReviews = Array.isArray(data.reviews) ? data.reviews.filter((r) => r?.text) : []
+        if (nextReviews.length) setReviews(nextReviews)
+        setProfile((prev) => ({
+          ...prev,
+          rating: data.rating || prev.rating,
+          reviewCount: data.reviewCount || prev.reviewCount,
+          reviewsUrl: data.reviewsUrl || prev.reviewsUrl,
+          name: data.name || prev.name,
+        }))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     const sync = () => {
@@ -129,9 +166,16 @@ export default function PremiumGoogleReviews() {
         <header className="cz-gr-head">
           <div className="cz-gr-head-copy">
             <h2>What Our Clients Say</h2>
-            <a className="cz-gr-google-meta" href={GOOGLE_PROFILE.reviewsUrl} target="_blank" rel="noreferrer">
+            <a
+              className="cz-gr-google-meta"
+              href={profile.reviewsUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`${profile.rating} on Google`}
+            >
               <GoogleMark size={18} />
-              <strong>{GOOGLE_PROFILE.rating}</strong>
+              <strong>{profile.rating}</strong>
+              <Stars size={16} />
               <span>on Google</span>
             </a>
           </div>
@@ -163,8 +207,8 @@ export default function PremiumGoogleReviews() {
               '--cz-gr-per': perView,
             }}
           >
-            {reviews.map((review) => (
-              <div key={review.author} className="cz-gr-slide">
+            {reviews.map((review, i) => (
+              <div key={`${review.author}-${review.when || i}`} className="cz-gr-slide">
                 <ReviewCard review={review} />
               </div>
             ))}
@@ -172,28 +216,30 @@ export default function PremiumGoogleReviews() {
         </div>
 
         <div className="cz-gr-controls">
-          <div className="cz-gr-arrows">
-            <button type="button" className="cz-gr-arrow" onClick={prev} aria-label="Previous reviews">
-              <ChevronLeft size={20} strokeWidth={2.4} />
-            </button>
-            <button type="button" className="cz-gr-arrow" onClick={next} aria-label="Next reviews">
-              <ChevronRight size={20} strokeWidth={2.4} />
-            </button>
+          <div className="cz-gr-nav">
+            <div className="cz-gr-arrows">
+              <button type="button" className="cz-gr-arrow" onClick={prev} aria-label="Previous reviews">
+                <ChevronLeft size={20} strokeWidth={2.4} />
+              </button>
+              <button type="button" className="cz-gr-arrow" onClick={next} aria-label="Next reviews">
+                <ChevronRight size={20} strokeWidth={2.4} />
+              </button>
+            </div>
+            <div className="cz-gr-dots" role="tablist" aria-label="Review pages">
+              {Array.from({ length: pages }).map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  role="tab"
+                  aria-selected={i === index}
+                  className={`cz-gr-dot${i === index ? ' is-active' : ''}`}
+                  onClick={() => setIndex(i)}
+                  aria-label={`Go to review set ${i + 1}`}
+                />
+              ))}
+            </div>
           </div>
-          <div className="cz-gr-dots" role="tablist" aria-label="Review pages">
-            {Array.from({ length: pages }).map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                role="tab"
-                aria-selected={i === index}
-                className={`cz-gr-dot${i === index ? ' is-active' : ''}`}
-                onClick={() => setIndex(i)}
-                aria-label={`Go to review set ${i + 1}`}
-              />
-            ))}
-          </div>
-          <a className="cz-gr-write" href={GOOGLE_PROFILE.writeReviewUrl} target="_blank" rel="noreferrer">
+          <a className="cz-gr-write" href={profile.writeReviewUrl} target="_blank" rel="noreferrer">
             Review us on Google
           </a>
         </div>

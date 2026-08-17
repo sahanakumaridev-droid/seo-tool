@@ -5,6 +5,7 @@ import ContactForm from '../components/revamp/ContactForm'
 import SiteFooter from '../components/SiteFooter'
 import ServiceOffers from '../components/ServiceOffers'
 import GrowthPanel from '../components/GrowthPanel'
+import WorkCarousel from '../components/WorkCarousel'
 import { Reveal } from '../components/premium/Reveal'
 import { SITE_CONTACT } from '../data/revampContent'
 import { useHashScroll, scrollToHashId } from '../hooks/useHashScroll'
@@ -148,42 +149,7 @@ export default function WebsiteDesignPage() {
             <h2>{WDS_WORK.title}</h2>
             <p className="cz-whisper">{WDS_WORK.lead}</p>
           </Reveal>
-          <div className="wds-work-grid">
-            {WDS_WORK.items.map((item, i) => (
-              <Reveal
-                key={item.title}
-                className="wds-work-card"
-                style={{ transitionDelay: `${i * 90}ms` }}
-              >
-                {item.href ? (
-                  <a
-                    className="wds-work-link"
-                    href={item.href}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <div className="wds-work-media">
-                      <img src={item.image} alt={item.alt || item.title} loading="lazy" decoding="async" />
-                    </div>
-                    <div className="wds-work-meta">
-                      <h3>{item.title}</h3>
-                      <p>{item.meta}</p>
-                    </div>
-                  </a>
-                ) : (
-                  <>
-                    <div className="wds-work-media">
-                      <img src={item.image} alt={item.alt || item.title} loading="lazy" decoding="async" />
-                    </div>
-                    <div className="wds-work-meta">
-                      <h3>{item.title}</h3>
-                      <p>{item.meta}</p>
-                    </div>
-                  </>
-                )}
-              </Reveal>
-            ))}
-          </div>
+          <WorkCarousel items={WDS_WORK.items} />
         </div>
       </section>
 

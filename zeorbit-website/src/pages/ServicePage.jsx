@@ -7,6 +7,8 @@ import SiteFooter from '../components/SiteFooter'
 import ServiceOffers from '../components/ServiceOffers'
 import ServiceStudio from '../components/ServiceStudio'
 import GrowthPanel from '../components/GrowthPanel'
+import WorkCarousel from '../components/WorkCarousel'
+import PricingPlans from '../components/PricingPlans'
 import { Reveal } from '../components/premium/Reveal'
 import { SITE_CONTACT } from '../data/revampContent'
 import { NAV_PAGES } from '../data/navPages'
@@ -217,42 +219,83 @@ function ContactPageLayout({ page }) {
 function ServiceLanding({ page }) {
   const [openFaq, setOpenFaq] = useState(-1)
   useHashScroll()
+  const isProHero = page.heroTone === 'pro'
 
   return (
     <div className="cz-page wds-page" data-hero={page.heroTone || 'light'}>
       <RevampHeader />
 
-      <section className="wds-hero" aria-label={page.navLabel}>
-        <div className="wds-hero-bg" aria-hidden="true">
-          <img
-            src={page.image}
-            alt=""
-            width={1400}
-            height={900}
-            loading="eager"
-            decoding="async"
-            fetchPriority="high"
-          />
-          <div className="wds-hero-shade" />
-          <div className="wds-hero-grain" />
-        </div>
-        <div className="wds-hero-inner">
-          <Reveal className="wds-hero-copy" eager>
-            <p className="wds-hero-eyebrow">{page.eyebrow}</p>
-            <h1>{page.title}</h1>
-            <p className="wds-hero-lead">{page.lead}</p>
-            <div className="wds-hero-cta">
-              <button type="button" className="cz-btn-solid" onClick={scrollToContact}>
-                Get a free quote
-                <ArrowRight size={18} strokeWidth={2.4} />
-              </button>
-              <a className="wds-hero-ghost" href={`tel:${SITE_CONTACT.phoneTel}`}>
-                <Phone size={15} strokeWidth={2.4} />
-                Call {SITE_CONTACT.phone}
-              </a>
+      <section className={`wds-hero${isProHero ? ' wds-hero-pro' : ''}`} aria-label={page.navLabel}>
+        {isProHero ? (
+          <>
+            <div className="wds-hero-atmosphere" aria-hidden="true">
+              <div className="wds-hero-glow" />
+              <div className="wds-hero-grain" />
             </div>
-          </Reveal>
-        </div>
+            <div className="wds-hero-inner wds-hero-split">
+              <Reveal className="wds-hero-copy" eager>
+                <p className="wds-hero-eyebrow">{page.eyebrow}</p>
+                <h1>{page.title}</h1>
+                <p className="wds-hero-lead">{page.lead}</p>
+                <div className="wds-hero-cta">
+                  <button type="button" className="cz-btn-solid" onClick={scrollToContact}>
+                    Get a free quote
+                    <ArrowRight size={18} strokeWidth={2.4} />
+                  </button>
+                  <a className="wds-hero-ghost" href={`tel:${SITE_CONTACT.phoneTel}`}>
+                    <Phone size={15} strokeWidth={2.4} />
+                    Call {SITE_CONTACT.phone}
+                  </a>
+                </div>
+              </Reveal>
+              <div className="wds-hero-visual" aria-hidden="true">
+                <img
+                  className="wds-hero-device is-ui-board"
+                  src={page.image}
+                  alt=""
+                  width={1500}
+                  height={1500}
+                  loading="eager"
+                  decoding="async"
+                  fetchPriority="high"
+                />
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="wds-hero-bg" aria-hidden="true">
+              <img
+                src={page.image}
+                alt=""
+                width={1400}
+                height={900}
+                loading="eager"
+                decoding="async"
+                fetchPriority="high"
+              />
+              <div className="wds-hero-shade" />
+              <div className="wds-hero-grain" />
+            </div>
+            <div className="wds-hero-inner">
+              <Reveal className="wds-hero-copy" eager>
+                <p className="wds-hero-eyebrow">{page.eyebrow}</p>
+                <h1>{page.title}</h1>
+                <p className="wds-hero-lead">{page.lead}</p>
+                <div className="wds-hero-cta">
+                  <button type="button" className="cz-btn-solid" onClick={scrollToContact}>
+                    Get a free quote
+                    <ArrowRight size={18} strokeWidth={2.4} />
+                  </button>
+                  <a className="wds-hero-ghost" href={`tel:${SITE_CONTACT.phoneTel}`}>
+                    <Phone size={15} strokeWidth={2.4} />
+                    Call {SITE_CONTACT.phone}
+                  </a>
+                </div>
+              </Reveal>
+            </div>
+          </>
+        )}
       </section>
 
       <section className="wds-proof" aria-label="Capabilities">
@@ -274,19 +317,7 @@ function ServiceLanding({ page }) {
             <h2>Proof in the product.</h2>
             <p className="cz-whisper">Imagery from real builds and growth systems — not stock filler.</p>
           </Reveal>
-          <div className="wds-work-grid">
-            {page.work.map((item, i) => (
-              <Reveal key={item.title} className="wds-work-card">
-                <div className="wds-work-media">
-                  <img src={item.image} alt="" loading="lazy" decoding="async" />
-                </div>
-                <div className="wds-work-meta">
-                  <h3>{item.title}</h3>
-                  <p>{item.meta}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
+          <WorkCarousel items={page.work} />
         </div>
       </section>
 
@@ -306,6 +337,8 @@ function ServiceLanding({ page }) {
           </ol>
         </div>
       </section>
+
+      {page.pricing ? <PricingPlans pricing={page.pricing} onCta={scrollToContact} /> : null}
 
       {page.growth ? (
         <section className="wds-growth">

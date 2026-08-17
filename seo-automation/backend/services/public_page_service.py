@@ -678,6 +678,10 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
   .cc-form .cc-btn {{ background:var(--brand); color:#fff; padding:12px 18px; font-size:14px; }}
   .cc-form-msg {{ font-family:var(--sans); font-size:13.5px; color:var(--ink); margin-top:14px; display:none; text-align:center; }}
   .cc-form-msg.show {{ display:block; }}
+  .cc-hp {{ position:absolute; left:-10000px; width:1px; height:1px; overflow:hidden; }}
+  .cc-captcha {{ position:relative; display:grid; gap:8px; }}
+  .cc-captcha img {{ width:100%; height:58px; object-fit:contain; object-position:left; background:#0b1220; border-radius:6px; }}
+  .cc-captcha-refresh {{ position:absolute; top:8px; right:8px; width:28px; height:28px; border:0; border-radius:6px; background:rgba(255,255,255,.14); color:#fff; cursor:pointer; }}
 
   @media (max-width:800px) {{
     .contact-card {{ grid-template-columns:1fr; }}
@@ -886,6 +890,14 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
         <form class="cc-form" id="ccLeadForm">
           <input type="email" name="email" placeholder="Your email" required />
           <input type="tel" name="phone" placeholder="Phone number" required />
+          <div class="cc-hp" aria-hidden="true">
+            <label>Website <input type="text" name="website_url" tabindex="-1" autocomplete="off" /></label>
+          </div>
+          <div class="cc-captcha">
+            <img id="ccCaptchaImg" alt="Captcha code" width="188" height="58" />
+            <button type="button" class="cc-captcha-refresh" id="ccCaptchaRefresh" aria-label="Refresh captcha">↻</button>
+            <input type="text" name="captcha_answer" id="ccCaptchaAnswer" placeholder="Type the code" required maxlength="8" autocomplete="off" spellcheck="false" />
+          </div>
           <button type="submit" class="cc-btn">Send</button>
         </form>
         <div class="cc-form-msg" id="ccLeadMsg"></div>
@@ -907,7 +919,18 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
     var ccOpenFooter=document.getElementById('ccOpenDialogFooter');
     var ccCloseBtn=document.getElementById('ccCloseDialog');
     var ccForm=document.getElementById('ccLeadForm');
-    function openLead(){{ if(leadDialog) leadDialog.showModal(); }}
+    var ccCaptchaId='';
+    var ccStartedAt=Date.now();
+    function loadCaptcha(){{
+      fetch('/api/leads/captcha').then(function(r){{ return r.json(); }}).then(function(data){{
+        ccCaptchaId=data.id||'';
+        var img=document.getElementById('ccCaptchaImg');
+        if(img && data.image) img.src=data.image;
+        var ans=document.getElementById('ccCaptchaAnswer');
+        if(ans) ans.value='';
+      }}).catch(function(){{}});
+    }}
+    function openLead(){{ if(leadDialog){{ leadDialog.showModal(); loadCaptcha(); }} }}
     if(leadDialog && ccOpenBtn){{
       ccOpenBtn.addEventListener('click', openLead);
       if(ccCloseBtn) ccCloseBtn.addEventListener('click', function(){{ leadDialog.close(); }});
@@ -919,9 +942,11 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
       document.querySelectorAll('.ft-col').forEach(function(el){{ el.removeAttribute('open'); }});
     }}
     if(ccForm){{
+      var refresh=document.getElementById('ccCaptchaRefresh');
+      if(refresh) refresh.addEventListener('click', loadCaptcha);
       ccForm.addEventListener('submit', function(e){{
         e.preventDefault();
-        var btn=ccForm.querySelector('button');
+        var btn=ccForm.querySelector('.cc-btn');
         btn.disabled=true; btn.textContent='Sending…';
         fetch('/api/leads/', {{
           method:'POST',
@@ -933,7 +958,11 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
             website: {json.dumps(WEBSITE)},
             location: {json.dumps(location)},
             service: {json.dumps(biz)},
-            message: 'Lead captured from public SEO page: ' + window.location.href
+            message: 'Lead captured from public SEO page: ' + window.location.href,
+            captcha_id: ccCaptchaId,
+            captcha_answer: (document.getElementById('ccCaptchaAnswer')||{{}}).value || '',
+            website_url: (ccForm.website_url && ccForm.website_url.value) || '',
+            started_at: ccStartedAt
           }})
         }}).then(function(r){{ if(!r.ok) throw new Error('bad status'); return r.json(); }})
           .then(function(){{
@@ -944,8 +973,9 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
           }})
           .catch(function(){{
             btn.disabled=false; btn.textContent='Send';
+            loadCaptcha();
             var msg=document.getElementById('ccLeadMsg');
-            msg.textContent='Something went wrong — please call us instead.';
+            msg.textContent='Check the captcha code and try again, or call us.';
             msg.classList.add('show');
           }});
       }});

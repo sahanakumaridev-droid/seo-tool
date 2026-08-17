@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Mail, Phone } from 'lucide-react'
 import Logo from './Logo'
+import SocialBrandIcon from './SocialBrandIcon'
 import { SITE_CONTACT } from '../data/revampContent'
 
 const OFFER_LINKS = [
@@ -25,20 +26,6 @@ const SPECIAL_LINKS = [
   { label: 'Blogs', to: '/blog' },
 ]
 
-export const SOCIAL_ICONS = {
-  Facebook:
-    'M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H8v3h2v7h3v-7h3l1-3h-4v-2c0-.6.4-1 1-1z',
-  LinkedIn:
-    'M6.5 9.5H4V20h2.5V9.5zM5.2 4A1.5 1.5 0 1 0 5.2 7a1.5 1.5 0 0 0 0-3zM20 13.3c0-3-1.6-4.4-3.7-4.4-1.7 0-2.5.9-2.9 1.6V9.5H11V20h2.5v-5.6c0-1.5.3-2.9 2.1-2.9 1.8 0 1.9 1.6 1.9 3V20H20v-6.7z',
-  Instagram:
-    'M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zm5 4.5A4.5 4.5 0 1 0 12 16.5 4.5 4.5 0 0 0 12 7.5zm0 7.2a2.7 2.7 0 1 1 0-5.4 2.7 2.7 0 0 1 0 5.4zM17.2 6.6a1 1 0 1 0 0 2 1 1 0 0 0 0-2z',
-  YouTube:
-    'M21.6 8.2a2.5 2.5 0 0 0-1.8-1.8C18.2 6 12 6 12 6s-6.2 0-7.8.4A2.5 2.5 0 0 0 2.4 8.2 26 26 0 0 0 2 12a26 26 0 0 0 .4 3.8 2.5 2.5 0 0 0 1.8 1.8C5.8 18 12 18 12 18s6.2 0 7.8-.4a2.5 2.5 0 0 0 1.8-1.8A26 26 0 0 0 22 12a26 26 0 0 0-.4-3.8zM10 14.8V9.2L15.2 12 10 14.8z',
-  X: 'M17.5 4h-2.3l-3.1 4.1L9 4H4.5l5.2 7.2L4.7 20h2.3l3.4-4.5L14.9 20H19.5l-5.4-7.5L17.5 4zm-1.2 14.5h-1.2L7.8 5.4h1.3l7.2 13.1z',
-  Pinterest:
-    'M12 3a9 9 0 0 0-3.3 17.4c-.1-.7-.2-1.8 0-2.6l1.2-5.1s-.3-.6-.3-1.5c0-1.4.8-2.4 1.8-2.4.9 0 1.3.6 1.3 1.4 0 .9-.6 2.2-.9 3.4-.2.9.5 1.7 1.5 1.7 1.8 0 3.1-2.3 3.1-5.1 0-2.1-1.4-3.7-4-3.7-2.9 0-4.7 2.2-4.7 4.6 0 .9.3 1.8.7 2.3.1.1.1.2.1.3l-.3 1c0 .2-.2.2-.3.1-1.3-.6-2-2.2-2-3.6 0-2.7 2.3-5.9 6.7-5.9 3.6 0 6 2.6 6 5.4 0 3.7-2.1 6.5-5.1 6.5-1 0-2-.6-2.3-1.2l-.6 2.4c-.2.9-.8 2-1.2 2.7A9 9 0 1 0 12 3z',
-}
-
 export default function SiteFooter() {
   const year = new Date().getFullYear()
 
@@ -51,8 +38,10 @@ export default function SiteFooter() {
               <Logo size={40} />
             </Link>
             <p>
-              ZeOrbit builds websites on WordPress, Shopify, Wix, and Squarespace — and mobile apps for
-              iOS and Android. Serving clients worldwide with hands-on strategy from first sketch to launch.
+              ZeOrbit is an award-winning web and mobile app development company, building high-performing
+              websites on WordPress, Shopify, Wix, and Squarespace, along with custom iOS and Android apps.
+              We serve clients worldwide with strategic guidance from the first idea and design sketch to
+              final launch.
             </p>
             <div className="zo-site-footer-social">
               {SITE_CONTACT.social.map((s) => (
@@ -62,11 +51,9 @@ export default function SiteFooter() {
                   target="_blank"
                   rel="noreferrer"
                   aria-label={s.label}
-                  className={`zo-social is-${s.label.toLowerCase()}`}
+                  className={`zo-social is-${s.label.toLowerCase().replace(/\s+/g, '-')}`}
                 >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d={SOCIAL_ICONS[s.label] || SOCIAL_ICONS.X} />
-                  </svg>
+                  <SocialBrandIcon label={s.label} />
                 </a>
               ))}
             </div>

@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete as sa_delete
@@ -5,6 +6,8 @@ from db import get_session, LeadRecord
 from models.schemas import LeadCreate, ProspectRequest
 from services.leads_service import parse_webhook_lead
 from services.prospecting_service import discover_businesses
+from services.email_service import notify_lead
+from services import captcha_service
 from typing import List, Optional
 
 router = APIRouter()
@@ -43,14 +46,43 @@ async def _persist_many(session: AsyncSession, leads: List[dict]) -> int:
     return added
 
 
+def _client_ip(request: Request) -> str:
+    forwarded = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+    if forwarded:
+        return forwarded
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+@router.get("/captcha")
+async def issue_captcha():
+    """One-time visual challenge for public contact forms."""
+    return captcha_service.issue()
+
+
 @router.post("/", response_model=dict)
-async def create_lead(lead: LeadCreate, session: AsyncSession = Depends(get_session)):
-    """Manually create a lead."""
+async def create_lead(lead: LeadCreate, request: Request, session: AsyncSession = Depends(get_session)):
+    """Manually create a lead and email it to the ZeOrbit inbox."""
+    public = captcha_service.is_public_source(lead.source)
+
+    if public:
+        if captcha_service.honeypot_tripped(lead.website_url):
+            return {"id": 0, "status": "new", "source": lead.source}
+        if captcha_service.rate_limited(_client_ip(request)):
+            raise HTTPException(status_code=429, detail="Too many submissions. Please try again later.")
+        if captcha_service.too_fast(lead.started_at):
+            raise HTTPException(status_code=400, detail="Please complete the form and captcha, then send.")
+        if not captcha_service.verify(lead.captcha_id, lead.captcha_answer):
+            raise HTTPException(status_code=400, detail="Captcha is incorrect. Refresh the code and try again.")
+
     rec = _record_from({**lead.model_dump(), "status": "new"})
     session.add(rec)
     await session.commit()
     await session.refresh(rec)
-    return _to_dict(rec)
+    payload = _to_dict(rec)
+    await asyncio.to_thread(notify_lead, payload)
+    return payload
 
 
 @router.get("/", response_model=List[dict])
@@ -131,4 +163,8 @@ async def lead_webhook(source: str, request: Request, session: AsyncSession = De
     session.add(rec)
     await session.commit()
     await session.refresh(rec)
+    saved = _to_dict(rec)
+    src = (lead.get("source") or source or "").lower()
+    if src.startswith(("landing", "contact", "website")):
+        await asyncio.to_thread(notify_lead, saved)
     return {"received": True, "lead_id": rec.id}

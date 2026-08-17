@@ -8,7 +8,7 @@ export const SITE_CONTACT = {
     mapsUrl:
       'https://www.google.com/maps/search/?api=1&query=4231+Balboa+Avenue+Suite+1340+San+Diego+CA+92117',
     streetEmbed:
-      'https://maps.google.com/maps?q=4231+Balboa+Avenue+San+Diego+CA+92117&z=17&hl=en&t=m&output=embed',
+      'https://maps.google.com/maps?ll=32.80964,-117.20147&z=16&t=m&hl=en&iwloc=&output=embed',
   },
   offices: [
     {
@@ -17,7 +17,7 @@ export const SITE_CONTACT = {
       mapsUrl:
         'https://www.google.com/maps/search/?api=1&query=1860+Greenfield+Dr+El+Cajon+CA+92021',
       streetEmbed:
-        'https://maps.google.com/maps?q=1860+Greenfield+Dr+El+Cajon+CA+92021&z=17&hl=en&t=m&output=embed',
+        'https://maps.google.com/maps?ll=32.8192,-116.9628&z=16&t=m&hl=en&iwloc=&output=embed',
     },
     {
       label: 'Los Angeles',
@@ -33,10 +33,13 @@ export const SITE_CONTACT = {
     { label: 'YouTube', href: 'https://www.youtube.com/@ZeOrbit-Firm' },
     { label: 'X', href: 'https://twitter.com/orbit_ze' },
     { label: 'Pinterest', href: 'https://www.pinterest.com/zeorbitsd/' },
+    { label: 'Apple Maps', href: 'https://maps.apple/p/VA-_LREgJ5PzDV' },
+    { label: 'Google Maps', href: 'https://maps.app.goo.gl/teVefHUc3yycwkcA7' },
+    { label: 'Yelp', href: 'https://www.yelp.com/biz/zeorbit-san-diego-2' },
   ],
   google: {
     placeId: 'ChIJpd4HFaVZ2YARFUApQxHkD30',
-    reviewsUrl: 'https://search.google.com/local/reviews?placeid=ChIJpd4HFaVZ2YARFUApQxHkD30',
+    reviewsUrl: 'https://maps.app.goo.gl/teVefHUc3yycwkcA7',
     writeReviewUrl: 'https://search.google.com/local/writereview?placeid=ChIJpd4HFaVZ2YARFUApQxHkD30',
     rating: '5.0',
     reviewCount: 28,
@@ -79,6 +82,7 @@ export const PRIMARY_NAV = [
       { label: 'Google Ads', href: '/seo-ppc#ads' },
       { label: 'Social Ads', href: '/seo-ppc#social-ads' },
       { label: 'Blog & Insights', href: '/seo-ppc#blog' },
+      { label: 'Pricing', href: '/seo-ppc#pricing' },
     ],
   },
   {

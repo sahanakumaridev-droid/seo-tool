@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { ChevronDown, ChevronLeft, Menu, Phone, X } from 'lucide-react'
 import Logo from '../Logo'
+import SocialBrandIcon from '../SocialBrandIcon'
 import { PRIMARY_NAV, SITE_CONTACT } from '../../data/revampContent'
 import { scrollToHashId } from '../../hooks/useHashScroll'
 
@@ -10,22 +11,16 @@ function isActive(pathname, href) {
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
+function socialSlug(label) {
+  return label.toLowerCase().replace(/\s+/g, '-')
+}
+
 const HEADER_SOCIAL = SITE_CONTACT.social.filter((s) =>
-  ['Facebook', 'Instagram', 'LinkedIn', 'YouTube', 'X', 'Pinterest'].includes(s.label),
+  ['Facebook', 'Instagram', 'LinkedIn', 'YouTube', 'X', 'Pinterest', 'Apple Maps', 'Google Maps', 'Yelp'].includes(
+    s.label,
+  ),
 )
 
-const SOCIAL_PATHS = {
-  Facebook: 'M14 13.5h2.5l1-4H14v-2c0-1.03 0-2 2-2h1.5V2.14c-.326-.043-1.557-.14-2.857-.14C11.928 2 10 3.657 10 6.7v2.8H7v4h3V22h4z',
-  Instagram:
-    'M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5zm10 2H7a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3zm-5 3.5A4.5 4.5 0 1 1 7.5 12 4.5 4.5 0 0 1 12 7.5zm0 2A2.5 2.5 0 1 0 14.5 12 2.5 2.5 0 0 0 12 9.5zM17.5 6.75a1.25 1.25 0 1 1-1.25 1.25A1.25 1.25 0 0 1 17.5 6.75z',
-  YouTube:
-    'M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2 31.5 31.5 0 0 0 0 12a31.5 31.5 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1A31.5 31.5 0 0 0 24 12a31.5 31.5 0 0 0-.5-5.8zM9.8 15.5v-7l6.2 3.5z',
-  X: 'M18.244 2H21.5l-7.23 8.26L22.5 22h-6.59l-5.16-6.74L5.2 22H1.94l7.73-8.83L1.5 2h6.75l4.66 6.16L18.244 2zm-1.16 18h1.82L7.08 3.94H5.12L17.084 20z',
-  LinkedIn:
-    'M6.94 6.5a1.94 1.94 0 1 1-1.94-1.94A1.94 1.94 0 0 1 6.94 6.5zM7 9.25H3V21h4zm6.5 0h-3.8V21h3.8v-6.1c0-2.3 2.9-2.5 2.9 0V21H20v-7.1c0-5.1-5.5-4.9-6.5-2.4z',
-  Pinterest:
-    'M12 2C6.48 2 2 6.27 2 11.64c0 4.1 2.56 7.62 6.17 8.96-.09-.76-.16-1.93.03-2.76.18-.76 1.14-4.84 1.14-4.84s-.29-.58-.29-1.44c0-1.35.78-2.36 1.76-2.36.83 0 1.23.62 1.23 1.37 0 .83-.53 2.08-.8 3.24-.23.97.48 1.76 1.43 1.76 1.72 0 3.04-1.81 3.04-4.43 0-2.32-1.67-3.94-4.05-3.94-2.76 0-4.38 2.07-4.38 4.21 0 .83.32 1.72.72 2.2.08.1.09.18.07.28l-.27 1.1c-.04.18-.14.22-.32.13-1.2-.56-1.95-2.32-1.95-3.74 0-3.05 2.22-5.85 6.39-5.85 3.35 0 5.96 2.39 5.96 5.58 0 3.33-2.1 6.01-5.01 6.01-.98 0-1.9-.51-2.21-1.11l-.6 2.29c-.22.84-.81 1.89-1.21 2.53A9.9 9.9 0 0 0 12 21.28c5.52 0 10-4.27 10-9.64C22 6.27 17.52 2 12 2z',
-}
 
 export default function RevampHeader() {
   const [open, setOpen] = useState(false)
@@ -89,11 +84,9 @@ export default function RevampHeader() {
                 target="_blank"
                 rel="noreferrer"
                 aria-label={item.label}
-                className={`zo-topbar-social-link is-${item.label.toLowerCase()}`}
+                className={`zo-topbar-social-link is-${socialSlug(item.label)}`}
               >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path fill="currentColor" d={SOCIAL_PATHS[item.label] || SOCIAL_PATHS.X} />
-                </svg>
+                <SocialBrandIcon label={item.label} />
               </a>
             ))}
           </div>
@@ -273,11 +266,9 @@ export default function RevampHeader() {
                     target="_blank"
                     rel="noreferrer"
                     aria-label={item.label}
-                    className={`is-${item.label.toLowerCase()}`}
+                    className={`is-${socialSlug(item.label)}`}
                   >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path fill="currentColor" d={SOCIAL_PATHS[item.label] || SOCIAL_PATHS.X} />
-                    </svg>
+                    <SocialBrandIcon label={item.label} />
                   </a>
                 ))}
               </div>

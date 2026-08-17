@@ -129,6 +129,18 @@ class Settings(BaseSettings):
     # Dangerous for spend — leave false unless billing is intentional. Default keeps campaigns paused.
     GOOGLE_ADS_AUTO_ENABLE: bool = False
 
+    # ── Website form notifications ────────────────────────────────
+    # Emails website inquiries to the inbox below. Requires SMTP credentials
+    # for a mailbox that is allowed to send (Google Workspace app password,
+    # Microsoft 365, or the host's SMTP).
+    LEAD_NOTIFY_TO: str = "info@zeorbit.com"
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "info@zeorbit.com"
+    SMTP_STARTTLS: bool = True
+
     # ── Demo mode (optional sales simulation ONLY when live APIs missing) ─
     # Production default: false. Prefer free live Google APIs + free Groq/Gemini.
     # When true AND credentials are missing, Indexing/GBP/Ads return demo data.
