@@ -6,20 +6,7 @@ export default function ScrollToTop() {
   const { pathname, hash } = useLocation()
 
   useEffect(() => {
-    if (hash) {
-      const id = decodeURIComponent(hash.replace('#', ''))
-      // Wait a tick so the new page can mount before scrolling to an anchor.
-      requestAnimationFrame(() => {
-        const el = document.getElementById(id)
-        if (el) {
-          el.scrollIntoView({ block: 'start' })
-          return
-        }
-        window.scrollTo(0, 0)
-      })
-      return
-    }
-
+    if (hash) return
     window.scrollTo(0, 0)
   }, [pathname, hash])
 

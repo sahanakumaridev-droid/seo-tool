@@ -69,6 +69,7 @@ export default function ContactForm({
 
     return {
       source: isContactPage ? 'contact_page' : 'landing_page',
+      contact_name: trimmed.name,
       ...trimmed,
     }
   }, [form, isContactPage])
@@ -103,8 +104,9 @@ export default function ContactForm({
     setLoading(true)
     setStatus({ type: 'idle', message: '' })
     try {
-      const apiBase = (import.meta.env.VITE_API_URL || '').trim()
-      const endpoint = apiBase ? `${apiBase.replace(/\/$/, '')}/api/leads/` : '/api/leads/'
+      // VITE_API_URL is the API root (`/api` in production). Do not append `/api` again.
+      const apiBase = (import.meta.env.VITE_API_URL || '/api').trim().replace(/\/$/, '')
+      const endpoint = `${apiBase}/leads/`
 
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -113,8 +115,15 @@ export default function ContactForm({
       })
 
       if (!res.ok) {
-        const text = await res.text().catch(() => '')
-        throw new Error(text || `Request failed with ${res.status}`)
+        let detail = `Request failed (${res.status})`
+        try {
+          const data = await res.json()
+          if (typeof data?.detail === 'string') detail = data.detail
+        } catch {
+          const text = await res.text().catch(() => '')
+          if (text) detail = text
+        }
+        throw new Error(detail)
       }
 
       await res.json().catch(() => ({}))

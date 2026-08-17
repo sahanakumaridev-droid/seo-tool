@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { ChevronDown, ChevronLeft, Menu, Phone, X } from 'lucide-react'
 import Logo from '../Logo'
 import { PRIMARY_NAV, SITE_CONTACT } from '../../data/revampContent'
+import { scrollToHashId } from '../../hooks/useHashScroll'
 
 function isActive(pathname, href) {
   if (href === '/') return pathname === '/'
@@ -159,7 +160,11 @@ export default function RevampHeader() {
                           key={child.label}
                           to={child.href}
                           role="menuitem"
-                          onClick={() => setOpenMenu(null)}
+                          onClick={() => {
+                            setOpenMenu(null)
+                            const id = child.href.split('#')[1]
+                            if (id) window.setTimeout(() => scrollToHashId(id), 40)
+                          }}
                         >
                           {child.label}
                         </Link>
@@ -208,7 +213,16 @@ export default function RevampHeader() {
               </button>
               <p className="zo-mobile-panel-title">{mobilePanel.label}</p>
               {mobilePanel.children.map((child) => (
-                <Link key={child.label} to={child.href} className="zo-mobile-panel-link" onClick={closeMobile}>
+                <Link
+                  key={child.label}
+                  to={child.href}
+                  className="zo-mobile-panel-link"
+                  onClick={() => {
+                    closeMobile()
+                    const id = child.href.split('#')[1]
+                    if (id) window.setTimeout(() => scrollToHashId(id), 80)
+                  }}
+                >
                   {child.label}
                 </Link>
               ))}

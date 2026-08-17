@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
-import { useLocation } from 'react-router-dom'
 import { ArrowRight, CheckCircle2, ChevronDown, Phone } from 'lucide-react'
 import RevampHeader from '../components/revamp/RevampHeader'
 import ContactForm from '../components/revamp/ContactForm'
 import SiteFooter from '../components/SiteFooter'
+import ServiceOffers from '../components/ServiceOffers'
+import GrowthPanel from '../components/GrowthPanel'
 import { Reveal } from '../components/premium/Reveal'
 import { SITE_CONTACT } from '../data/revampContent'
+import { useHashScroll, scrollToHashId } from '../hooks/useHashScroll'
 import {
   WDS_FAQS,
   WDS_FINAL_CTA,
@@ -21,7 +23,7 @@ import '../components/premium/premium-home.css'
 import './website-design-page.css'
 
 function scrollToContact() {
-  document.getElementById('wds-contact')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  scrollToHashId('contact')
 }
 
 function usePreferMotionVideo() {
@@ -38,29 +40,6 @@ function usePreferMotionVideo() {
   return preferVideo
 }
 
-function useHashScroll() {
-  const { hash, pathname } = useLocation()
-  useEffect(() => {
-    if (!hash) return undefined
-    const id = decodeURIComponent(hash.replace('#', ''))
-    let tries = 0
-    let timer = 0
-
-    const go = () => {
-      const el = document.getElementById(id)
-      if (el) {
-        el.scrollIntoView({ behavior: 'auto', block: 'start' })
-        return
-      }
-      tries += 1
-      if (tries < 16) timer = window.setTimeout(go, 20)
-    }
-
-    timer = window.setTimeout(go, 0)
-    return () => window.clearTimeout(timer)
-  }, [hash, pathname])
-}
-
 function FaqItem({ item, open, onToggle }) {
   return (
     <div className={`wds-faq-item${open ? ' is-open' : ''}`}>
@@ -74,7 +53,7 @@ function FaqItem({ item, open, onToggle }) {
 }
 
 export default function WebsiteDesignPage() {
-  const [openFaq, setOpenFaq] = useState(0)
+  const [openFaq, setOpenFaq] = useState(-1)
   const preferVideo = usePreferMotionVideo()
   useHashScroll()
 
@@ -157,31 +136,9 @@ export default function WebsiteDesignPage() {
             <h2>{WDS_SERVICES.title}</h2>
             <p className="cz-whisper">{WDS_SERVICES.lead}</p>
           </Reveal>
-          <div className="wds-service-grid">
-            {WDS_SERVICES.items.map((item, i) => (
-              <Reveal
-                key={item.title}
-                className="wds-service"
-                id={item.id}
-                style={{ transitionDelay: `${Math.min(i, 5) * 70}ms` }}
-              >
-                <button type="button" className="wds-service-btn" onClick={scrollToContact}>
-                  <div className="wds-service-media">
-                    <img src={item.image} alt="" loading="lazy" decoding="async" />
-                  </div>
-                  <div className="wds-service-body">
-                    <h3>{item.title}</h3>
-                    <p>{item.copy}</p>
-                    <span>
-                      {item.cta} <ArrowRight size={14} strokeWidth={2.2} />
-                    </span>
-                  </div>
-                </button>
-              </Reveal>
-            ))}
-          </div>
         </div>
       </section>
+      <ServiceOffers items={WDS_SERVICES.items} onCta={scrollToContact} />
 
       {/* SELECTED WORK */}
       <section className="wds-section wds-section-snow">
@@ -280,9 +237,7 @@ export default function WebsiteDesignPage() {
               <ArrowRight size={18} strokeWidth={2.4} />
             </button>
           </Reveal>
-          <Reveal className="wds-growth-media">
-            <img src={WDS_GROWTH.image} alt="" loading="lazy" decoding="async" />
-          </Reveal>
+          <GrowthPanel metrics={WDS_GROWTH.metrics} />
         </div>
       </section>
 
@@ -333,7 +288,7 @@ export default function WebsiteDesignPage() {
       </section>
 
       {/* CONTACT */}
-      <section id="wds-contact" className="wds-final">
+      <section className="wds-final">
         <div className="cz-rail wds-final-inner">
           <Reveal className="wds-final-copy">
             <p className="wds-final-eyebrow">{WDS_FINAL_CTA.kicker}</p>
@@ -344,13 +299,13 @@ export default function WebsiteDesignPage() {
               Prefer to talk? {SITE_CONTACT.phone}
             </a>
           </Reveal>
-          <Reveal className="wds-final-form" eager>
+          <div id="contact" className="wds-final-form">
             <div className="wds-final-form-head">
               <p>Project inquiry</p>
               <h3>Send a short brief</h3>
             </div>
             <ContactForm hideIntro submitLabel="Get a free quote" />
-          </Reveal>
+          </div>
         </div>
       </section>
 

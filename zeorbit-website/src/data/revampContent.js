@@ -27,7 +27,7 @@ export const SITE_CONTACT = {
     },
   ],
   social: [
-    { label: 'Facebook', href: 'https://www.facebook.com/zeorbit.zeorbit' },
+    { label: 'Facebook', href: 'https://www.facebook.com/zeorbit.web.designers.mobileapp.developers' },
     { label: 'Instagram', href: 'https://www.instagram.com/zeorbit/' },
     { label: 'LinkedIn', href: 'https://www.linkedin.com/company/zeorbit/' },
     { label: 'YouTube', href: 'https://www.youtube.com/@ZeOrbit-Firm' },
@@ -91,6 +91,7 @@ export const PRIMARY_NAV = [
       { label: 'Automation', href: '/custom-software#automation' },
     ],
   },
+  { label: 'Work', href: '/portfolio' },
   {
     label: 'Contact',
     href: '/contact',

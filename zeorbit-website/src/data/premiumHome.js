@@ -6,7 +6,7 @@ export const HERO = {
   headline: 'Digital Solutions\nThat Drive Results.',
   line: 'Websites, apps, SEO, and custom software that help ambitious brands stand out, get found, and grow — wherever your customers are.',
   primaryCta: 'Get Started',
-  primaryHref: '#contact',
+  primaryHref: '/contact#contact',
   scene: '/videos/hero-agency-poster.jpg',
   sceneAlt: 'ZeOrbit web design agency cinematic brand film',
   video: '/videos/hero-agency.mp4',

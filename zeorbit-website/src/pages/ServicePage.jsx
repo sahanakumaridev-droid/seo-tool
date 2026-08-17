@@ -1,29 +1,21 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { ArrowRight, CheckCircle2, ChevronDown, Mail, MapPin, Phone } from 'lucide-react'
 import RevampHeader from '../components/revamp/RevampHeader'
 import ContactForm from '../components/revamp/ContactForm'
 import SiteFooter from '../components/SiteFooter'
+import ServiceOffers from '../components/ServiceOffers'
+import ServiceStudio from '../components/ServiceStudio'
+import GrowthPanel from '../components/GrowthPanel'
 import { Reveal } from '../components/premium/Reveal'
 import { SITE_CONTACT } from '../data/revampContent'
 import { NAV_PAGES } from '../data/navPages'
+import { useHashScroll, scrollToHashId } from '../hooks/useHashScroll'
 import '../components/premium/premium-home.css'
 import './website-design-page.css'
 
 function scrollToContact() {
-  document.getElementById('wds-contact')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-}
-
-function useHashScroll() {
-  const { hash, pathname } = useLocation()
-  useEffect(() => {
-    if (!hash) return undefined
-    const id = hash.replace('#', '')
-    const timer = window.setTimeout(() => {
-      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }, 80)
-    return () => window.clearTimeout(timer)
-  }, [hash, pathname])
+  scrollToHashId('contact')
 }
 
 function FaqItem({ item, open, onToggle }) {
@@ -39,7 +31,9 @@ function FaqItem({ item, open, onToggle }) {
 }
 
 function ContactPageLayout({ page }) {
+  const { hash } = useLocation()
   useHashScroll()
+  const formFirst = hash === '#contact'
 
   const maps = [
     {
@@ -72,9 +66,10 @@ function ContactPageLayout({ page }) {
   ]
 
   return (
-    <div className="cz-page zo-contact-page">
+    <div className={`cz-page zo-contact-page${formFirst ? ' is-form-first' : ''}`}>
       <RevampHeader />
 
+      {formFirst ? null : (
       <section className="zo-contact-hero" aria-label="Contact">
         <div className="zo-contact-hero-bg" aria-hidden="true">
           <iframe
@@ -104,64 +99,68 @@ function ContactPageLayout({ page }) {
           </div>
         </div>
       </section>
+      )}
 
-      <section className="zo-contact-body" aria-label="Contact details and form">
-        <div className="zo-contact-split">
-          <Reveal className="zo-contact-aside">
-            <p className="cz-kicker">San Diego · Nationwide</p>
-            <h2>Get in touch</h2>
-            <p className="zo-contact-lead">{page.lead}</p>
+      <section className={`zo-contact-body${formFirst ? ' is-form-first' : ''}`} aria-label="Contact details and form">
+        <div className={`zo-contact-split${formFirst ? ' is-form-only' : ''}`}>
+          {formFirst ? null : (
+            <Reveal className="zo-contact-aside">
+              <p className="cz-kicker">San Diego · Nationwide</p>
+              <h2>Get in touch</h2>
+              <p className="zo-contact-lead">{page.lead}</p>
 
-            <div className="zo-contact-lines">
-              <a className="zo-contact-line" href={`tel:${SITE_CONTACT.phoneTel}`}>
-                <span className="zo-contact-line-icon">
-                  <Phone size={16} strokeWidth={2.2} />
-                </span>
-                <span>
-                  <strong>Call</strong>
-                  <b>{SITE_CONTACT.phone}</b>
-                </span>
-              </a>
-              <a className="zo-contact-line" href={`mailto:${SITE_CONTACT.email}`}>
-                <span className="zo-contact-line-icon">
-                  <Mail size={16} strokeWidth={2.2} />
-                </span>
-                <span>
-                  <strong>Email</strong>
-                  <b>{SITE_CONTACT.email}</b>
-                </span>
-              </a>
-            </div>
+              <div className="zo-contact-lines">
+                <a className="zo-contact-line" href={`tel:${SITE_CONTACT.phoneTel}`}>
+                  <span className="zo-contact-line-icon">
+                    <Phone size={16} strokeWidth={2.2} />
+                  </span>
+                  <span>
+                    <strong>Call</strong>
+                    <b>{SITE_CONTACT.phone}</b>
+                  </span>
+                </a>
+                <a className="zo-contact-line" href={`mailto:${SITE_CONTACT.email}`}>
+                  <span className="zo-contact-line-icon">
+                    <Mail size={16} strokeWidth={2.2} />
+                  </span>
+                  <span>
+                    <strong>Email</strong>
+                    <b>{SITE_CONTACT.email}</b>
+                  </span>
+                </a>
+              </div>
 
-            <div className="zo-contact-places">
-              {places.map((place) => (
-                <article key={place.title} className="zo-contact-place">
-                  <MapPin size={16} strokeWidth={2.2} />
-                  <div>
-                    <h3>{place.title}</h3>
-                    {place.lines.map((line) => (
-                      <p key={line}>{line}</p>
-                    ))}
-                    <a href={place.mapsUrl} target="_blank" rel="noreferrer">
-                      Open in Maps
-                      <ArrowRight size={13} strokeWidth={2.4} />
-                    </a>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </Reveal>
+              <div className="zo-contact-places">
+                {places.map((place) => (
+                  <article key={place.title} className="zo-contact-place">
+                    <MapPin size={16} strokeWidth={2.2} />
+                    <div>
+                      <h3>{place.title}</h3>
+                      {place.lines.map((line) => (
+                        <p key={line}>{line}</p>
+                      ))}
+                      <a href={place.mapsUrl} target="_blank" rel="noreferrer">
+                        Open in Maps
+                        <ArrowRight size={13} strokeWidth={2.4} />
+                      </a>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </Reveal>
+          )}
 
-          <Reveal className="zo-contact-form-panel" id="contact" eager>
+          <div id="contact" className="zo-contact-form-panel">
             <div className="zo-contact-form-head">
               <p>Project inquiry</p>
               <h3>Send a short brief</h3>
             </div>
             <ContactForm hideIntro submitLabel="Send message" variant="contactPage" />
-          </Reveal>
+          </div>
         </div>
       </section>
 
+      {formFirst ? null : (
       <section className="zo-contact-map" aria-label="Find ZeOrbit on the map">
         <div className="zo-contact-map-inner">
           <p className="cz-kicker">Studios</p>
@@ -175,26 +174,26 @@ function ContactPageLayout({ page }) {
                     src={map.embed}
                     loading="lazy"
                     referrerPolicy="no-referrer-when-downgrade"
-                    allowFullScreen
+                    tabIndex={-1}
                   />
                 </div>
-                <div className="zo-contact-map-meta">
-                  <div>
-                    <h3>{map.title}</h3>
-                    <p>{map.address}</p>
-                  </div>
-                  <a href={map.mapsUrl} target="_blank" rel="noreferrer">
-                    Directions
-                    <ArrowRight size={14} strokeWidth={2.4} />
+                <div className="cz-finale-map-pin">
+                  <a className="cz-finale-map-callout" href={map.mapsUrl} target="_blank" rel="noreferrer">
+                    <strong>{map.title}</strong>
+                    <span>{map.address}</span>
                   </a>
+                  <span className="cz-finale-map-marker" aria-hidden="true">
+                    <MapPin size={14} strokeWidth={2.6} />
+                  </span>
                 </div>
               </article>
             ))}
           </div>
         </div>
       </section>
+      )}
 
-      {page.areas ? (
+      {formFirst || !page.areas ? null : (
         <section id="areas" className="zo-contact-areas" aria-label="Areas we serve">
           <div className="zo-contact-areas-inner">
             <p className="cz-kicker">{page.areas.title}</p>
@@ -207,7 +206,7 @@ function ContactPageLayout({ page }) {
             </div>
           </div>
         </section>
-      ) : null}
+      )}
 
       <SiteFooter />
     </div>
@@ -216,7 +215,7 @@ function ContactPageLayout({ page }) {
 
 
 function ServiceLanding({ page }) {
-  const [openFaq, setOpenFaq] = useState(0)
+  const [openFaq, setOpenFaq] = useState(-1)
   useHashScroll()
 
   return (
@@ -264,35 +263,9 @@ function ServiceLanding({ page }) {
         </div>
       </section>
 
-      <section className="wds-section">
-        <div className="cz-rail">
-          <Reveal className="wds-section-head">
-            <p className="cz-kicker">What we deliver</p>
-            <h2>Focused capabilities — not a recycled checklist.</h2>
-            <p className="cz-whisper">
-              Every item below is unique to {page.navLabel.toLowerCase()}. Pick a path and we’ll scope it clearly.
-            </p>
-          </Reveal>
-          <div className="wds-service-grid">
-            {page.services.map((item) => (
-              <Reveal key={item.id} className="wds-service" id={item.id}>
-                <button type="button" className="wds-service-btn" onClick={scrollToContact}>
-                  <div className="wds-service-media">
-                    <img src={item.image} alt="" loading="lazy" decoding="async" />
-                  </div>
-                  <div className="wds-service-body">
-                    <h3>{item.title}</h3>
-                    <p>{item.copy}</p>
-                    <span>
-                      {item.cta} <ArrowRight size={14} strokeWidth={2.2} />
-                    </span>
-                  </div>
-                </button>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
+      <ServiceOffers items={page.services} onCta={scrollToContact} />
+
+      <ServiceStudio page={page} />
 
       <section className="wds-section wds-section-snow">
         <div className="cz-rail">
@@ -354,9 +327,7 @@ function ServiceLanding({ page }) {
                 <ArrowRight size={18} strokeWidth={2.4} />
               </button>
             </Reveal>
-            <Reveal className="wds-growth-media">
-              <img src={page.growth.image} alt="" loading="lazy" decoding="async" />
-            </Reveal>
+            <GrowthPanel metrics={page.growth.metrics} />
           </div>
         </section>
       ) : null}
@@ -380,7 +351,7 @@ function ServiceLanding({ page }) {
         </div>
       </section>
 
-      <section id="wds-contact" className="wds-final">
+      <section className="wds-final">
         <div className="cz-rail wds-final-inner">
           <Reveal className="wds-final-copy">
             <p className="wds-final-eyebrow">{page.finalCta.kicker}</p>
@@ -391,13 +362,13 @@ function ServiceLanding({ page }) {
               Prefer to talk? {SITE_CONTACT.phone}
             </a>
           </Reveal>
-          <Reveal className="wds-final-form" eager>
+          <div id="contact" className="wds-final-form">
             <div className="wds-final-form-head">
               <p>Project inquiry</p>
               <h3>Send a short brief</h3>
             </div>
             <ContactForm hideIntro submitLabel="Get a free quote" />
-          </Reveal>
+          </div>
         </div>
       </section>
 

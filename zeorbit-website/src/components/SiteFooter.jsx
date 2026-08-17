@@ -20,7 +20,7 @@ const SPECIAL_LINKS = [
   { label: 'SEO & PPC Tactics', to: '/seo-ppc' },
   { label: 'App Timeline', to: '/mobile-apps#timeline' },
   { label: 'UI / UX Design', to: '/website-designing#ux' },
-  { label: 'Portfolios', to: '/#work' },
+  { label: 'Portfolio', to: '/portfolio' },
   { label: "Let's Talk", to: '/contact' },
   { label: 'Blogs', to: '/blog' },
 ]
@@ -48,7 +48,7 @@ export default function SiteFooter() {
         <div className="rv-shell zo-site-footer-main">
           <div className="zo-site-footer-brand">
             <Link to="/" className="zo-site-footer-logo" aria-label="ZeOrbit home">
-              <Logo size={40} onDark />
+              <Logo size={40} />
             </Link>
             <p>
               ZeOrbit builds websites on WordPress, Shopify, Wix, and Squarespace — and mobile apps for

@@ -206,7 +206,7 @@ export const INSIGHTS = [
 ]
 
 export const SITE_SOCIAL = [
-  { label: 'Facebook', href: 'https://www.facebook.com/zeorbit.zeorbit' },
+  { label: 'Facebook', href: 'https://www.facebook.com/zeorbit.web.designers.mobileapp.developers' },
   { label: 'LinkedIn', href: 'https://www.linkedin.com/company/zeorbit/' },
   { label: 'Instagram', href: 'https://www.instagram.com/zeorbit/' },
   { label: 'X', href: 'https://twitter.com/orbit_ze' },

@@ -74,7 +74,7 @@ export default function SeoHead({
       telephone: '+1-619-724-9517',
       areaServed: 'US',
       sameAs: [
-        'https://www.facebook.com/zeorbit.zeorbit',
+        'https://www.facebook.com/zeorbit.web.designers.mobileapp.developers',
         'https://www.linkedin.com/company/zeorbit/',
         'https://zeorbit.com',
       ],

@@ -26,13 +26,13 @@ import {
   UtensilsCrossed,
 } from 'lucide-react'
 import RevampHeader from '../revamp/RevampHeader'
-import ContactForm from '../revamp/ContactForm'
 import SiteFooter from '../SiteFooter'
+import ContactForm from '../revamp/ContactForm'
 import { Reveal } from './Reveal'
 import PremiumGoogleReviews from './PremiumGoogleReviews'
 import SeoOrbit from './SeoOrbit'
+import { useHashScroll } from '../../hooks/useHashScroll'
 import {
-  FILM_PANELS,
   FINAL_CTA,
   HERO,
   INDUSTRIES,
@@ -63,10 +63,6 @@ const INDUSTRY_ICONS = {
   GraduationCap,
   Smile,
   Handshake,
-}
-
-function scrollTo(id) {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 function usePreferMotionVideo() {
@@ -150,66 +146,6 @@ function HeroVideo({ preferVideo }) {
   )
 }
 
-function FilmPanel({ panel }) {
-  const rootRef = useRef(null)
-  const preferVideo = usePreferMotionVideo()
-  const [inView, setInView] = useState(true)
-  const [videoFailed, setVideoFailed] = useState(false)
-  const showVideo = preferVideo && panel.mediaType === 'video' && inView && !videoFailed
-  const videoRef = useAutoPlayVideo(showVideo)
-
-  useEffect(() => {
-    if (!preferVideo || panel.mediaType !== 'video') return undefined
-    const el = rootRef.current
-    if (!el) return undefined
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) setInView(true)
-      },
-      { rootMargin: '320px 0px' },
-    )
-    io.observe(el)
-    return () => io.disconnect()
-  }, [preferVideo, panel.mediaType])
-
-  return (
-    <section ref={rootRef} id={panel.id} className="cz-film-panel is-split" aria-label={panel.label}>
-      <div className="cz-film-inner">
-        <Reveal className="cz-film-copy" eager>
-          <p className="cz-film-label">{panel.label}</p>
-          <h2 className="cz-film-title">
-            {panel.title.split('\n').map((line) => (
-              <span key={line}>{line}</span>
-            ))}
-          </h2>
-          <p className="cz-film-line">{panel.line}</p>
-          <Link to={panel.href} className="cz-film-cta">
-            {panel.cta}
-            <ArrowRight size={16} strokeWidth={2.4} />
-          </Link>
-        </Reveal>
-      </div>
-      <div className="cz-film-media" aria-hidden="true">
-        {showVideo ? (
-          <video
-            ref={videoRef}
-            src={panel.media}
-            poster={panel.poster}
-            autoPlay
-            loop
-            muted
-            playsInline
-            preload="auto"
-            onError={() => setVideoFailed(true)}
-          />
-        ) : (
-          <img src={panel.poster || panel.media} alt="" loading="lazy" decoding="async" />
-        )}
-      </div>
-    </section>
-  )
-}
-
 function WireFrames({ className = '' }) {
   return (
     <div className={`cz-wireframes ${className}`} aria-hidden="true">
@@ -274,7 +210,6 @@ function CaseCard({ item }) {
           <div className="cz-case-shade" />
         </div>
         <div className="cz-case-copy">
-          <p className="cz-case-num">{item.num}</p>
           <h3>{item.title}</h3>
           <p className="cz-case-meta">{item.meta}</p>
           {item.copy ? <p className="cz-case-body">{item.copy}</p> : null}
@@ -326,7 +261,7 @@ function IndustriesExplorer() {
             </button>
           </div>
           <p>{openItem.blurb}</p>
-          <Link to="/contact" className="cz-industry-drawer-cta">
+          <Link to="/contact#contact" className="cz-industry-drawer-cta">
             Start a project
             <ArrowRight size={15} strokeWidth={2.4} />
           </Link>
@@ -355,7 +290,7 @@ function FinaleMaps() {
   ]
 
   return (
-    <div className="cz-finale-maps">
+    <div className="cz-finale-maps" aria-label="Office locations">
       {maps.map((map) => (
         <article key={map.key} className="cz-finale-map-card">
           <div className="cz-finale-map-stage">
@@ -365,20 +300,19 @@ function FinaleMaps() {
               src={map.embed}
               loading="lazy"
               referrerPolicy="no-referrer-when-downgrade"
-              allowFullScreen
+              tabIndex={-1}
             />
           </div>
-          <div className="cz-finale-map-meta">
-            <div>
-              <h3>{map.title}</h3>
+          <div className="cz-finale-map-pin">
+            <a className="cz-finale-map-callout" href={map.mapsUrl} target="_blank" rel="noreferrer">
+              <strong>{map.title}</strong>
               {map.lines.map((line) => (
-                <p key={line}>{line}</p>
+                <span key={line}>{line}</span>
               ))}
-            </div>
-            <a className="cz-finale-map-link" href={map.mapsUrl} target="_blank" rel="noreferrer">
-              Directions
-              <ArrowRight size={14} strokeWidth={2.4} />
             </a>
+            <span className="cz-finale-map-marker" aria-hidden="true">
+              <MapPin size={14} strokeWidth={2.6} />
+            </span>
           </div>
         </article>
       ))}
@@ -387,8 +321,8 @@ function FinaleMaps() {
 }
 
 export default function PremiumHome() {
-  const [showForm, setShowForm] = useState(false)
   const preferHeroVideo = usePreferMotionVideo()
+  useHashScroll()
 
   return (
     <div className="cz-page" id="main">
@@ -405,10 +339,10 @@ export default function PremiumHome() {
             </h1>
             <p className="cz-hero-line">{HERO.line}</p>
             <div className="cz-hero-cta">
-              <button type="button" className="cz-btn-solid" onClick={() => scrollTo('contact')}>
+              <Link to="/contact#contact" className="cz-btn-solid">
                 {HERO.primaryCta}
                 <ArrowRight size={18} strokeWidth={2.4} />
-              </button>
+              </Link>
             </div>
           </Reveal>
         </div>
@@ -431,6 +365,10 @@ export default function PremiumHome() {
         <Reveal eager className="cz-work-intro">
           <p className="cz-kicker">{PORTFOLIO.kicker}</p>
           <h2>{PORTFOLIO.headline}</h2>
+          <Link to="/portfolio" className="cz-link">
+            See all work
+            <ArrowRight size={16} strokeWidth={2.4} />
+          </Link>
         </Reveal>
 
         {PORTFOLIO.items.slice(0, 2).map((item) => (
@@ -476,9 +414,6 @@ export default function PremiumHome() {
         </div>
       </section>
 
-      {/* 4. VIDEO panel — mid page */}
-      <FilmPanel panel={FILM_PANELS.afterWork} />
-
       {/* 5. More work images */}
       <section className="cz-work cz-work-continued" aria-label="More of our work">
         {PORTFOLIO.items.slice(2).map((item) => (
@@ -506,40 +441,28 @@ export default function PremiumHome() {
       {/* 8. GOOGLE REVIEWS */}
       <PremiumGoogleReviews />
 
-      {/* 9. CONTACT */}
-      <section id="contact" className="cz-finale">
+      {/* 9. CONTACT — inquiry form on the home screen */}
+      <section className="cz-finale" aria-label="Contact">
         <div className="cz-finale-inner">
-          <Reveal className="cz-finale-copy">
-            <h2>{FINAL_CTA.headline}</h2>
-            <p className="cz-whisper is-light">{FINAL_CTA.line}</p>
+          <div className="cz-finale-left">
+            <Reveal className="cz-finale-copy">
+              <h2>{FINAL_CTA.headline}</h2>
+              <p className="cz-whisper is-light">{FINAL_CTA.line}</p>
+              <a className="cz-finale-quick" href={`tel:${SITE_CONTACT.phoneTel}`}>
+                <Phone size={16} strokeWidth={2.2} />
+                Prefer to talk? {SITE_CONTACT.phone}
+              </a>
+            </Reveal>
+            <FinaleMaps />
+          </div>
 
-            {showForm ? (
-              <button type="button" className="cz-finale-back" onClick={() => setShowForm(false)}>
-                ← Back
-              </button>
-            ) : (
-              <div className="cz-finale-actions">
-                <button type="button" className="cz-btn-solid" onClick={() => setShowForm(true)}>
-                  Start a Project
-                  <ArrowRight size={18} strokeWidth={2.4} />
-                </button>
-                <a className="cz-finale-quick" href={`tel:${SITE_CONTACT.phoneTel}`}>
-                  <Phone size={16} strokeWidth={2.2} />
-                  {SITE_CONTACT.phone}
-                </a>
-              </div>
-            )}
-          </Reveal>
-
-          <Reveal className="cz-finale-visual">
-            {showForm ? (
-              <div className="cz-finale-form-card">
-                <ContactForm />
-              </div>
-            ) : (
-              <FinaleMaps />
-            )}
-          </Reveal>
+          <div id="contact" className="cz-finale-form-card">
+            <div className="cz-finale-form-head">
+              <p>Project inquiry</p>
+              <h3>Send a short brief</h3>
+            </div>
+            <ContactForm hideIntro submitLabel="Send message" variant="contactPage" />
+          </div>
         </div>
       </section>
 
