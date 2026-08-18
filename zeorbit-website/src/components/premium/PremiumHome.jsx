@@ -209,7 +209,7 @@ function CaseCard({ item }) {
   return (
     <Reveal eager className={`cz-case cz-case-${item.tone}${item.flip ? ' is-flip' : ''}`}>
       <Link to={item.href} className="cz-case-link">
-        <div className="cz-case-media">
+        <div className={`cz-case-media${item.mediaFit === 'wide' ? ' is-wide' : ''}`}>
           <img src={item.image} alt={item.alt || item.title} loading="lazy" decoding="async" />
           <div className="cz-case-shade" />
         </div>

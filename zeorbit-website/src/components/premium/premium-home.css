@@ -1787,6 +1787,16 @@
   transition: transform 0.45s ease-out;
 }
 
+.cz-case-media.is-wide {
+  aspect-ratio: 16 / 10;
+  background: #070b14;
+}
+
+.cz-case-media.is-wide img {
+  object-fit: cover;
+  object-position: center 55%;
+}
+
 .cz-case-link:hover .cz-case-media img {
   transform: scale(1.03);
 }
