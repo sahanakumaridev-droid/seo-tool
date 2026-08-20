@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react'
-import { ArrowRight, ArrowUpRight, Search } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ArrowRight, Search } from 'lucide-react'
 import RevampHeader from '../components/revamp/RevampHeader'
 import SiteFooter from '../components/SiteFooter'
+import { listBlogPosts } from '../api'
 import { ZEORBIT_BLOG, ZEORBIT_BLOG_POSTS } from '../data/zeorbitBlog'
+import { isOffsiteBlogHref, toSiteBlogHref } from '../lib/blogUrls'
 
 function formatDate(iso) {
   if (!iso) return ''
@@ -26,27 +28,53 @@ function PostImage({ src, alt, className = '' }) {
   )
 }
 
+function postLinkProps(item) {
+  const href = toSiteBlogHref(item)
+  if (isOffsiteBlogHref(href)) {
+    return { href, target: '_blank', rel: 'noopener noreferrer' }
+  }
+  return { href }
+}
+
 export default function BlogPage() {
   const [topic, setTopic] = useState('All')
   const [query, setQuery] = useState('')
+  const [posts, setPosts] = useState(ZEORBIT_BLOG_POSTS)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data } = await listBlogPosts(0, 60)
+        const apiPosts = Array.isArray(data?.posts) ? data.posts : []
+        if (!cancelled && apiPosts.length) setPosts(apiPosts)
+      } catch {
+        if (!cancelled) setPosts(ZEORBIT_BLOG_POSTS)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   const topics = useMemo(() => {
-    const set = new Set(ZEORBIT_BLOG_POSTS.map((p) => p.category).filter(Boolean))
-    return ['All', ...Array.from(set)]
-  }, [])
+    const set = new Set(posts.map((p) => p.category).filter(Boolean))
+    return ['All', ...Array.from(set).slice(0, 8)]
+  }, [posts])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return ZEORBIT_BLOG_POSTS.filter((p) => {
+    return posts.filter((p) => {
       if (topic !== 'All' && p.category !== topic) return false
       if (!q) return true
       return (
-        p.title.toLowerCase().includes(q) ||
+        (p.title || '').toLowerCase().includes(q) ||
         (p.excerpt || '').toLowerCase().includes(q) ||
         (p.category || '').toLowerCase().includes(q)
       )
     })
-  }, [topic, query])
+  }, [posts, topic, query])
 
   const featured = filtered[0] || null
   const rest = featured ? filtered.slice(1) : []
@@ -96,13 +124,10 @@ export default function BlogPage() {
 
       <main className="zo-blog-main">
         <div className="rv-shell zo-blog-layout">
-          {featured ? (
-            <a
-              className="zo-blog-feature"
-              href={featured.url}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
+          {loading && !featured ? (
+            <p className="zo-blog-empty">Loading articles…</p>
+          ) : featured ? (
+            <a className="zo-blog-feature" {...postLinkProps(featured)}>
               <div className="zo-blog-feature-media">
                 <PostImage src={featured.featured_image_url} alt="" />
               </div>
@@ -114,7 +139,7 @@ export default function BlogPage() {
                 <h2>{featured.title}</h2>
                 {featured.excerpt ? <p>{featured.excerpt}</p> : null}
                 <span className="zo-blog-card-cta">
-                  Read on ZeOrbit <ArrowUpRight size={16} strokeWidth={2.2} />
+                  Read article <ArrowRight size={16} strokeWidth={2.2} />
                 </span>
               </div>
             </a>
@@ -128,9 +153,7 @@ export default function BlogPage() {
                 <a
                   key={item.id}
                   className="zo-blog-secondary-card"
-                  href={item.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  {...postLinkProps(item)}
                 >
                   <div className="zo-blog-secondary-media">
                     <PostImage src={item.featured_image_url} alt="" />
@@ -154,18 +177,13 @@ export default function BlogPage() {
             <section className="zo-blog-more" aria-label="More articles">
               <div className="zo-blog-more-head">
                 <h2>More from ZeOrbit</h2>
-                <a href={ZEORBIT_BLOG.sourceUrl} target="_blank" rel="noopener noreferrer">
-                  View all on zeorbit.com <ArrowUpRight size={15} />
-                </a>
               </div>
               <div className="zo-blog-grid">
                 {grid.map((item) => (
                   <a
                     key={item.id}
                     className="zo-blog-card"
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    {...postLinkProps(item)}
                   >
                     <div className="zo-blog-card-media">
                       <PostImage src={item.featured_image_url} alt="" />

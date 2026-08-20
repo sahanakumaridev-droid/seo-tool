@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { RefreshCw } from 'lucide-react'
 
 const SERVICE_OPTIONS = [
@@ -35,6 +36,25 @@ function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
 }
 
+function digitsOnly(value) {
+  return String(value || '').replace(/\D/g, '')
+}
+
+function isValidUsPhone(value) {
+  let digits = digitsOnly(value)
+  if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1)
+  if (digits.length !== 10) return false
+  if ('01'.includes(digits[0]) || '01'.includes(digits[3])) return false
+  if (/^(\d)\1{9}$/.test(digits)) return false
+  return true
+}
+
+function formSourceFromPath(pathname) {
+  const path = (pathname || '/').replace(/\/+$/, '') || '/'
+  if (path === '/') return 'home'
+  return path.replace(/^\//, '').slice(0, 40) || 'home'
+}
+
 export default function ContactForm({
   hideIntro = false,
   submitLabel = 'Send request',
@@ -42,6 +62,7 @@ export default function ContactForm({
 }) {
   const isContactPage = variant === 'contactPage'
   const serviceOptions = isContactPage ? CONTACT_PAGE_SERVICES : SERVICE_OPTIONS
+  const location = useLocation()
 
   const [form, setForm] = useState({
     name: '',
@@ -73,7 +94,8 @@ export default function ContactForm({
     }
 
     return {
-      source: isContactPage ? 'contact_page' : 'landing_page',
+      source: formSourceFromPath(location.pathname),
+      page_url: typeof window !== 'undefined' ? window.location.href : '',
       contact_name: trimmed.name,
       captcha_id: captcha.id,
       captcha_answer: form.captcha_answer.trim(),
@@ -81,7 +103,7 @@ export default function ContactForm({
       started_at: startedAt,
       ...trimmed,
     }
-  }, [form, isContactPage, captcha.id, startedAt])
+  }, [form, location.pathname, captcha.id, startedAt])
 
   const errors = useMemo(() => {
     const next = {}
@@ -89,6 +111,10 @@ export default function ContactForm({
     if (touched.email) {
       if (!payload.email) next.email = 'Email is required'
       else if (!isValidEmail(payload.email)) next.email = 'Enter a valid email'
+    }
+    if (touched.phone) {
+      if (!payload.phone) next.phone = 'U.S. phone number is required'
+      else if (!isValidUsPhone(payload.phone)) next.phone = 'Enter a valid U.S. phone number'
     }
     if (touched.message && !payload.message) next.message = 'Tell us a bit about the project'
     if (touched.captcha_answer && !payload.captcha_answer) next.captcha_answer = 'Enter the code from the image'
@@ -98,6 +124,7 @@ export default function ContactForm({
   const canSubmit = useMemo(() => {
     if (!payload.name) return false
     if (!payload.email || !isValidEmail(payload.email)) return false
+    if (!payload.phone || !isValidUsPhone(payload.phone)) return false
     if (!payload.message) return false
     if (!payload.captcha_id || !payload.captcha_answer) return false
     return true
@@ -126,7 +153,7 @@ export default function ContactForm({
 
   async function onSubmit(e) {
     e.preventDefault()
-    setTouched({ name: true, email: true, message: true, captcha_answer: true })
+    setTouched({ name: true, email: true, phone: true, message: true, captcha_answer: true })
     if (!canSubmit || loading) return
 
     setLoading(true)
@@ -235,17 +262,20 @@ export default function ContactForm({
 
           <label className="rv-label">
             <span className="rv-label-row">
-              {isContactPage ? 'Your Number' : 'Phone'}{' '}
-              {!isContactPage ? <span className="rv-opt">optional</span> : null}
+              {isContactPage ? 'Your Number' : 'Phone'} <em className="rv-req">*</em>
             </span>
             <input
-              className="rv-input"
+              className={`rv-input${errors.phone ? ' is-invalid' : ''}`}
               value={form.phone}
               onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+              onBlur={() => markTouched('phone')}
               autoComplete="tel"
               inputMode="tel"
-              placeholder={isContactPage ? 'Your Number' : '(555) 000-0000'}
+              placeholder={isContactPage ? 'Your Number' : '(619) 555-0100'}
+              required
+              aria-invalid={Boolean(errors.phone)}
             />
+            {errors.phone ? <span className="rv-field-error">{errors.phone}</span> : null}
           </label>
 
           {isContactPage ? (

@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     # Base URL used to build public "Publish to Web" links. If empty, it is
     # derived from the incoming request. e.g. https://seo.159.198.79.219.nip.io
     PUBLIC_BASE_URL: str = ""
+    # Where humans should land after publish (live marketing site). nip.io
+    # SEO-tool hosts are rewritten to this URL so blogs open on zeorbit.com.
+    MARKETING_SITE_URL: str = "https://zeorbit.com"
 
     # ── Marketing / Tracking ─────────────────────────────────────
     # Google Tag Manager container (e.g. "GTM-XXXXXXX"). Empty = no tag loaded,

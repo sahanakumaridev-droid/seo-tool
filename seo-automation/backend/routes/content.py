@@ -8,7 +8,7 @@ from models.schemas import (
     GenerateRequest, SEOBlock, BulkGenerateResponse,
     ArticleRequest, WebsiteAnalysisRequest, WebsiteProfile,
 )
-from services.location_service import get_nearby_cities, LocationNotResolvedError
+from services.location_service import get_nearby_cities, LocationNotResolvedError, merge_extra_locations
 from services.content_service import generate_seo_block, generate_articles
 from services.website_analysis_service import analyze_website
 from services.export_service import export_json, export_html, export_wordpress
@@ -33,6 +33,8 @@ async def llm_providers():
 async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(get_session)):
     try:
         cities = await get_nearby_cities(req.base_location, req.num_cities)
+        cities = merge_extra_locations(cities, req.extra_locations)
+        cities = [c for c in cities if getattr(c, "kind", "city") != "state"]
     except LocationNotResolvedError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if not cities:
@@ -64,11 +66,11 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
         # State chip is for Location Expansion UI; generate for cities + counties only.
         if getattr(city_info, "kind", "city") == "state":
             continue
-        # When overwriting an existing slug, free its current images so they can be reassigned
-        slug = slugify(f"{req.business_type}-{city_info.name}")
-        result = await session.execute(select(PageRecord).where(PageRecord.slug == slug))
-        existing = result.scalar_one_or_none()
         exclude = list(used_featured)
+        from services.slug_utils import article_slug
+        preview_slug = article_slug(req.target_keywords, city_info.name, req.business_type)
+        result = await session.execute(select(PageRecord).where(PageRecord.slug == preview_slug))
+        existing = result.scalar_one_or_none()
         if existing:
             prev = existing.seo_block if isinstance(existing.seo_block, dict) else {}
             free_urls = []
@@ -103,6 +105,7 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
                     count=3,
                     exclude_urls=used_featured,
                     industry=req.industry or "",
+                    niche=req.business_type or "",
                 )
                 if images:
                     block.in_content_images = images
@@ -112,10 +115,13 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             for im in block.in_content_images or []:
                 if im.url:
                     used_featured.append(im.url)
+        slug = (block.slug or preview_slug).strip()
+        block.slug = slug
         pages.append(block)
         
         if existing:
             existing.seo_block = block.model_dump()
+            existing.slug = slug
             existing.updated_at = datetime.now(timezone.utc)
         else:
             session.add(PageRecord(
@@ -179,6 +185,7 @@ async def generate_articles_endpoint(req: ArticleRequest, session: AsyncSession 
                 angle_title=block.title or "",
                 exclude_urls=used_featured,
                 industry=getattr(req, "industry", "") or getattr(block, "industry", "") or "",
+                niche=req.primary_keyword or "",
             )
             if imgs:
                 block.in_content_images = imgs
@@ -288,6 +295,7 @@ async def refresh_images(
             angle_title=block.get("title") or "",
             exclude_urls=used_by_family[family],
             industry=block.get("industry") or "",
+            niche=business,
         )
         if not images:
             skipped.append(row.slug)

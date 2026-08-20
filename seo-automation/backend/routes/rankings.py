@@ -9,12 +9,18 @@ from providers.mock_rank_data import MockRankProvider
 
 router = APIRouter()
 _provider = MockRankProvider()
+LIVE_SITE = "https://zeorbit.com"
 
 
 def _public_base(request: Request) -> str:
+    marketing = (getattr(settings, "MARKETING_SITE_URL", None) or "").strip().rstrip("/")
+    if marketing:
+        return marketing
     if settings.PUBLIC_BASE_URL:
-        return settings.PUBLIC_BASE_URL.rstrip("/")
-    return str(request.base_url).rstrip("/")
+        base = settings.PUBLIC_BASE_URL.rstrip("/")
+        if "nip.io" not in base.lower():
+            return base
+    return LIVE_SITE
 
 
 @router.get("", response_model=RankingResult)

@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { ArrowLeft, RefreshCw, Save, CheckCircle, Upload, Globe, ExternalLink, Megaphone } from 'lucide-react'
-import { generateSingle, savePage, publishToWordPress, publishToWeb, zeorbitBlogUrl } from '../api'
+import { generateSingle, savePage, publishToWordPress, publishToWeb, zeorbitBlogUrl, zeorbitArticleUrl } from '../api'
 
 function ScoreRing({ value, color }) {
   const r = 20, c = 2 * Math.PI * r
@@ -98,8 +98,9 @@ export default function PagePreviewPage() {
     setWebPublishing(true); setWebError('')
     try {
       const res = await publishToWeb(block)
-      setWebUrl(res.data.public_url)
-      window.open(res.data.public_url, '_blank', 'noopener')
+      const liveUrl = zeorbitArticleUrl(res.data.public_url || res.data.slug)
+      setWebUrl(liveUrl)
+      window.open(liveUrl, '_blank', 'noopener')
       window.open(zeorbitBlogUrl(), '_blank', 'noopener')
     } catch (e) {
       setWebError(e.response?.data?.detail || 'Publish failed. Is the backend running?')

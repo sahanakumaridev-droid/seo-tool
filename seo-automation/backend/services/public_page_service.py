@@ -272,7 +272,7 @@ def _footer() -> str:
       <div class="ft-grid">
         <div class="ft-brand">
           <a class="ft-logo" href="{WEBSITE}" target="_blank" rel="noreferrer">
-            <img src="/static/zeorbit-logo.png" alt="ZeOrbit" />
+            <img src="{WEBSITE}/zeorbit-logo-nav.webp?v=8" alt="ZeOrbit" width="180" height="52" />
           </a>
           <p class="ft-brand-p">Helping businesses improve their visibility, websites, and digital growth with smarter SEO tools and strategies.</p>
           <div class="ft-socials">{socials}</div>
@@ -440,8 +440,8 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
 {og_img}
 {canonical_tag}
 <meta name="robots" content="index,follow" />
-<link rel="icon" type="image/png" href="/static/zeorbit-logo.png" />
-<link rel="apple-touch-icon" href="/static/zeorbit-logo.png" />
+<link rel="icon" type="image/webp" href="{WEBSITE}/zeorbit-logo.webp?v=8" />
+<link rel="apple-touch-icon" href="{WEBSITE}/zeorbit-logo.webp?v=8" />
 <style>
   :root {{
     --brand:#2563EB; --brand-dark:#1D4ED8; --navy:#0B1F3A; --signal:#38BDF8;
@@ -478,7 +478,7 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
           padding:8px 20px; background:rgba(255,255,255,0.96); backdrop-filter:blur(12px); border-bottom:1px solid var(--line);
           font-family:var(--apple); min-height:0; }}
   .brand {{ display:inline-flex; align-items:center; text-decoration:none; justify-self:start; }}
-  .brand img {{ height:24px; width:auto; display:block; }}
+  .brand img {{ height:36px; width:auto; display:block; }}
   .nav-mid {{ display:flex; align-items:center; justify-content:center; gap:2px 14px; flex-wrap:nowrap; }}
   .nav-mid a {{
     font-family:var(--apple); font-size:11px; font-weight:600; color:var(--ink); text-decoration:none;
@@ -502,7 +502,7 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
   @media (max-width:640px) {{
     .topbar {{ padding:8px 16px; }}
     .nav {{ padding:7px 14px; gap:10px; }}
-    .brand img {{ height:22px; }}
+    .brand img {{ height:30px; }}
     .nav .cta {{ padding:7px 12px; font-size:10px; }}
   }}
 
@@ -840,7 +840,7 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
   {_social_bar()}
   <div class="nav">
     <a class="brand" href="{WEBSITE}" target="_blank" rel="noreferrer">
-      <img src="/static/zeorbit-logo.png" alt="ZeOrbit" />
+      <img src="{WEBSITE}/zeorbit-logo.webp?v=8" alt="ZeOrbit" width="180" height="52" />
     </a>
     <nav class="nav-mid" aria-label="On this page">
       {nav_mid_html}
@@ -953,6 +953,7 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
           headers:{{'Content-Type':'application/json'}},
           body:JSON.stringify({{
             source:'public_page',
+            page_url: window.location.href,
             email: ccForm.email.value.trim(),
             phone: ccForm.phone.value.trim(),
             website: {json.dumps(WEBSITE)},

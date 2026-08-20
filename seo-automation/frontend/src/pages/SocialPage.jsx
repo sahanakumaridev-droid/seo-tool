@@ -15,16 +15,26 @@ function isUsableUrl(url) {
 }
 
 function resolvePostUrl(block, projectWebsite, pagePublicUrl) {
-  if (isUsableUrl(pagePublicUrl)) return pagePublicUrl
+  const liveHost = 'https://zeorbit.com'
+  const toLive = (url) => {
+    if (!url) return url
+    try {
+      const u = new URL(url)
+      if (u.hostname.includes('nip.io') || u.hostname.startsWith('seo.')) {
+        const path = u.pathname.replace(/\/$/, '')
+        if (path.startsWith('/p/')) return `${liveHost}/${path.slice(3)}`
+        if (path && path !== '/' && path !== '/blog') return `${liveHost}${path}`
+        return `${liveHost}/blog`
+      }
+    } catch { /* relative or invalid */ }
+    return url
+  }
+  if (isUsableUrl(pagePublicUrl)) return toLive(pagePublicUrl)
   if (!block) return ''
-  if (isUsableUrl(block.wp_post_url)) return block.wp_post_url
-  if (isUsableUrl(block.public_url)) return block.public_url
+  if (isUsableUrl(block.wp_post_url)) return toLive(block.wp_post_url)
+  if (isUsableUrl(block.public_url)) return toLive(block.public_url)
   if (block.slug) {
-    const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    // Frontend origin serves the SPA — only use it when /p/ is same-host (prod proxy).
-    if (origin && !origin.includes('example.com') && !/:(5173|5174|3000)$/.test(origin)) {
-      return `${origin}/p/${block.slug}`
-    }
+    return `${liveHost}/${block.slug}`
   }
   const site = (projectWebsite || '').trim().replace(/\/$/, '')
   if (site && isUsableUrl(site.startsWith('http') ? site : `https://${site}`)) {

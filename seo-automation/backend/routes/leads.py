@@ -8,6 +8,7 @@ from services.leads_service import parse_webhook_lead
 from services.prospecting_service import discover_businesses
 from services.email_service import notify_lead
 from services import captcha_service
+from services import form_guard
 from typing import List, Optional
 
 router = APIRouter()
@@ -73,10 +74,21 @@ async def create_lead(lead: LeadCreate, request: Request, session: AsyncSession 
             raise HTTPException(status_code=429, detail="Too many submissions. Please try again later.")
         if captcha_service.too_fast(lead.started_at):
             raise HTTPException(status_code=400, detail="Please complete the form and captcha, then send.")
+        email_err = form_guard.email_reject_reason(lead.email or "")
+        if email_err:
+            raise HTTPException(status_code=400, detail=email_err)
+        if not form_guard.is_valid_us_phone(lead.phone or ""):
+            raise HTTPException(status_code=400, detail="Enter a valid U.S. phone number.")
         if not captcha_service.verify(lead.captcha_id, lead.captcha_answer):
             raise HTTPException(status_code=400, detail="Captcha is incorrect. Refresh the code and try again.")
 
-    rec = _record_from({**lead.model_dump(), "status": "new"})
+    data = lead.model_dump()
+    page_url = (data.pop("page_url", None) or "").strip()
+    if page_url.startswith("https://") or page_url.startswith("http://"):
+        data["website"] = page_url[:300]
+    if public and data.get("phone"):
+        data["phone"] = form_guard.format_us_phone(data["phone"])
+    rec = _record_from({**data, "status": "new"})
     session.add(rec)
     await session.commit()
     await session.refresh(rec)

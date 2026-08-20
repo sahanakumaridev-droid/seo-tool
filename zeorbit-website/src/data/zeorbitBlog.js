@@ -4,7 +4,7 @@ export const ZEORBIT_BLOG = {
   eyebrow: 'ZeOrbit Blog',
   title: 'Insights for growing brands.',
   lead: 'Website design, local SEO, and digital growth notes from the ZeOrbit team — sourced from zeorbit.com.',
-  sourceUrl: 'https://zeorbit.com/blog/',
+  sourceUrl: '/blog',
 }
 
 export const ZEORBIT_BLOG_POSTS = [

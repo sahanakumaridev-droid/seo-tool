@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { listBlogPosts } from '../../api'
 import { ZEORBIT_BLOG_POSTS } from '../../data/zeorbitBlog'
+import { isOffsiteBlogHref, toSiteBlogHref } from '../../lib/blogUrls'
 
 const FALLBACK_IMAGES = [
   '/from-zeorbit/blog/small-business-website-cost-in-san-diego.jpg',
@@ -65,8 +66,8 @@ function PostImage({ src, alt }) {
 }
 
 function PostCard({ item, index, featured = false }) {
-  const href = item.url || item.public_url || '/blog'
-  const external = /^https?:\/\//i.test(href)
+  const href = toSiteBlogHref(item)
+  const offsite = isOffsiteBlogHref(href)
   const image = resolveImage(item, index)
   const dateLabel = formatDate(item.published_at) || (item.source === 'fallback' ? 'Guide' : 'Live')
   const place = [item.city, item.state].filter(Boolean).join(', ')
@@ -75,7 +76,7 @@ function PostCard({ item, index, featured = false }) {
     <a
       className={`zo-blog-card${featured ? ' is-featured' : ''}`}
       href={href}
-      {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+      {...(offsite ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
     >
       <div className="zo-blog-card-media">
         <PostImage src={image} alt="" />

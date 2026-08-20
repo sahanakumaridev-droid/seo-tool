@@ -17,12 +17,11 @@ MAX_LIVE = 4000
 MIN_FILL_MS = 2500
 RATE_WINDOW_S = 15 * 60
 RATE_MAX = 8
-PUBLIC_SOURCES = frozenset({
-    "landing_page",
-    "contact_page",
-    "public_page",
-    "website",
-})
+_SKIP_CAPTCHA = frozenset({"manual", "prospecting", "instant-quote"})
+
+
+def is_public_source(source: str) -> bool:
+    return (source or "").strip().lower() not in _SKIP_CAPTCHA
 
 _lock = Lock()
 _challenges: dict[str, dict] = {}
@@ -68,10 +67,6 @@ def verify(cid: str, answer: str) -> bool:
         if ok or row["tries"] >= MAX_ATTEMPTS:
             _challenges.pop(token, None)
         return ok
-
-
-def is_public_source(source: str) -> bool:
-    return (source or "").strip().lower() in PUBLIC_SOURCES
 
 
 def too_fast(started_at_ms: int) -> bool:

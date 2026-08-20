@@ -642,10 +642,10 @@ export default function GoogleAdsPage() {
                 Final URL (ads link here)
               </label>
               <input type="text" value={biz.finalUrl} onChange={e => { setBiz(b => ({ ...b, finalUrl: e.target.value })); setSelectedPageId('') }}
-                placeholder="https://yoursite.com/p/web-design-san-diego" style={{ width: '100%', padding: '10px 12px' }} />
+                placeholder="https://zeorbit.com/web-design-san-diego" style={{ width: '100%', padding: '10px 12px' }} />
               {biz.finalUrl.trim() && !urlHasTld && (
                 <div style={{ fontSize: 12, color: 'var(--red, #d92d20)', marginTop: 6 }}>
-                  Enter a real public domain (e.g. https://example.com/p/slug) — Google Ads can't target localhost or IPs.
+                  Enter a real public domain (e.g. https://zeorbit.com/web-design-san-diego) — Google Ads can't target localhost or IPs.
                 </div>
               )}
             </div>

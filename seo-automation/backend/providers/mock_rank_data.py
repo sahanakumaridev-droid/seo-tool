@@ -104,9 +104,9 @@ def _page_url(slug: str, block: Dict[str, Any], public_base: str) -> str:
         return wp
     base = (public_base or "").rstrip("/")
     if base and slug:
-        return f"{base}/p/{slug}"
+        return f"{base}/{slug}"
     if slug:
-        return f"/p/{slug}"
+        return f"/{slug}"
     return ""
 
 

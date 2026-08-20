@@ -671,9 +671,10 @@ async def generate_seo_block(
     exclude_image_urls: Optional[list] = None,
 ) -> SEOBlock:
     from services.image_service import resolve_campaign_niche
+    original_niche = normalize_niche_text(business_type or "")
     # Industry=Education + leftover "software engineer" niche → Education Services
     business_type = resolve_campaign_niche(
-        normalize_niche_text(business_type or ""),
+        original_niche,
         industry or "",
     )
     if use_ai:
@@ -684,7 +685,10 @@ async def generate_seo_block(
             block = await _generate_template_block(business_type, city, state, target_keywords, industry)
     else:
         block = await _generate_template_block(business_type, city, state, target_keywords, industry)
-    
+
+    from services.slug_utils import article_slug
+    block.slug = article_slug(target_keywords, city, business_type)
+
     # Auto-generate a featured image plus in-content images (so the article
     # body has images distributed through it, not just at the top — mirrors
     # what the Articles pipeline already does via generate_article_images()).
@@ -695,6 +699,7 @@ async def generate_seo_block(
             focus_keyword, f"{city}, {state}".strip(", "), "", count=3,
             exclude_urls=exclude_image_urls,
             industry=industry or "",
+            niche=original_niche,
         )
         block.in_content_images = images
         if images:
@@ -1101,6 +1106,7 @@ async def generate_articles(req: ArticleRequest, profile: WebsiteProfile) -> Lis
                         angle_title=angle.get("title", ""),
                         exclude_urls=used_featured,
                         industry=getattr(req, "industry", "") or "",
+                        niche=req.primary_keyword or "",
                     )
                     block.in_content_images = images
                     if images:

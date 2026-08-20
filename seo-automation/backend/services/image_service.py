@@ -41,6 +41,19 @@ def topic_image_family(text: str) -> str:
         return "hvac"
     if any(k in t for k in ("electric",)):
         return "electrician"
+    if any(k in t for k in ("dental", "dentist")):
+        return "dental"
+    # Verticals before "website" so "medical website" is not filed as generic web.
+    if any(k in t for k in ("health", "medical", "clinic", "hospital", "doctor", "patient")):
+        return "healthcare"
+    if any(k in t for k in ("law", "legal", "attorney")):
+        return "legal"
+    if any(k in t for k in ("real estate", "realtor")):
+        return "real_estate"
+    if any(k in t for k in ("restaurant", "chef", "cafe")):
+        return "restaurant"
+    if any(k in t for k in ("educat", "school", "learn", "tutor", "university", "college", "student")):
+        return "education"
     if any(k in t for k in ("financ", "bank", "fintech", "invest", "account")):
         return "finance"
     if any(k in t for k in ("market", "seo", "advertis", "agency")) and not any(
@@ -54,14 +67,6 @@ def topic_image_family(text: str) -> str:
         return "software"
     if any(k in t for k in ("web", "website", "wordpress", "designer", "developer")):
         return "web"
-    if any(k in t for k in ("dental", "dentist")):
-        return "dental"
-    if any(k in t for k in ("real estate", "realtor")):
-        return "real_estate"
-    if any(k in t for k in ("law", "legal", "attorney")):
-        return "legal"
-    if any(k in t for k in ("restaurant", "chef", "cafe")):
-        return "restaurant"
     if any(k in t for k in ("clean",)):
         return "cleaning"
     if any(k in t for k in ("roof",)):
@@ -72,8 +77,6 @@ def topic_image_family(text: str) -> str:
         return "fitness"
     if any(k in t for k in ("photo",)):
         return "photography"
-    if any(k in t for k in ("educat", "school", "learn", "tutor", "university", "college", "student")):
-        return "education"
     return "general"
 
 def _stable_index(seed: str, modulo: int) -> int:
@@ -375,6 +378,18 @@ _FINANCE_IMAGES = [
     "https://images.unsplash.com/photo-1642543492481-44e81e3914a7",  # crypto / finance UI
 ]
 
+# Clinic / medical — used when Industry = Healthcare (or medical keywords)
+_HEALTHCARE_IMAGES = [
+    "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d",  # medical clinic
+    "https://images.unsplash.com/photo-1576091160550-2173dba999ef",  # doctor at computer
+    "https://images.unsplash.com/photo-1584820927498-cfe5211fd8bf",  # doctor
+    "https://images.unsplash.com/photo-1631217868264-e5b90bb7e133",  # medical office
+    "https://images.unsplash.com/photo-1516549655169-df83a0774514",  # hospital
+    "https://images.unsplash.com/photo-1551076805-e1869033e561",  # hospital corridor
+    "https://images.unsplash.com/photo-1666214280557-f1b5022eb634",  # clinician laptop
+    "https://images.unsplash.com/photo-1579684385127-1ef15d508118",  # clinical care
+]
+
 # Back-compat alias used by pool helpers
 _WEB_FAMILY_IMAGES = list(_WEB_DESIGN_IMAGES)
 
@@ -389,6 +404,10 @@ _CURATED_TOPIC_IMAGES = {
     "banking": list(_FINANCE_IMAGES),
     "fintech": list(_FINANCE_IMAGES),
     "investment": list(_FINANCE_IMAGES),
+    "healthcare": list(_HEALTHCARE_IMAGES),
+    "medical": list(_HEALTHCARE_IMAGES),
+    "clinic": list(_HEALTHCARE_IMAGES),
+    "hospital": list(_HEALTHCARE_IMAGES),
     "plumbing": [
         "https://images.unsplash.com/photo-1607472586893-edb57bdc0e39",  # plumber tools
         "https://images.unsplash.com/photo-1581244277943-fe4a9c777189",  # plumbing work
@@ -552,6 +571,21 @@ _TOPIC_MODIFIERS = {
     "education": ["classroom students", "teacher whiteboard", "university campus", "library study"],
     "school": ["classroom students", "school hallway", "graduation ceremony", "students learning"],
     "tutoring": ["tutor student desk", "homework help", "study session", "learning books"],
+    "healthcare": ["clinic website", "doctor laptop", "hospital website", "medical office"],
+    "medical": ["clinic website", "doctor laptop", "hospital website", "medical office"],
+    "clinic": ["medical clinic", "doctor laptop", "hospital reception", "healthcare app"],
+    "insurance": ["insurance office", "agent laptop", "policy documents", "insurance website"],
+}
+
+# When Business Niche is web/software and Industry is a vertical, search these
+# instead of generic UI mockups — e.g. Web Design + Healthcare → clinic website.
+_WEB_VERTICAL_MODIFIERS = {
+    "medical": ["clinic website", "doctor laptop", "hospital website", "healthcare app"],
+    "finance": ["banking website", "finance dashboard", "investment app", "fintech laptop"],
+    "legal": ["law firm website", "attorney laptop", "legal office computer", "law website"],
+    "real estate": ["real estate website", "property listing laptop", "realtor computer", "home website"],
+    "education": ["school website", "student laptop", "university website", "elearning ui"],
+    "insurance": ["insurance website", "agent laptop", "policy dashboard", "insurance office"],
 }
 
 # Audience industries that may bias stock photos — whitelist ONLY (never pass through
@@ -666,6 +700,7 @@ def _curated_pool_for_topic(text: str) -> List[str]:
         "hvac": _CURATED_TOPIC_IMAGES.get("hvac", []),
         "electrician": _CURATED_TOPIC_IMAGES.get("electrician", []),
         "finance": _FINANCE_IMAGES,
+        "healthcare": _HEALTHCARE_IMAGES,
         "marketing": _CURATED_TOPIC_IMAGES.get("marketing", []),
         "software": _SOFTWARE_IMAGES,
         "web": _WEB_DESIGN_IMAGES,
@@ -729,6 +764,47 @@ def _pick_image_topic(niche_topic: str, focus_keyword: str, industry: str = "") 
     return topic, topic
 
 
+def _related_stock_plan(
+    focus_keyword: str,
+    industry: str,
+    location_words: set,
+    niche: str = "",
+) -> tuple:
+    """Build an on-topic Unsplash/Pexels query from keyword + niche + industry.
+
+    Web Design + Healthcare → "medical website" / clinic laptop, not generic UI mockups
+    and not a hospital-only override that drops the website angle.
+    """
+    visual = _resolve_visual_industry(industry)
+    niche_clean = _clean_image_query(niche, exclude=location_words)
+    kw_clean = (
+        _clean_image_query(focus_keyword, exclude=location_words)
+        or niche_clean
+        or "business"
+    )
+    fam = topic_image_family(f"{niche} {focus_keyword} {kw_clean}")
+
+    if visual and fam in ("web", "software", "marketing", "general"):
+        mods = list(_WEB_VERTICAL_MODIFIERS.get(visual) or [visual, "professional", "laptop", "office"])
+        if fam == "web":
+            topic = f"{visual} website"
+        elif fam == "software":
+            topic = f"{visual} software"
+            mods = [f"{visual} app", "dashboard", "developer laptop", visual]
+        else:
+            topic = f"{visual} {kw_clean}".strip()
+        return topic, mods, visual
+
+    topic = kw_clean
+    modifiers = _IMAGE_QUERY_MODIFIERS
+    search_blob = f"{topic} {industry} {focus_keyword} {niche}".lower()
+    for key, mods in _TOPIC_MODIFIERS.items():
+        if key in topic.lower() or key in search_blob:
+            modifiers = mods
+            break
+    return topic, modifiers, topic
+
+
 def _with_unsplash_params(url: str) -> str:
     if "images.unsplash.com" in url and "?" not in url:
         return f"{url}?w=1200&h=675&fit=crop&q=80"
@@ -739,7 +815,7 @@ def _all_curated_urls() -> List[str]:
     """Every curated Unsplash URL we ship — used when a niche pool is exhausted."""
     seen: List[str] = []
     keys = set()
-    for pool in (_WEB_DESIGN_IMAGES, _SOFTWARE_IMAGES, _FINANCE_IMAGES, _GENERIC_CURATED):
+    for pool in (_WEB_DESIGN_IMAGES, _SOFTWARE_IMAGES, _FINANCE_IMAGES, _HEALTHCARE_IMAGES, _GENERIC_CURATED):
         for u in pool:
             k = normalize_image_key(u)
             if k and k not in keys:
@@ -801,8 +877,9 @@ async def _hosted_image_url(
 ) -> str:
     """Return an on-topic hosted image URL unique to this seed/location."""
     exclude_keys = {normalize_image_key(u) for u in (exclude or []) if u}
-    place = " ".join(re.findall(r"[a-zA-Z]+", (location or "").lower())[:3])
-    search = f"{query} {place}".strip() if place else query
+    # Stock libraries almost never tag small US cities; appending them dilutes
+    # relatedness (e.g. "medical website Coronado" → random travel photos).
+    search = query
     page = (_stable_index(seed, 20) + 1)
     if settings.UNSPLASH_ACCESS_KEY:
         try:
@@ -902,11 +979,12 @@ async def generate_article_images(
     angle_title: str = "",
     exclude_urls: Optional[Iterable[str]] = None,
     industry: str = "",
+    niche: str = "",
 ) -> List[ImageAsset]:
     """Generate 1 featured + (count-1) in-content images with full SEO metadata.
 
-    Business niche (focus_keyword) owns the visual topic. Industry / Audience only
-    overrides for Finance/Legal-style audiences when the niche is a vague tech title.
+    Photos are auto-picked from Unsplash/Pexels using keyword + business niche +
+    industry (curated Unsplash URLs if no API keys). Each page in a batch stays unique.
 
     `exclude_urls` prevents reusing featured photos already assigned to other pages
     in the same generate/refresh batch (and within this article).
@@ -916,45 +994,24 @@ async def generate_article_images(
     location_words = {
         w for w in re.findall(r"[a-zA-Z]+", (location or "").lower()) if len(w) > 2
     }
-    niche_topic = (
-        _clean_image_query(focus_keyword, exclude=location_words)
-        or _clean_image_query(angle_title, exclude=location_words)
-        or "business"
+    topic, modifiers, fallback_topic = _related_stock_plan(
+        focus_keyword, industry, location_words, niche=niche,
     )
-    topic, topic_blob = _pick_image_topic(niche_topic, focus_keyword, industry)
-
-    modifiers = _IMAGE_QUERY_MODIFIERS
-    topic_l = topic.lower()
-    search_blob = f"{topic_l} {industry} {focus_keyword}".lower()
-    for key, mods in _TOPIC_MODIFIERS.items():
-        if key in topic_l or key in search_blob:
-            modifiers = mods
-            break
 
     used: Set[str] = {normalize_image_key(u) for u in (exclude_urls or []) if u}
-    # Prefer curated pool when we know the niche — keeps photos on-topic and unique
-    # across locations (Unsplash often returns the same popular hit).
-    prefer_curated = topic_image_family(topic_blob) not in ("general",)
 
     for i in range(count):
         is_featured = i == 0
         modifier = modifiers[i % len(modifiers)]
         query = f"{topic} {modifier}".strip()
-        seed = f"{topic}|{location}|{focus_keyword}|{i}|{angle_title}|{industry}"
-        url = ""
-        if prefer_curated:
-            url = _curated_image_url(topic_blob, seed=seed, exclude=used)
-            key = normalize_image_key(url)
-            if key and key in used:
-                url = ""
-        if not url:
-            url = await _hosted_image_url(query, seed=seed, exclude=used, location=location)
+        seed = f"{topic}|{location}|{focus_keyword}|{i}|{angle_title}|{industry}|{niche}"
+        # Related stock search first; curated pool is the fallback.
+        url = await _hosted_image_url(query, seed=seed, exclude=used, location="")
         key = normalize_image_key(url)
-        # Hard uniqueness: if we still collided, force another curated pick with a new seed
         if key and key in used:
             for attempt in range(12):
                 alt = _curated_image_url(
-                    topic_blob,
+                    fallback_topic,
                     seed=f"{seed}|retry|{attempt}",
                     exclude=used,
                 )
@@ -964,11 +1021,13 @@ async def generate_article_images(
                     break
             if key in used:
                 url = await _hosted_image_url(
-                    query, seed=f"{seed}|retry-host", exclude=used, location=location,
+                    query, seed=f"{seed}|retry-host", exclude=used, location="",
                 )
                 key = normalize_image_key(url)
         if key:
             used.add(key)
+        if i == 0:
+            print(f"[Image] related stock: {query}")
         meta = build_image_metadata(focus_keyword, location, business_name, i, is_featured)
         assets.append(ImageAsset(
             url=url,

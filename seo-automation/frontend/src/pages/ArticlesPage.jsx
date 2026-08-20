@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Zap, MapPin, Globe, Eye, CheckCircle, X, Search, Link2, FileText, Image as ImageIcon,
          Upload, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
-import { analyzeWebsite, generateArticles, publishToWordPress, publishBulkToWordPress, publishToWeb, zeorbitBlogUrl } from '../api'
+import { analyzeWebsite, generateArticles, publishToWordPress, publishBulkToWordPress, publishToWeb, zeorbitBlogUrl, zeorbitArticleUrl } from '../api'
 
 const SEO_PLUGINS = [
   { value: 'rankmath', label: 'RankMath' },
@@ -143,8 +143,9 @@ export default function ArticlesPage() {
     setWebResults(r => ({ ...r, [i]: 'loading' }))
     try {
       const res = await publishToWeb(block)
-      setWebResults(r => ({ ...r, [i]: { url: res.data.public_url } }))
-      window.open(res.data.public_url, '_blank', 'noopener')
+      const liveUrl = zeorbitArticleUrl(res.data.public_url || res.data.slug)
+      setWebResults(r => ({ ...r, [i]: { url: liveUrl } }))
+      window.open(liveUrl, '_blank', 'noopener')
       window.open(zeorbitBlogUrl(), '_blank', 'noopener')
     } catch (e) {
       setWebResults(r => ({ ...r, [i]: { error: e.response?.data?.detail || 'Failed' } }))

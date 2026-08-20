@@ -31,11 +31,16 @@ function usePreferMotionVideo() {
   const [preferVideo, setPreferVideo] = useState(false)
 
   useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: no-preference)')
-    const sync = () => setPreferVideo(mq.matches)
+    const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const narrow = window.matchMedia('(max-width: 768px)')
+    const sync = () => setPreferVideo(!motion.matches && !narrow.matches)
     sync()
-    mq.addEventListener('change', sync)
-    return () => mq.removeEventListener('change', sync)
+    motion.addEventListener('change', sync)
+    narrow.addEventListener('change', sync)
+    return () => {
+      motion.removeEventListener('change', sync)
+      narrow.removeEventListener('change', sync)
+    }
   }, [])
 
   return preferVideo

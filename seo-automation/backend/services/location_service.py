@@ -219,6 +219,42 @@ def _city_info(name: str, state: str, lat: float, lon: float, kind: str = "city"
     )
 
 
+def city_from_label(text: str) -> Optional[CityInfo]:
+    """Parse a typed or dropdown location like 'Coronado, CA' into CityInfo."""
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    if "," in raw:
+        name, state = [p.strip() for p in raw.split(",", 1)]
+    else:
+        name, state = raw, ""
+    if not name:
+        return None
+    return _city_info(name, state, 0.0, 0.0, "city")
+
+
+def merge_extra_locations(cities: List[CityInfo], extra_labels: Optional[List[str]]) -> List[CityInfo]:
+    """Prepend manually added locations without duplicating nearby results."""
+    out: List[CityInfo] = []
+    seen = set()
+    for label in extra_labels or []:
+        info = city_from_label(label)
+        if not info:
+            continue
+        key = (info.name.lower(), (info.state or "").lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(info)
+    for city in cities or []:
+        key = (city.name.lower(), (city.state or "").lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(city)
+    return out
+
+
 # Curated major metros per state — shown first when base location is a state.
 _STATE_MAJOR_CITIES = {
     "AL": ["Birmingham", "Montgomery", "Huntsville", "Mobile", "Tuscaloosa"],

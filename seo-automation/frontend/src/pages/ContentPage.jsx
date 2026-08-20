@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Zap, MapPin, Globe, Eye, X, RefreshCw, Save, CheckCircle,
          FileJson, Tag, Plus, Upload, ChevronDown, ChevronUp, Megaphone, Trash2 } from 'lucide-react'
 import { generateBulk, exportJson, exportWordpress, generateSingle,
-         savePage, publishToWordPress, publishBulkToWordPress, startBulkGenerateJob, getJob, publishAllToWeb, zeorbitBlogUrl,
+         savePage, publishToWordPress, publishBulkToWordPress, startBulkGenerateJob, getJob, publishAllToWeb, zeorbitBlogUrl, zeorbitArticleUrl,
          getNearbyCities, deletePage, listPages } from '../api'
 import axios from 'axios'
 
@@ -21,6 +21,24 @@ const INDUSTRIES = ['Contractors', 'Healthcare', 'Retail', 'Restaurants',
 const KW_SUGGESTIONS = ['web design san diego', 'affordable web design', 'small business website',
   'website designer near me', 'wordpress website san diego', 'custom website design',
   'website redesign', 'mobile app development san diego', 'ecommerce website developer']
+
+const US_CITY_OPTIONS = [
+  'San Diego, CA', 'Coronado, CA', 'La Jolla, CA', 'Chula Vista, CA', 'El Cajon, CA',
+  'La Mesa, CA', 'National City, CA', 'Imperial Beach, CA', 'Lemon Grove, CA',
+  'Carlsbad, CA', 'Oceanside, CA', 'Encinitas, CA', 'Vista, CA', 'San Marcos, CA',
+  'Escondido, CA', 'Poway, CA', 'Del Mar, CA', 'Solana Beach, CA',
+  'Los Angeles, CA', 'San Francisco, CA', 'San Jose, CA', 'Sacramento, CA',
+  'Oakland, CA', 'Fresno, CA', 'Long Beach, CA', 'Anaheim, CA', 'Riverside, CA',
+  'Irvine, CA', 'Santa Ana, CA', 'Bakersfield, CA',
+  'Phoenix, AZ', 'Tucson, AZ', 'Las Vegas, NV', 'Denver, CO', 'Seattle, WA',
+  'Portland, OR', 'Austin, TX', 'Dallas, TX', 'Houston, TX', 'San Antonio, TX',
+  'Chicago, IL', 'New York, NY', 'Miami, FL', 'Orlando, FL', 'Tampa, FL',
+  'Atlanta, GA', 'Boston, MA', 'Philadelphia, PA', 'Washington, DC',
+]
+
+function locKey(value) {
+  return (value || '').toLowerCase().replace(/\s+/g, ' ').trim()
+}
 const SEO_PLUGINS = [
   { value: 'rankmath', label: 'RankMath' },
   { value: 'aioseo', label: 'All in One SEO' },
@@ -95,6 +113,8 @@ const FAMILY_LABEL = {
 function familiesCompatible(a, b) {
   if (!a || !b || a === 'other' || b === 'other') return true
   if (a === b) return true
+  // Web / app work is vertical-agnostic: "healthcare web design", "restaurant website", etc.
+  if (a === 'web' || b === 'web' || a === 'software' || b === 'software') return true
   const set = FAMILY_COMPAT[a]
   return set ? set.has(b) : false
 }
@@ -104,26 +124,7 @@ function familiesCompatible(a, b) {
  * Returns { ok, message } — message is snackbar-ready when not ok.
  */
 function analyzeCategoryAlignment(niche, industry, keywords = []) {
-  const nicheFam = categoryFamily(niche)
-  const indFam = industryFamily(industry)
-  if (!nicheFam) return { ok: true, message: '' }
-
-  if (indFam && indFam !== 'other' && !familiesCompatible(nicheFam, indFam)) {
-    return {
-      ok: false,
-      message: `Please select matching categories only — Business Niche is “${FAMILY_LABEL[nicheFam] || nicheFam}” but Industry is “${FAMILY_LABEL[indFam] || indFam}”. Align niche, industry, and keywords.`,
-    }
-  }
-
-  const kwText = (keywords || []).join(' ')
-  const kwFam = categoryFamily(kwText)
-  if (kwFam && !familiesCompatible(nicheFam, kwFam)) {
-    return {
-      ok: false,
-      message: `Please select matching categories only — keywords look like “${FAMILY_LABEL[kwFam]}” but Business Niche is “${FAMILY_LABEL[nicheFam]}”. Use keywords for the same category.`,
-    }
-  }
-
+  // Industry / Audience is optional tone only — never block generate.
   return { ok: true, message: '' }
 }
 
@@ -491,23 +492,13 @@ export default function ContentPage() {
   const resultsRef = useRef(null)
   const [nearbyCities, setNearbyCities] = useState([])
   const [nearbyError, setNearbyError] = useState('')
+  const [extraLocations, setExtraLocations] = useState([])
+  const [extraLocDraft, setExtraLocDraft] = useState('')
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), type === 'warning' ? 6500 : 4000)
   }
-
-  // Warn when niche / industry / keywords point at different categories
-  useEffect(() => {
-    const niche = (form.business_type || '').trim()
-    if (!niche) return
-    const timer = setTimeout(() => {
-      const result = analyzeCategoryAlignment(niche, form.industry, targetKeywords)
-      if (!result.ok) showToast(result.message, 'warning')
-    }, 450)
-    return () => clearTimeout(timer)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.business_type, form.industry, targetKeywords])
 
   // Keep results + keywords alive when navigating to a page preview and back
   useEffect(() => { sessionStorage.setItem('seo_pages', JSON.stringify(pages)) }, [pages])
@@ -622,6 +613,14 @@ export default function ContentPage() {
   }
   const removeKeyword = (kw) => setTargetKeywords(prev => prev.filter(k => k !== kw))
 
+  const addExtraLocation = (raw) => {
+    const loc = (raw || extraLocDraft).trim()
+    if (!loc) return
+    setExtraLocations(prev => prev.some(x => locKey(x) === locKey(loc)) ? prev : [...prev, loc])
+    setExtraLocDraft('')
+  }
+  const removeExtraLocation = (loc) => setExtraLocations(prev => prev.filter(x => locKey(x) !== locKey(loc)))
+
   const handleGenerate = async (e) => {
     e.preventDefault()
     const niche = (form.business_type || '').trim()
@@ -637,13 +636,6 @@ export default function ContentPage() {
       document.getElementById('target-keywords-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
-    const alignment = analyzeCategoryAlignment(niche, form.industry, targetKeywords)
-    if (!alignment.ok) {
-      setError(alignment.message)
-      showToast(alignment.message, 'warning')
-      document.getElementById('business-niche-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      return
-    }
     setLoading(true)
     setError('')
     setPublishResults({})
@@ -654,6 +646,7 @@ export default function ContentPage() {
         business_type: niche,
         num_cities: Number(form.num_cities),
         target_keywords: targetKeywords,
+        extra_locations: extraLocations,
         use_ai: useAi,
         llm_provider: llmProvider || null,
       }
@@ -734,11 +727,6 @@ export default function ContentPage() {
   }
 
   const filtered = pages.filter(p => p.city.toLowerCase().includes(filter.toLowerCase()))
-  const categoryAlignment = analyzeCategoryAlignment(
-    (form.business_type || '').trim(),
-    form.industry,
-    targetKeywords,
-  )
 
   return (
     <div className="space-y-5 fade-in">
@@ -856,20 +844,22 @@ export default function ContentPage() {
                 className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500/50">
                 {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
               </select>
-              <p className="mt-1.5 text-[10px] text-slate-500">Shapes copy tone. Keep it in the same category as Business Niche.</p>
+              <p className="mt-1.5 text-[10px] text-slate-500">Optional. Shapes copy tone and related photos — any industry is allowed.</p>
             </div>
-            {!categoryAlignment.ok && (
-              <div className="text-[11px] leading-snug px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/35 text-amber-200">
-                {categoryAlignment.message}
-              </div>
-            )}
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
                 <MapPin size={10} className="inline mr-1" />Base Location
               </label>
+              <select
+                value={US_CITY_OPTIONS.find(c => locKey(c) === locKey(form.base_location)) || ''}
+                onChange={e => { if (e.target.value) updateForm(f => ({ ...f, base_location: e.target.value })) }}
+                className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500/50 mb-1.5">
+                <option value="">Choose a city…</option>
+                {US_CITY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
               <input type="text" value={form.base_location}
                 onChange={e => updateForm(f => ({ ...f, base_location: e.target.value }))}
-                placeholder="e.g. San Diego, CA"
+                placeholder="Or type a city — e.g. San Diego, CA"
                 className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50" />
               {form.base_location.trim() && !form.base_location.includes(',') && (
                 <div className="mt-1.5 text-[10px] text-amber-400">
@@ -956,35 +946,70 @@ export default function ContentPage() {
               )
             })()}
 
-            <button type="submit" disabled={loading || !!asyncJobId || !targetKeywords.length || !(form.business_type || '').trim() || !categoryAlignment.ok}
+            <button type="submit" disabled={loading || !!asyncJobId || !targetKeywords.length || !(form.business_type || '').trim()}
               className="btn-primary w-full py-2.5 rounded-lg text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
               title={
                 !(form.business_type || '').trim() ? 'Select a Business Niche first'
                   : !targetKeywords.length ? 'Add at least one target keyword first'
-                    : !categoryAlignment.ok ? 'Align niche, industry, and keywords to the same category'
-                      : undefined
+                    : undefined
               }>
               {loading || asyncJobId
                 ? <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.2)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/></svg>{asyncJobId ? 'Generating…' : `Generating ${form.num_cities} pages...`}</>
                 : <><Zap size={14} />{useAsync ? 'Start Async Job' : 'Generate Pages'}{useAi ? ' (AI)' : ''}</>}
             </button>
+            <p className="text-[10px] text-center" style={{ color: 'var(--text-3)' }}>
+              Each page gets 3 related stock photos (1 hero + 2 in the article) from keyword + niche + industry.
+            </p>
             {!(form.business_type || '').trim() ? (
               <p className="text-[11px] text-amber-400 text-center">Select a Business Niche to enable generate.</p>
             ) : !targetKeywords.length ? (
               <p className="text-[11px] text-amber-400 text-center">Add a target keyword above to enable generate.</p>
-            ) : !categoryAlignment.ok ? (
-              <p className="text-[11px] text-amber-400 text-center">Please select matching categories only.</p>
             ) : null}
           </form>
         </div>
 
         <div className="card p-3 lg:col-span-2">
           <h4 className="text-[11px] font-semibold uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: 'var(--text-2)' }}>
-            <Globe size={11} /> Location Expansion — {nearbyCities.length || form.num_cities} locations
+            <Globe size={11} /> Location Expansion — {nearbyCities.length + extraLocations.length || form.num_cities} locations
           </h4>
+          <div className="flex flex-col sm:flex-row gap-1.5 mb-2">
+            <select
+              value=""
+              onChange={e => { if (e.target.value) addExtraLocation(e.target.value) }}
+              className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
+              style={{ borderColor: 'var(--border)', color: 'var(--text-1)' }}>
+              <option value="">Add from dropdown…</option>
+              {US_CITY_OPTIONS.filter(c => !extraLocations.some(x => locKey(x) === locKey(c)) && locKey(c) !== locKey(form.base_location)).map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <div className="flex gap-1.5 flex-1">
+              <input type="text" value={extraLocDraft}
+                onChange={e => setExtraLocDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addExtraLocation() } }}
+                placeholder="Or type City, ST"
+                className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-1)' }} />
+              <button type="button" onClick={() => addExtraLocation()}
+                className="px-3 py-2 rounded-lg text-xs font-semibold text-white flex-shrink-0"
+                style={{ background: 'var(--brand, #4f46e5)' }}>
+                Add
+              </button>
+            </div>
+          </div>
           <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
+            {extraLocations.map(loc => (
+              <span key={`extra-${loc}`}
+                className="text-[11px] px-2 py-0.5 rounded font-semibold inline-flex items-center gap-1"
+                style={{ background: '#ecfdf5', border: '1px solid #059669', color: '#065f46' }}>
+                {loc}
+                <button type="button" onClick={() => removeExtraLocation(loc)} aria-label={`Remove ${loc}`}
+                  className="leading-none opacity-70 hover:opacity-100">×</button>
+              </span>
+            ))}
             {nearbyCities.slice(0, 40).map(c => {
               const kind = c.kind || 'city'
+              const label = `${c.name}${c.state ? `, ${c.state}` : ''}`
               const style = kind === 'state'
                 ? { background: '#eef2ff', border: '1px solid #6366f1', color: '#312e81' }
                 : kind === 'county'
@@ -1001,7 +1026,7 @@ export default function ContentPage() {
                       {kind}
                     </span>
                   )}
-                  {c.name}{c.state ? `, ${c.state}` : ''}
+                  {label}
                 </span>
               )
             })}
@@ -1011,12 +1036,12 @@ export default function ContentPage() {
                 +{nearbyCities.length - 40} more
               </span>
             )}
-            {!nearbyCities.length && !nearbyError && form.base_location.trim() && (
+            {!nearbyCities.length && !nearbyError && !extraLocations.length && form.base_location.trim() && (
               <span className="text-xs" style={{ color: 'var(--text-3)' }}>Looking up locations…</span>
             )}
           </div>
           <p className="text-[10px] mt-2" style={{ color: 'var(--text-3)' }}>
-            Tip: use a state (“Illinois, IL”), county (“Cook County, IL”), or city (“Chicago, IL”).
+            Dropdown or type a city to include it. Nearby cities come from the base location. Live URL is the keyword plus city, e.g. /web-design-san-diego.
           </p>
         </div>
       </div>
@@ -1077,16 +1102,16 @@ export default function ContentPage() {
               <div key={i} className="flex items-center justify-between gap-3 rounded-lg px-3 py-2" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
                 <div className="min-w-0">
                   <div className="text-xs font-semibold truncate" style={{ color: 'var(--text-1)' }}>{l.city}{l.state ? `, ${l.state}` : ''}</div>
-                  <a href={l.public_url} target="_blank" rel="noreferrer" className="text-xs truncate block" style={{ color: 'var(--brand-violet)' }}>{l.public_url}</a>
+                  <a href={zeorbitArticleUrl(l.public_url || l.slug)} target="_blank" rel="noreferrer" className="text-xs truncate block" style={{ color: 'var(--brand-violet)' }}>{zeorbitArticleUrl(l.public_url || l.slug)}</a>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <button onClick={() => navigator.clipboard?.writeText(l.public_url)}
+                  <button onClick={() => navigator.clipboard?.writeText(zeorbitArticleUrl(l.public_url || l.slug))}
                     className="px-2.5 py-1.5 rounded-lg text-xs" style={{ background: 'var(--bg-overlay)', border: '1px solid var(--border-bright)', color: 'var(--text-2)' }}>Copy</button>
                   <button
                     onClick={() => navigate('/google-ads', {
                       state: {
-                        finalUrl: l.public_url,
-                        public_url: l.public_url,
+                        finalUrl: zeorbitArticleUrl(l.public_url || l.slug),
+                        public_url: zeorbitArticleUrl(l.public_url || l.slug),
                         category: form.business_type,
                         city: l.city || '',
                         businessName: form.business_type,
@@ -1099,7 +1124,7 @@ export default function ContentPage() {
                   >
                     <Megaphone size={11} /> Google Ads
                   </button>
-                  <a href={l.public_url} target="_blank" rel="noreferrer"
+                  <a href={zeorbitArticleUrl(l.public_url || l.slug)} target="_blank" rel="noreferrer"
                     className="px-2.5 py-1.5 rounded-lg text-xs btn-primary" style={{ color: '#fff' }}>Open</a>
                 </div>
               </div>

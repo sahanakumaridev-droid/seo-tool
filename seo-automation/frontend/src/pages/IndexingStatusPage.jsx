@@ -243,7 +243,7 @@ export default function IndexingStatusPage() {
             required
             value={inspectUrl}
             onChange={e => setInspectUrl(e.target.value)}
-            placeholder="https://seo.159.198.79.219.nip.io/p/web-design-san-diego"
+            placeholder="https://zeorbit.com/web-design-san-diego"
             style={{ width: '100%', padding: '10px 12px' }}
           />
         </div>

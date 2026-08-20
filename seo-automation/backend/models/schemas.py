@@ -6,6 +6,10 @@ class GenerateRequest(BaseModel):
     business_type: str = Field(..., min_length=1, example="Web Design", description="Business niche (required)")
     base_location: str = Field(..., example="San Diego, CA")
     num_cities: int = Field(default=10, ge=1, le=100)
+    extra_locations: List[str] = Field(
+        default_factory=list,
+        description="Extra cities typed or picked in the UI, e.g. ['Coronado, CA']",
+    )
     target_keywords: List[str] = Field(
         ...,
         min_length=1,
@@ -272,6 +276,7 @@ class LeadCreate(BaseModel):
     captcha_answer: str = ""
     website_url: str = ""
     started_at: int = 0
+    page_url: str = ""
 
 class ProspectRequest(BaseModel):
     industry: str = Field(..., example="roofing")

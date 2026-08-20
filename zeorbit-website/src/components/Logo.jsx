@@ -5,7 +5,7 @@
  */
 export default function Logo({ size = 40, onDark = false, className = '' }) {
   // onDark: brightened official blue mark (readable on black header)
-  const src = onDark ? '/zeorbit-logo-nav.png?v=7' : '/zeorbit-logo.png?v=3'
+  const src = onDark ? '/zeorbit-logo-nav.webp?v=8' : '/zeorbit-logo.webp?v=8'
   const aspect = onDark ? 632 / 180 : 1010 / 293
 
   return (
@@ -17,6 +17,7 @@ export default function Logo({ size = 40, onDark = false, className = '' }) {
       height={size}
       loading="eager"
       decoding="async"
+      fetchPriority="low"
       style={{
         height: size,
         width: 'auto',

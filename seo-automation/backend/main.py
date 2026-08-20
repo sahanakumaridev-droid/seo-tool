@@ -3,7 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse, PlainTextResponse, Response
+from fastapi.responses import JSONResponse, HTMLResponse, PlainTextResponse, Response, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from db import get_session
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -78,13 +78,19 @@ app.add_middleware(RequestIDMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "https://*.vercel.app",
-        os.getenv("FRONTEND_URL", ""),
+        origin for origin in [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:5175",
+            "http://127.0.0.1:5180",
+            "https://zeorbit.com",
+            "https://www.zeorbit.com",
+            os.getenv("FRONTEND_URL", ""),
+        ] if origin
     ],
+    allow_origin_regex=r"https://([a-z0-9-]+\.)?zeorbit\.com",
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -227,7 +233,7 @@ async def sitemap_xml(request: Request, session=Depends(get_session)):
     base = _public_base(request)
     rows = (await session.execute(select(PageRecord.slug, PageRecord.updated_at))).all()
     urls = "".join(
-        f"<url><loc>{base}/p/{slug}</loc>"
+        f"<url><loc>{base}/{slug}</loc>"
         f"<lastmod>{updated_at.date().isoformat() if updated_at else ''}</lastmod></url>"
         for slug, updated_at in rows
     )
@@ -235,10 +241,14 @@ async def sitemap_xml(request: Request, session=Depends(get_session)):
     return Response(content=xml, media_type="application/xml")
 
 
-# ── Public "Publish to Web" pages ───────────────────────────────
-@app.get("/p/{slug}", response_class=HTMLResponse, tags=["Public Pages"])
-async def public_page(slug: str, request: Request, session=Depends(get_session)):
-    """Serve a published page as standalone, publicly viewable HTML."""
+# ── Public published articles at /{slug} (never /p/ in the address bar) ──
+_RESERVED_ARTICLE_SLUGS = {
+    "docs", "redoc", "openapi.json", "health", "metrics", "static",
+    "robots.txt", "sitemap.xml", "favicon.ico", "api",
+}
+
+
+async def _render_public_article(slug: str, request: Request, session):
     from sqlalchemy import select
     from db import PageRecord
     from models.schemas import SEOBlock
@@ -255,5 +265,20 @@ async def public_page(slug: str, request: Request, session=Depends(get_session))
             status_code=404,
         )
     block = SEOBlock(**row.seo_block)
-    public_url = f"{_public_base(request)}/p/{slug}"
+    public_url = f"{_public_base(request)}/{slug}"
     return HTMLResponse(render_public_html(block, public_url))
+
+
+@app.api_route("/p/{slug}", methods=["GET", "HEAD"], tags=["Public Pages"])
+async def public_page_legacy(slug: str, request: Request):
+    """Old /p/{slug} links 301 to /{slug} so /p/ never stays in the URL."""
+    from routes.pages import _public_base
+    return RedirectResponse(url=f"{_public_base(request)}/{slug}", status_code=301)
+
+
+@app.api_route("/{slug}", methods=["GET", "HEAD"], response_class=HTMLResponse, tags=["Public Pages"])
+async def public_page(slug: str, request: Request, session=Depends(get_session)):
+    """Serve a published page at https://zeorbit.com/{keyword}-{city}."""
+    if slug in _RESERVED_ARTICLE_SLUGS or "." in slug:
+        return HTMLResponse("Not found", status_code=404)
+    return await _render_public_article(slug, request, session)

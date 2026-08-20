@@ -47,6 +47,11 @@ def notify_lead(lead: dict) -> None:
     source = _clean(lead.get("source")) or "website"
     message = _clean(lead.get("message"))
     location = _clean(lead.get("location"))
+    page = _clean(lead.get("website"))
+    if page.startswith("http"):
+        page_label = page
+    else:
+        page_label = ""
 
     subject = f"New ZeOrbit inquiry from {name}"
     if service:
@@ -63,6 +68,7 @@ def notify_lead(lead: dict) -> None:
         f"Budget: {budget or '—'}",
         f"Location: {location or '—'}",
         f"Source: {source}",
+        f"Submitted from: {page_label or '—'}",
         "",
         "Message:",
         message or "—",
@@ -85,6 +91,7 @@ def notify_lead(lead: dict) -> None:
       {_row("Budget", budget)}
       {_row("Location", location)}
       {_row("Source", source)}
+      {_row("Submitted from", page_label)}
     </table>
     <div style="padding:16px 24px 24px">
       <div style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Message</div>

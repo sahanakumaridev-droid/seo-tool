@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowRight,
@@ -28,9 +28,7 @@ import {
 } from 'lucide-react'
 import RevampHeader from '../revamp/RevampHeader'
 import SiteFooter from '../SiteFooter'
-import ContactForm from '../revamp/ContactForm'
 import { Reveal } from './Reveal'
-import PremiumGoogleReviews from './PremiumGoogleReviews'
 import SeoOrbit from './SeoOrbit'
 import { useHashScroll } from '../../hooks/useHashScroll'
 import {
@@ -41,6 +39,9 @@ import {
   SERVICE_STRIPS,
 } from '../../data/premiumHome'
 import { SITE_CONTACT } from '../../data/revampContent'
+
+const ContactForm = lazy(() => import('../revamp/ContactForm'))
+const PremiumGoogleReviews = lazy(() => import('./PremiumGoogleReviews'))
 
 const INDUSTRY_ICONS = {
   UtensilsCrossed,
@@ -68,17 +69,76 @@ const INDUSTRY_ICONS = {
 }
 
 function usePreferMotionVideo() {
-  const [preferVideo, setPreferVideo] = useState(true)
+  const [preferVideo, setPreferVideo] = useState(false)
 
   useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const sync = () => setPreferVideo(!mq.matches)
+    const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const narrow = window.matchMedia('(max-width: 768px)')
+    const sync = () => setPreferVideo(!motion.matches && !narrow.matches)
     sync()
-    mq.addEventListener('change', sync)
-    return () => mq.removeEventListener('change', sync)
+    motion.addEventListener('change', sync)
+    narrow.addEventListener('change', sync)
+    return () => {
+      motion.removeEventListener('change', sync)
+      narrow.removeEventListener('change', sync)
+    }
   }, [])
 
   return preferVideo
+}
+
+function useDeferredMotion(enabled, delayMs = 2800) {
+  const [go, setGo] = useState(false)
+
+  useEffect(() => {
+    if (!enabled) {
+      setGo(false)
+      return undefined
+    }
+    let timeoutId
+    const arm = () => {
+      timeoutId = window.setTimeout(() => setGo(true), delayMs)
+    }
+    if (document.readyState === 'complete') arm()
+    else window.addEventListener('load', arm)
+    return () => {
+      window.removeEventListener('load', arm)
+      window.clearTimeout(timeoutId)
+    }
+  }, [enabled, delayMs])
+
+  return go
+}
+
+function WhenVisible({ children, rootMargin = '480px', minHeight }) {
+  const ref = useRef(null)
+  const [show, setShow] = useState(false)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return undefined
+    if (typeof IntersectionObserver === 'undefined') {
+      setShow(true)
+      return undefined
+    }
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setShow(true)
+          io.disconnect()
+        }
+      },
+      { rootMargin },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [rootMargin])
+
+  return (
+    <div ref={ref} style={minHeight && !show ? { minHeight } : undefined}>
+      {show ? children : null}
+    </div>
+  )
 }
 
 function useAutoPlayVideo(enabled) {
@@ -121,28 +181,39 @@ function useAutoPlayVideo(enabled) {
 
 function HeroVideo({ preferVideo }) {
   const [videoFailed, setVideoFailed] = useState(false)
-  const showVideo = preferVideo && !videoFailed
-  const videoRef = useAutoPlayVideo(showVideo)
+  const [videoOn, setVideoOn] = useState(false)
+  const allowVideo = useDeferredMotion(preferVideo, 2800) && !videoFailed
+  const videoRef = useAutoPlayVideo(allowVideo)
 
   return (
     <div className="cz-hero-bg" aria-hidden="true">
-      {showVideo ? (
+      <img
+        className="cz-hero-poster"
+        src="/videos/hero-agency-poster.webp"
+        srcSet="/videos/hero-agency-poster-800.webp 800w, /videos/hero-agency-poster.webp 1200w, /videos/hero-agency-poster-1600.webp 1600w"
+        sizes="100vw"
+        width={1500}
+        height={900}
+        alt=""
+        loading="eager"
+        decoding="async"
+        fetchPriority="high"
+      />
+      {allowVideo ? (
         <video
           ref={videoRef}
-          className="cz-hero-video"
+          className={`cz-hero-video${videoOn ? ' is-on' : ''}`}
           src={HERO.video}
-          poster={HERO.scene}
           autoPlay
           loop
           muted
           playsInline
-          preload="auto"
+          preload="none"
           disablePictureInPicture
+          onCanPlay={() => setVideoOn(true)}
           onError={() => setVideoFailed(true)}
         />
-      ) : (
-        <img className="cz-hero-poster" src={HERO.scene} alt="" loading="eager" decoding="async" fetchPriority="high" />
-      )}
+      ) : null}
       <div className="cz-hero-scrim" />
     </div>
   )
@@ -165,11 +236,25 @@ function WireFrames({ className = '' }) {
   )
 }
 
+function FluidImg({ src, alt = '', eager = false, sizes = '(max-width: 768px) 100vw, 46vw' }) {
+  const src800 = src.replace(/(\.[a-z0-9]+)$/i, '-800$1')
+  return (
+    <img
+      src={src}
+      srcSet={`${src800} 800w, ${src} 1400w`}
+      sizes={sizes}
+      alt={alt}
+      loading={eager ? 'eager' : 'lazy'}
+      decoding="async"
+    />
+  )
+}
+
 function ServiceStrip({ item }) {
   const preferVideo = usePreferMotionVideo()
   const [videoFailed, setVideoFailed] = useState(false)
-  const showVideo = Boolean(item.video) && preferVideo && !videoFailed
-  const videoRef = useAutoPlayVideo(showVideo)
+  const allowVideo = useDeferredMotion(Boolean(item.video) && preferVideo, 4000) && !videoFailed
+  const videoRef = useAutoPlayVideo(allowVideo)
 
   return (
     <Reveal eager className={`cz-strip${item.flip ? ' is-flip' : ''}`} id={item.id}>
@@ -184,21 +269,19 @@ function ServiceStrip({ item }) {
           </Link>
         </div>
         <div className="cz-strip-media">
-          {showVideo ? (
+          <FluidImg src={item.image} />
+          {allowVideo ? (
             <video
               ref={videoRef}
               src={item.video}
-              poster={item.image}
               autoPlay
               loop
               muted
               playsInline
-              preload="auto"
+              preload="none"
               onError={() => setVideoFailed(true)}
             />
-          ) : (
-            <img src={item.image} alt="" loading="lazy" decoding="async" />
-          )}
+          ) : null}
         </div>
       </div>
     </Reveal>
@@ -210,7 +293,7 @@ function CaseCard({ item }) {
     <Reveal eager className={`cz-case cz-case-${item.tone}${item.flip ? ' is-flip' : ''}`}>
       <Link to={item.href} className="cz-case-link">
         <div className={`cz-case-media${item.mediaFit === 'wide' ? ' is-wide' : ''}`}>
-          <img src={item.image} alt={item.alt || item.title} loading="lazy" decoding="async" />
+          <FluidImg src={item.image} alt={item.alt || item.title} />
           <div className="cz-case-shade" />
         </div>
         <div className="cz-case-copy">
@@ -297,16 +380,18 @@ function FinaleMaps() {
     <div className="cz-finale-maps" aria-label="Office locations">
       {maps.map((map) => (
         <article key={map.key} className="cz-finale-map-card">
-          <div className="cz-finale-map-stage">
-            <iframe
-              className="cz-finale-map-iframe"
-              title={`${map.title} map`}
-              src={map.embed}
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-              tabIndex={-1}
-            />
-          </div>
+          <WhenVisible rootMargin="240px" minHeight={180}>
+            <div className="cz-finale-map-stage">
+              <iframe
+                className="cz-finale-map-iframe"
+                title={`${map.title} map`}
+                src={map.embed}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                tabIndex={-1}
+              />
+            </div>
+          </WhenVisible>
           <div className="cz-finale-map-pin">
             <a className="cz-finale-map-callout" href={map.mapsUrl} target="_blank" rel="noreferrer">
               <strong>{map.title}</strong>
@@ -428,7 +513,7 @@ export default function PremiumHome() {
       {/* 6. INDUSTRIES */}
       <section id="industries" className="cz-industries" aria-label="Industries we serve">
         <div className="cz-industries-bg" aria-hidden="true">
-          <img src="/showcase/why-team.png" alt="" loading="lazy" decoding="async" />
+          <FluidImg src="/showcase/why-team.webp" alt="" sizes="100vw" />
         </div>
         <div className="cz-industries-inner">
           <Reveal className="cz-industries-head">
@@ -443,7 +528,11 @@ export default function PremiumHome() {
       </section>
 
       {/* 8. GOOGLE REVIEWS */}
-      <PremiumGoogleReviews />
+      <WhenVisible minHeight={420}>
+        <Suspense fallback={null}>
+          <PremiumGoogleReviews />
+        </Suspense>
+      </WhenVisible>
 
       {/* 9. CONTACT — inquiry form on the home screen */}
       <section className="cz-finale" aria-label="Contact">
@@ -465,7 +554,11 @@ export default function PremiumHome() {
               <p>Project inquiry</p>
               <h3>Send a short brief</h3>
             </div>
-            <ContactForm hideIntro submitLabel="Send message" variant="contactPage" />
+            <WhenVisible minHeight={360}>
+              <Suspense fallback={null}>
+                <ContactForm hideIntro submitLabel="Send message" variant="contactPage" />
+              </Suspense>
+            </WhenVisible>
           </div>
         </div>
       </section>

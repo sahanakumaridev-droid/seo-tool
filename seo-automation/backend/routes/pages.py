@@ -3,23 +3,85 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from db import get_session, PageRecord, PublishedUrlRecord
 from services.content_service import generate_seo_block
+from services.slug_utils import article_slug
 from models.schemas import SEOBlock
 from config import settings
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
+from urllib.parse import urlparse
 import re
 
 router = APIRouter()
+
+LIVE_SITE = "https://zeorbit.com"
+
 
 def slugify(text: str) -> str:
     return re.sub(r'[^a-z0-9-]+', '-', text.lower()).strip('-')
 
 
-def _public_base(request: Request) -> str:
-    """Base URL for public /p/{slug} links (config override, else request origin)."""
+def _block_slug(block: SEOBlock) -> str:
+    if (block.slug or "").strip():
+        return block.slug.strip()
+    kws = []
+    if getattr(block, "focus_keyword", None):
+        kws.append(block.focus_keyword)
+    if block.keywords:
+        if block.keywords.primary:
+            kws.append(block.keywords.primary)
+        kws.extend(block.keywords.secondary or [])
+    return article_slug(kws, block.city or "", block.business_type or "") or slugify(
+        f"{block.business_type}-{block.city}-{block.state}"
+    )
+
+
+def _is_tool_host(url_or_host: str) -> bool:
+    h = (url_or_host or "").lower()
+    return "nip.io" in h or "://seo." in h
+
+
+def _reader_base(request: Optional[Request] = None) -> str:
+    """Live ZeOrbit site — published blogs must open here, not on the SEO host."""
+    marketing = (getattr(settings, "MARKETING_SITE_URL", None) or "").strip().rstrip("/")
+    if marketing:
+        return marketing
     if settings.PUBLIC_BASE_URL:
-        return settings.PUBLIC_BASE_URL.rstrip("/")
-    return str(request.base_url).rstrip("/")
+        base = settings.PUBLIC_BASE_URL.rstrip("/")
+        if not _is_tool_host(base):
+            return base
+    if request is not None:
+        origin = str(request.base_url).rstrip("/")
+        if origin and not _is_tool_host(origin) and "127.0.0.1" not in origin and "localhost" not in origin:
+            return origin
+    return LIVE_SITE
+
+
+def _public_base(request: Request) -> str:
+    """Reader-facing base for /p/{slug} links (always the live website)."""
+    return _reader_base(request)
+
+
+def _rewrite_reader_url(url: str, slug: str = "") -> str:
+    """Map SEO-tool / nip.io URLs onto the live website."""
+    base = _reader_base()
+    if slug:
+        return f"{base}/{slug.lstrip('/')}"
+    raw = (url or "").strip()
+    if not raw:
+        return f"{base}/blog"
+    if raw.startswith("/p/"):
+        return f"{base}/{raw[3:].split('?')[0]}"
+    try:
+        parsed = urlparse(raw if "://" in raw else f"https://{raw}")
+    except Exception:
+        return f"{base}/blog"
+    path = parsed.path or "/"
+    host = (parsed.hostname or "").lower()
+    if path.startswith("/p/"):
+        return f"{base}/{path[3:].rstrip('/')}"
+    if "nip.io" in host or host.startswith("seo."):
+        return f"{base}/blog"
+    return raw
 
 
 def _ads_ready_url(url: str) -> bool:
@@ -59,7 +121,7 @@ async def list_landing_pages_for_ads(
     for r in page_result.scalars().all():
         block = r.seo_block if isinstance(r.seo_block, dict) else {}
         title = (block.get("title") or block.get("h1") or r.business_type or "Untitled").strip()
-        public_url = f"{base}/p/{r.slug}"
+        public_url = f"{base}/{r.slug}"
         keywords = []
         kw = block.get("keywords") or {}
         if isinstance(kw, dict):
@@ -130,7 +192,7 @@ async def publish_to_web(
     Also runs crawl/indexing tracking and optional paused Ads auto-create."""
     from services.publish_pipeline import track_public_publish, maybe_auto_create_ads
 
-    slug = block.slug or slugify(f"{block.business_type}-{block.city}-{block.state}")
+    slug = _block_slug(block)
     block.slug = slug
 
     result = await session.execute(select(PageRecord).where(PageRecord.slug == slug))
@@ -149,7 +211,7 @@ async def publish_to_web(
         ))
     await session.commit()
 
-    public_url = f"{_public_base(request)}/p/{slug}"
+    public_url = f"{_public_base(request)}/{slug}"
     indexing = await track_public_publish(url=public_url, block=block, session=session)
     ads = await maybe_auto_create_ads(public_url=public_url, block=block)
 
@@ -178,7 +240,7 @@ async def publish_to_web_bulk(
     base = _public_base(request)
     published = []
     for block in blocks:
-        slug = block.slug or slugify(f"{block.business_type}-{block.city}-{block.state}")
+        slug = _block_slug(block)
         block.slug = slug
         result = await session.execute(select(PageRecord).where(PageRecord.slug == slug))
         existing = result.scalar_one_or_none()
@@ -192,7 +254,7 @@ async def publish_to_web_bulk(
                 city=block.city, state=block.state or "", slug=slug,
                 seo_block=block.model_dump(),
             ))
-        public_url = f"{base}/p/{slug}"
+        public_url = f"{base}/{slug}"
         indexing = await track_public_publish(url=public_url, block=block, session=session)
         ads = await maybe_auto_create_ads(public_url=public_url, block=block)
         published.append({
@@ -259,6 +321,7 @@ async def list_blog_posts(
         select(PageRecord).order_by(PageRecord.created_at.desc()).offset(0).limit(200)
     )
     page_rows = page_result.scalars().all()
+    page_slugs = {r.slug for r in page_rows if r.slug}
 
     posts = []
     for r in page_rows:
@@ -279,8 +342,8 @@ async def list_blog_posts(
             "excerpt": excerpt,
             "category": category,
             "slug": r.slug,
-            "url": f"/p/{r.slug}",
-            "public_url": f"{base}/p/{r.slug}",
+            "url": f"/{r.slug}",
+            "public_url": f"{base}/{r.slug}",
             "city": r.city,
             "state": r.state,
             "featured_image_url": block.get("featured_image_url") or None,
@@ -297,6 +360,17 @@ async def list_blog_posts(
         for u in wp_result.scalars().all():
             if not u.url:
                 continue
+            parsed = urlparse(u.url if "://" in u.url else f"https://{u.url}")
+            path = (parsed.path or "").rstrip("/")
+            if path.startswith("/p/"):
+                slug = path.rsplit("/", 1)[-1]
+                if slug in page_slugs:
+                    continue
+                live = _rewrite_reader_url(u.url, slug)
+                rel = f"/{slug}"
+            else:
+                live = _rewrite_reader_url(u.url)
+                rel = live
             posts.append({
                 "id": f"wp-{u.id}",
                 "source": u.source or "wordpress",
@@ -304,8 +378,8 @@ async def list_blog_posts(
                 "excerpt": "Published live SEO article.",
                 "category": "Published",
                 "slug": "",
-                "url": u.url,
-                "public_url": u.url,
+                "url": rel,
+                "public_url": live,
                 "city": "",
                 "state": "",
                 "featured_image_url": None,
@@ -348,7 +422,7 @@ async def list_pages(
             "state": r.state,
             "slug": r.slug,
             "seo_block": r.seo_block,
-            "public_url": f"{base}/p/{r.slug}",
+            "public_url": f"{base}/{r.slug}",
             "created_at": r.created_at.isoformat() if r.created_at else None,
         }
         for r in rows

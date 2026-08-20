@@ -286,7 +286,7 @@ async def push_all_to_google(session: AsyncSession = Depends(get_session)):
     pages = (await session.execute(select(PageRecord))).scalars().all()
     created = 0
     for page in pages:
-        url = f"{base}/p/{page.slug}"
+        url = f"{base}/{page.slug}"
         title = ""
         if isinstance(page.seo_block, dict):
             title = page.seo_block.get("title") or ""

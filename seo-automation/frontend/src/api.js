@@ -115,9 +115,25 @@ export const publishBulkToWordPress = (pages, wpConfig) =>
 
 // ── Publish to ZeOrbit (public page → appears on ZeOrbit blog) ───
 export const ZEORBIT_SITE_URL =
-  import.meta.env.VITE_ZEORBIT_SITE_URL || 'https://zeorbit.159.198.79.219.nip.io'
+  import.meta.env.VITE_ZEORBIT_SITE_URL || 'https://zeorbit.com'
 
 export const zeorbitBlogUrl = () => `${ZEORBIT_SITE_URL.replace(/\/$/, '')}/blog`
+
+/** Live article URL on zeorbit.com — keyword-city path, never /p/ or the SEO-tool host. */
+export function zeorbitArticleUrl(slugOrUrl) {
+  const base = ZEORBIT_SITE_URL.replace(/\/$/, '')
+  if (!slugOrUrl) return zeorbitBlogUrl()
+  let path = ''
+  if (/^https?:\/\//i.test(slugOrUrl)) {
+    try { path = new URL(slugOrUrl).pathname } catch { return zeorbitBlogUrl() }
+  } else {
+    path = slugOrUrl.startsWith('/') ? slugOrUrl : `/${slugOrUrl}`
+  }
+  path = path.replace(/\/$/, '')
+  if (path.startsWith('/p/')) path = `/${path.slice(3)}`
+  if (path && path !== '/' && path !== '/blog') return `${base}${path}`
+  return zeorbitBlogUrl()
+}
 
 export const publishToWeb = (seoBlock) =>
   api.post('/pages/publish-web', seoBlock)
