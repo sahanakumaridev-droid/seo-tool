@@ -11,13 +11,51 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+import asyncio
 
 from db import get_session, PublishedUrlRecord
 from services import crawl_check_service, search_console_service
 from providers.demo_google import use_demo_fallback, build_demo_index_urls
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 router = APIRouter()
+
+LIVE_SITE = "https://zeorbit.com"
+
+
+def _canonical_tracked_url(url: str) -> str:
+    """Map SEO-tool / nip.io /p/ URLs onto the live ZeOrbit article URL."""
+    raw = (url or "").strip()
+    if not raw:
+        return raw
+    try:
+        from config import settings
+        from routes.pages import _rewrite_reader_url
+    except Exception:
+        parsed = urlparse(raw if "://" in raw else f"https://{raw}")
+        host = (parsed.hostname or "").lower()
+        path = (parsed.path or "").strip("/")
+        if path.startswith("p/"):
+            path = path[2:]
+        if "nip.io" in host or host.startswith("seo."):
+            return f"{LIVE_SITE}/{path}"
+        return raw if "://" in raw else f"https://{raw}"
+
+    marketing = (getattr(settings, "MARKETING_SITE_URL", None) or LIVE_SITE).rstrip("/")
+    parsed = urlparse(raw if "://" in raw else f"https://{raw}")
+    host = (parsed.hostname or "").lower()
+    path = parsed.path or "/"
+    slug = ""
+    if path.startswith("/p/"):
+        slug = path[3:].strip("/")
+    elif "nip.io" in host or host.startswith("seo."):
+        slug = path.strip("/")
+    if slug:
+        return _rewrite_reader_url(raw, slug=slug)
+    if "nip.io" in host or host.startswith("seo."):
+        return marketing
+    return raw
 
 
 class InspectUrlRequest(BaseModel):
@@ -70,6 +108,14 @@ def _apply_free_crawl(rec: PublishedUrlRecord, check: dict) -> None:
         rec.coverage_state += " · canonical mismatch"
 
 
+def _rewrite_row_url(rec: PublishedUrlRecord) -> bool:
+    next_url = _canonical_tracked_url(rec.url)
+    if next_url and next_url != rec.url:
+        rec.url = next_url
+        return True
+    return False
+
+
 @router.get("/status")
 async def get_status(session: AsyncSession = Depends(get_session)):
     rows = (await session.execute(
@@ -87,18 +133,37 @@ async def get_status(session: AsyncSession = Depends(get_session)):
             "urls": build_demo_index_urls(),
         }
 
+    payload = []
+    changed = False
+    occupied = {r.url for r in rows if r.url}
+    for rec in rows:
+        nxt = _canonical_tracked_url(rec.url)
+        if nxt and nxt != rec.url and nxt not in occupied:
+            occupied.discard(rec.url)
+            occupied.add(nxt)
+            rec.url = nxt
+            changed = True
+        payload.append(_to_dict(rec))
+    if changed:
+        try:
+            await session.commit()
+        except Exception:
+            await session.rollback()
+
     return {
         "gsc_configured": gsc_configured,
         "demo": False,
         "mode": mode,
-        "urls": [_to_dict(r) for r in rows],
+        "urls": payload,
     }
 
 
 @router.post("/inspect")
 async def inspect_url(req: InspectUrlRequest, session: AsyncSession = Depends(get_session)):
     """Free production inspect: crawl-check a URL and track it. Uses GSC when configured."""
-    url = req.url.strip()
+    url = _canonical_tracked_url(req.url.strip())
+    if url and not url.startswith(("http://", "https://")):
+        url = "https://" + url.lstrip("/")
     if not url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="URL must start with http:// or https://")
 
@@ -173,17 +238,23 @@ async def refresh_status(id: Optional[int] = None, session: AsyncSession = Depen
     if id is not None:
         stmt = stmt.where(PublishedUrlRecord.id == id)
     else:
-        stmt = stmt.where(PublishedUrlRecord.status != "indexed")
+        stmt = stmt.where(PublishedUrlRecord.status != "indexed").limit(12)
     rows = (await session.execute(stmt)).scalars().all()
 
-    updated = []
-    for rec in rows:
+    occupied = set((await session.execute(select(PublishedUrlRecord.url))).scalars().all())
+    occupied.discard(None)
+    occupied.discard("")
+
+    async def _check_one(rec: PublishedUrlRecord):
+        nxt = _canonical_tracked_url(rec.url)
+        if nxt and nxt != rec.url and nxt not in occupied:
+            occupied.discard(rec.url)
+            occupied.add(nxt)
+            rec.url = nxt
         check = await crawl_check_service.check_url(rec.url)
         if not check.get("ok"):
             _apply_free_crawl(rec, check)
-            updated.append(_to_dict(rec))
-            continue
-
+            return _to_dict(rec)
         if gsc_configured:
             rec.http_status = check["http_status"]
             rec.robots_allowed = check["robots_allowed"]
@@ -199,7 +270,15 @@ async def refresh_status(id: Optional[int] = None, session: AsyncSession = Depen
                 _apply_free_crawl(rec, check)
         else:
             _apply_free_crawl(rec, check)
-        updated.append(_to_dict(rec))
+        return _to_dict(rec)
+
+    sem = asyncio.Semaphore(5)
+
+    async def _guarded(rec):
+        async with sem:
+            return await _check_one(rec)
+
+    updated = await asyncio.gather(*[_guarded(rec) for rec in rows])
 
     await session.commit()
     return {
@@ -214,10 +293,11 @@ async def refresh_status(id: Optional[int] = None, session: AsyncSession = Depen
 async def setup_checklist():
     """What is wired for Google Search discovery of /p/ pages."""
     from config import settings
+    from routes.pages import _reader_base
     import os
 
     key = settings.GOOGLE_INDEXING_KEY_FILE or ""
-    base = (settings.PUBLIC_BASE_URL or "").rstrip("/")
+    base = _reader_base().rstrip("/")
     gsc = search_console_service.is_configured()
     steps = [
         {
@@ -278,10 +358,11 @@ async def push_all_to_google(session: AsyncSession = Depends(get_session)):
     """Bootstrap every published /p/ page into tracking + submit sitemap to GSC."""
     from config import settings
     from db import PageRecord
+    from routes.pages import _reader_base
 
-    base = (settings.PUBLIC_BASE_URL or "").rstrip("/")
+    base = _reader_base().rstrip("/")
     if not base:
-        raise HTTPException(status_code=400, detail="Set PUBLIC_BASE_URL first")
+        raise HTTPException(status_code=400, detail="Set MARKETING_SITE_URL or PUBLIC_BASE_URL first")
 
     pages = (await session.execute(select(PageRecord))).scalars().all()
     created = 0
@@ -323,39 +404,56 @@ async def push_all_to_google(session: AsyncSession = Depends(get_session)):
         ]
         sitemap_result = next((r for r in results if r.get("ok")), results[-1] if results else sitemap_result)
 
-    # Crawl-check a sample of newest tracked URLs so the UI isn't empty of status
-    rows = (
-        await session.execute(
-            select(PublishedUrlRecord).order_by(PublishedUrlRecord.created_at.desc()).limit(25)
-        )
-    ).scalars().all()
+    # Rewrite tool-host URLs, then crawl a small sample (never 25 sequential timeouts).
+    tracked = (await session.execute(select(PublishedUrlRecord))).scalars().all()
+    occupied = {r.url for r in tracked if r.url}
+    for rec in tracked:
+        nxt = _canonical_tracked_url(rec.url)
+        if nxt and nxt != rec.url and nxt not in occupied:
+            occupied.discard(rec.url)
+            occupied.add(nxt)
+            rec.url = nxt
+
+    rows = sorted(
+        tracked,
+        key=lambda r: r.created_at or datetime(1970, 1, 1, tzinfo=timezone.utc),
+        reverse=True,
+    )[:8]
     inspected = 0
-    for rec in rows:
-        check = await crawl_check_service.check_url(rec.url)
-        if not check.get("ok"):
-            _apply_free_crawl(rec, check)
-            continue
-        if gsc:
-            rec.http_status = check["http_status"]
-            rec.robots_allowed = check["robots_allowed"]
-            rec.has_noindex = check["has_noindex"]
-            rec.canonical_ok = check["canonical_ok"]
-            inspect = search_console_service.inspect_url(rec.url)
-            if inspect.get("ok"):
-                rec.status = inspect["status"]
-                rec.coverage_state = inspect.get("coverage_state", "")
-                rec.last_inspected_at = datetime.now(timezone.utc)
-                rec.error_message = ""
-                inspected += 1
+    sem = asyncio.Semaphore(4)
+
+    async def _inspect(rec):
+        nonlocal inspected
+        async with sem:
+            check = await crawl_check_service.check_url(rec.url)
+            if not check.get("ok"):
+                _apply_free_crawl(rec, check)
+                return
+            if gsc:
+                rec.http_status = check["http_status"]
+                rec.robots_allowed = check["robots_allowed"]
+                rec.has_noindex = check["has_noindex"]
+                rec.canonical_ok = check["canonical_ok"]
+                inspect = search_console_service.inspect_url(rec.url)
+                if inspect.get("ok"):
+                    rec.status = inspect["status"]
+                    rec.coverage_state = inspect.get("coverage_state", "")
+                    rec.last_inspected_at = datetime.now(timezone.utc)
+                    rec.error_message = ""
+                    inspected += 1
+                else:
+                    _apply_free_crawl(rec, check)
+                    if sitemap_result.get("ok"):
+                        rec.status = "sitemap_submitted"
+                        rec.sitemap_submitted_at = datetime.now(timezone.utc)
             else:
                 _apply_free_crawl(rec, check)
-                if sitemap_result.get("ok"):
-                    rec.status = "sitemap_submitted"
-                    rec.sitemap_submitted_at = datetime.now(timezone.utc)
-        else:
-            _apply_free_crawl(rec, check)
-            rec.status = "published_awaiting_gsc"
-            rec.coverage_state = "Awaiting Search Console connection"
+                rec.status = "published_awaiting_gsc"
+                rec.coverage_state = "Awaiting Search Console connection"
+            inspected += 1
+
+    if rows:
+        await asyncio.gather(*[_inspect(rec) for rec in rows])
     await session.commit()
 
     all_rows = (

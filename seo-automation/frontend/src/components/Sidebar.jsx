@@ -7,13 +7,8 @@ import {
 import Logo from './Logo'
 import useProjectInfo from '../hooks/useProjectInfo'
 
-// Flat nav of only what's actually built. More SEO modules (backlinks, local
-// SEO, AI visibility, etc.) get added here once they're real pages — no
-// "Coming Soon" placeholders cluttering the list in the meantime.
-// SEO Content leads the list — it's the primary, day-to-day feature and the
-// post-login landing page (see App.jsx).
 const CRM_NAV = [
-  { to: '/',          icon: Activity, label: 'Pipeline' },
+  { to: '/dashboard', icon: Activity, label: 'Pipeline' },
   { to: '/leads',     icon: UserPlus, label: 'Contacts' },
 ]
 
@@ -35,25 +30,24 @@ const CONTENT_AUTOMATION_NAV = [
   { to: '/integrations',icon: Plug,            label: 'API Integrations' },
 ]
 
-const navItemStyle = {
-  display: 'flex', alignItems: 'center', gap: 8,
-  padding: '5px 8px',
-  fontSize: 12.5,
-  textDecoration: 'none', transition: 'all 0.15s',
-}
-
-function NavItem({ to, icon: Icon, label, indent, end }) {
+function NavItem({ to, icon: Icon, label, end }) {
   const location = useLocation()
-  const crmHome = to === '/' && (location.pathname === '/landing' || location.pathname === '/revamp-preview' || location.pathname === '/dashboard')
+  const contentHome = to === '/content' && (location.pathname === '/' || location.pathname === '/landing' || location.pathname === '/revamp-preview')
   return (
-    <NavLink to={to} end={end} className={({ isActive }) => ((isActive || crmHome) ? 'nav-active' : 'nav-inactive')}
-      style={{ ...navItemStyle, paddingLeft: indent ? 30 : 10 }}>
-      {({ isActive }) => (
-        <>
-      {Icon && <Icon size={14} style={{ color: isActive ? 'var(--brand)' : 'var(--text-2)', flexShrink: 0 }} />}
-          {label}
-        </>
-      )}
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) => ((isActive || contentHome) ? 'nav-active' : 'nav-inactive')}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '7px 10px',
+        fontSize: 12.5,
+        textDecoration: 'none',
+        transition: 'background 150ms ease, color 150ms ease',
+      }}
+    >
+      {Icon && <Icon size={14} style={{ flexShrink: 0, opacity: 0.9 }} />}
+      {label}
     </NavLink>
   )
 }
@@ -61,61 +55,43 @@ function NavItem({ to, icon: Icon, label, indent, end }) {
 export default function Sidebar({ open = false }) {
   const project = useProjectInfo()
   const projectName = project.business_name || (project.base_location ? `${project.base_location.split(',')[0]} Project` : 'New Workspace')
-  const projectSub = project.website || 'Configure in Onboarding'
+  const projectSub = project.website || 'zeorbit.com'
 
   return (
     <aside className={`sidebar${open ? ' open' : ''}`}>
-      {/* Logo */}
-      <div style={{ padding: '12px 12px 10px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-        <Logo size={32} />
-        <div style={{ color: 'var(--text-3)', fontSize: 10, marginTop: 6, fontWeight: 600, textTransform: 'uppercase' }}>CRM + SEO</div>
+      <div className="sidebar-logo">
+        <Logo size={34} onDark />
+        <div className="sidebar-kicker">CRM + SEO</div>
       </div>
 
-      {/* Workspace / project info */}
-      <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-        <div style={{
-          padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
-          background: 'var(--bg-raised)', border: '1px solid var(--border)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        }}>
+      <div className="sidebar-project">
+        <div className="sidebar-project-btn">
           <div style={{ minWidth: 0 }}>
-            <div style={{ color: 'var(--text-1)', fontSize: 12, fontWeight: 600 }} className="truncate">{projectName}</div>
-            <div style={{ color: 'var(--text-3)', fontSize: 10, marginTop: 1, fontWeight: 500 }} className="truncate">{projectSub}</div>
+            <div className="name truncate">{projectName}</div>
+            <div className="sub truncate">{projectSub}</div>
           </div>
-          <ChevronDown size={12} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
+          <ChevronDown size={12} style={{ color: 'var(--sidebar-muted)', flexShrink: 0 }} />
         </div>
       </div>
 
-      {/* Nav */}
-      <nav style={{ flex: 1, minHeight: 0, padding: '6px 6px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
-        <div style={{ color: 'var(--text-3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', padding: '4px 8px 2px' }}>
-          CRM
-        </div>
-        {CRM_NAV.map(item => <NavItem key={item.to} {...item} end={item.to === '/'} />)}
+      <nav className="sidebar-nav">
+        <div className="sidebar-section">CRM</div>
+        {CRM_NAV.map(item => <NavItem key={item.to} {...item} />)}
 
-        <div style={{ color: 'var(--text-3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', padding: '10px 8px 2px' }}>
-          SEO
-        </div>
+        <div className="sidebar-section">SEO</div>
         {SEO_NAV.map(item => <NavItem key={item.to} {...item} />)}
 
-        <div style={{ color: 'var(--text-3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', padding: '10px 8px 2px' }}>
-          Content Automation
-        </div>
+        <div className="sidebar-section">Content Automation</div>
         {CONTENT_AUTOMATION_NAV.map(item => <NavItem key={item.to} {...item} />)}
 
-        <div style={{ color: 'var(--text-3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', padding: '10px 8px 2px' }}>
-          Admin
-        </div>
+        <div className="sidebar-section">Admin</div>
         <NavItem to="/admin" icon={Shield} label="Admin Panel" />
       </nav>
 
-      {/* Bottom */}
-      <div style={{ padding: '6px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
-        {[{ Icon: HelpCircle, label: 'Help & Docs' }].map(({ Icon, label }) => (
-          <button key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: 13, width: '100%', textAlign: 'left' }}>
-            <Icon size={14} /> {label}
-          </button>
-        ))}
+      <div className="sidebar-foot">
+        <button type="button" className="sidebar-help">
+          <HelpCircle size={14} /> Help & Docs
+        </button>
       </div>
     </aside>
   )

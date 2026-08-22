@@ -591,6 +591,9 @@ _TOPIC_MODIFIERS = {
     "medical": ["clinic website", "doctor laptop", "hospital website", "medical office"],
     "clinic": ["medical clinic", "doctor laptop", "hospital reception", "healthcare app"],
     "insurance": ["insurance office", "agent laptop", "policy documents", "insurance website"],
+    "redirect": ["browser address bar", "website code", "server configuration", "http status"],
+    "301": ["url redirect", "browser address bar", "htaccess file", "developer laptop"],
+    "canonical": ["website code", "search console", "url structure", "developer laptop"],
 }
 
 # When Business Niche is web/software and Industry is a vertical, search these
@@ -651,9 +654,16 @@ _INDUSTRY_NICHE_MAP = {
     "retail": "Retail",
 }
 
-# Niches that are treated as stale leftovers when a strong Industry is selected.
+# Leftover tech niches that are NOT the service we sell (e.g. "software engineer"
+# while Industry is Education). Do NOT treat WordPress / web design as stale —
+# those are ZeOrbit services; Industry is the client vertical (healthcare, etc.).
 _STALE_NICHE_RE = re.compile(
-    r"\b(software|sotware|engineer|coding|developer|saas|web\s*design|wordpress)\b",
+    r"\b(software\s*engineer|sotware|coding|developer|saas)\b",
+    re.I,
+)
+_SERVICE_NICHE_RE = re.compile(
+    r"\b(wordpress|web\s*design|website\s*design|website\s*designer|"
+    r"landing\s*page|seo|ppc|mobile\s*app|e-?commerce)\b",
     re.I,
 )
 _STALE_DEFAULTS = frozenset({
@@ -684,6 +694,11 @@ def resolve_campaign_niche(business_type: str, industry: str = "") -> str:
         return bt or "Local Services"
 
     bt_l = bt.lower().strip()
+    # Industry = who we sell to. Niche = what ZeOrbit builds. Never replace
+    # "Small Business WordPress Web Design" with "Healthcare".
+    if bt and _SERVICE_NICHE_RE.search(bt):
+        return bt
+
     bt_fam = topic_image_family(bt)
     ind_fam = topic_image_family(industry_niche)
 
@@ -692,7 +707,7 @@ def resolve_campaign_niche(business_type: str, industry: str = "") -> str:
         return bt
 
     stale = (not bt) or bt_l in _STALE_DEFAULTS or bool(_STALE_NICHE_RE.search(bt))
-    if stale or (bt_fam != ind_fam and bt_fam in ("software", "web", "marketing", "general")):
+    if stale or (bt_fam != ind_fam and bt_fam in ("software", "general")):
         return industry_niche
 
     return bt or industry_niche
@@ -791,6 +806,12 @@ def _related_stock_plan(
     Web Design + Healthcare → "medical website" / clinic laptop, not generic UI mockups
     and not a hospital-only override that drops the website angle.
     """
+    blob = f"{focus_keyword} {niche} {industry}".lower()
+    if re.search(r"\b(301|302|redirect|htaccess|canonical url)\b", blob):
+        topic = "website url redirect"
+        mods = ["browser address bar", "developer laptop", "server configuration", "http code"]
+        return topic, mods, topic
+
     visual = _resolve_visual_industry(industry)
     niche_clean = _clean_image_query(niche, exclude=location_words)
     kw_clean = (

@@ -37,14 +37,56 @@ function bulletsFrom(text) {
   return parts.length >= 2 ? parts : null
 }
 
-function ArticleSections({ layout, h2s, h3s, body }) {
-  const sections = h2s.map((heading, i) => ({
-    heading,
-    sub: h3s[i] || '',
-    text: body[i] || '',
-    bullets: bulletsFrom(body[i] || ''),
-  }))
-  const leftover = body.slice(h2s.length)
+function parseMarkdownSections(raw, h3s) {
+  const text = String(raw || '').trim()
+  if (!/^##\s/m.test(text)) return null
+  const startsWithH2 = /^##\s/.test(text)
+  const parts = text.split(/^##\s+/m).filter(Boolean)
+  const chunks = startsWithH2 ? parts : parts.slice(1)
+  if (!chunks.length) return null
+  return chunks.map((chunk, i) => {
+    const nl = chunk.indexOf('\n')
+    const heading = (nl === -1 ? chunk : chunk.slice(0, nl)).trim()
+    const rest = (nl === -1 ? '' : chunk.slice(nl)).trim()
+    return { heading, sub: h3s[i] || '', text: rest, bullets: bulletsFrom(rest) }
+  })
+}
+
+function SectionCopy({ sec }) {
+  if (sec.bullets) {
+    return <ul>{sec.bullets.map((b) => <li key={b.slice(0, 40)}>{b}</li>)}</ul>
+  }
+  return paragraphs(sec.text).map((p) => <p key={p.slice(0, 48)}>{p}</p>)
+}
+
+function allocateSections(h2s, h3s, paras) {
+  const n = h2s.length
+  if (!n) return { sections: [], leftover: paras }
+  let idx = 0
+  const sections = h2s.map((heading, i) => {
+    const remainingH = n - i
+    const remainingP = paras.length - idx
+    const takeCount = i === n - 1
+      ? remainingP
+      : remainingP >= remainingH
+        ? Math.max(1, Math.floor(remainingP / remainingH))
+        : remainingP > 0
+          ? 1
+          : 0
+    const take = paras.slice(idx, idx + takeCount)
+    idx += take.length
+    const text = take.join('\n\n')
+    return { heading, sub: h3s[i] || '', text, bullets: bulletsFrom(text) }
+  })
+  return { sections, leftover: paras.slice(idx) }
+}
+
+function ArticleSections({ layout, h2s, h3s, body, rawContent }) {
+  const parsed = parseMarkdownSections(rawContent, h3s)
+  const allocated = parsed
+    ? { sections: parsed, leftover: [] }
+    : allocateSections(h2s, h3s, body)
+  const { sections, leftover } = allocated
 
   if (layout === 'steps' || layout === 'timeline') {
     return (
@@ -53,7 +95,7 @@ function ArticleSections({ layout, h2s, h3s, body }) {
           <li key={`${sec.heading}-${i}`}>
             <h2>{sec.heading}</h2>
             {sec.sub ? <h3>{sec.sub}</h3> : null}
-            {sec.bullets ? <ul>{sec.bullets.map((b) => <li key={b.slice(0, 40)}>{b}</li>)}</ul> : <p>{sec.text}</p>}
+            <SectionCopy sec={sec} />
           </li>
         ))}
       </ol>
@@ -67,7 +109,7 @@ function ArticleSections({ layout, h2s, h3s, body }) {
           <section key={`${sec.heading}-${i}`} className="zo-article-card">
             <h2>{sec.heading}</h2>
             {sec.sub ? <h3>{sec.sub}</h3> : null}
-            <p>{sec.text}</p>
+            <SectionCopy sec={sec} />
           </section>
         ))}
       </div>
@@ -81,7 +123,7 @@ function ArticleSections({ layout, h2s, h3s, body }) {
           <section key={`${sec.heading}-${i}`} className={i % 2 === 0 ? 'is-problem' : 'is-solution'}>
             <h2>{sec.heading}</h2>
             {sec.sub ? <h3>{sec.sub}</h3> : null}
-            {sec.bullets ? <ul>{sec.bullets.map((b) => <li key={b.slice(0, 40)}>{b}</li>)}</ul> : <p>{sec.text}</p>}
+            <SectionCopy sec={sec} />
           </section>
         ))}
       </div>
@@ -102,7 +144,7 @@ function ArticleSections({ layout, h2s, h3s, body }) {
           <section key={`${sec.heading}-${i}`}>
             <h2>{sec.heading}</h2>
             {sec.sub ? <h3>{sec.sub}</h3> : null}
-            <p>{sec.text}</p>
+            <SectionCopy sec={sec} />
           </section>
         ))}
       </div>
@@ -115,7 +157,7 @@ function ArticleSections({ layout, h2s, h3s, body }) {
         <details key={`${sec.heading}-${i}`} className="zo-article-qa-item" open={i < 2}>
           <summary>{sec.heading}</summary>
           {sec.sub ? <h3>{sec.sub}</h3> : null}
-          {sec.bullets ? <ul>{sec.bullets.map((b) => <li key={b.slice(0, 40)}>{b}</li>)}</ul> : <p>{sec.text}</p>}
+          <SectionCopy sec={sec} />
         </details>
       ))}
       {leftover.map((p) => <p key={p.slice(0, 48)}>{p}</p>)}
@@ -155,10 +197,9 @@ export default function SeoArticlePage() {
   const faqs = Array.isArray(block.faqs) ? block.faqs : []
   const h2s = Array.isArray(block.h2s) ? block.h2s : []
   const h3s = Array.isArray(block.h3s) ? block.h3s : []
-  const body = paragraphs(block.content)
-  const hero = block.featured_image_url
+  const body = paragraphs(String(block.content || '').replace(/^##\s+.+$/gm, '').replace(/\n{3,}/g, '\n\n'))
   const layout = layoutFor(slug, block.layout_variant)
-  const leftover = layout === 'qa' ? [] : body.slice(h2s.length)
+  const hero = block.featured_image_url
 
   return (
     <div className={`rv-page zo-blog-page zo-seo-article is-layout-${layout}`}>
@@ -186,15 +227,13 @@ export default function SeoArticlePage() {
             <article>
               {location ? <p className="zo-blog-eyebrow">{location}</p> : null}
               <h1>{h1}</h1>
-              {desc ? <p className="zo-article-lead">{desc}</p> : null}
               {hero ? (
                 <figure className="zo-article-hero">
                   <img src={hero} alt={h1} />
                 </figure>
               ) : null}
               {block.intro ? paragraphs(block.intro).map((p) => <p key={p.slice(0, 40)}>{p}</p>) : null}
-              <ArticleSections layout={layout} h2s={h2s} h3s={h3s} body={body} />
-              {leftover.map((p) => <p key={p.slice(0, 48)}>{p}</p>)}
+              <ArticleSections layout={layout} h2s={h2s} h3s={h3s} body={body} rawContent={block.content} />
               {block.cta ? <p className="zo-article-cta">{block.cta}</p> : null}
               <p>
                 <a className="zo-article-call" href={`tel:${SITE_CONTACT.phoneTel}`}>

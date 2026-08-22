@@ -41,9 +41,11 @@ export default function IndexingStatusPage() {
   const [inspectUrl, setInspectUrl] = useState('')
   const [inspecting, setInspecting] = useState(false)
   const [inspectError, setInspectError] = useState('')
+  const [error, setError] = useState('')
 
   const load = async () => {
     setLoading(true)
+    setError('')
     try {
       const [res, setupRes] = await Promise.all([
         getSeoIndexingStatus(),
@@ -55,7 +57,7 @@ export default function IndexingStatusPage() {
       setMode(res.data.mode || (res.data.demo ? 'demo' : res.data.gsc_configured ? 'gsc' : 'crawl'))
       if (setupRes?.data) setSetup(setupRes.data)
     } catch (e) {
-      console.error(e)
+      setError(e.response?.data?.detail || e.message || 'Could not load indexing status. Is the API running?')
     } finally {
       setLoading(false)
     }
@@ -75,7 +77,7 @@ export default function IndexingStatusPage() {
         await load()
       }
     } catch (e) {
-      console.error(e)
+      setError(e.response?.data?.detail || e.message || 'Refresh failed.')
     } finally {
       setRefreshing(false)
     }
@@ -132,6 +134,7 @@ export default function IndexingStatusPage() {
           <h1 className="font-display" style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-1)' }}>Google Search</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--text-3)' }}>
             Get published URLs into Google on <strong>www.zeorbit.com</strong> — sitemap ping, then track Submitted / Crawled / Indexed.
+            Refresh checks 12 URLs at a time so the page does not time out.
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -140,10 +143,12 @@ export default function IndexingStatusPage() {
           </button>
           <button onClick={handleRefresh} disabled={refreshing}
             className="btn btn-secondary flex items-center gap-2" style={{ opacity: refreshing ? 0.6 : 1 }}>
-            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> {refreshing ? 'Refreshing...' : 'Refresh Status'}
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> {refreshing ? 'Refreshing...' : 'Refresh next 12'}
           </button>
         </div>
       </div>
+
+      {error && <div className="alert alert-error">⚠ {error}</div>}
 
       {pushNote && (
         <div className={`alert ${gscConfigured ? 'alert-success' : 'alert-warning'}`}>

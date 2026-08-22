@@ -29,7 +29,7 @@ function CategoryBar({ name, score }) {
 
 function IssueRow({ issue }) {
   const [open, setOpen] = useState(false)
-  const tab = SEVERITY_TABS.find(t => t.key === issue.severity)
+  const tab = SEVERITY_TABS.find(t => t.key === issue.severity) || SEVERITY_TABS[1]
   return (
     <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
       <button onClick={() => setOpen(o => !o)}
@@ -37,7 +37,7 @@ function IssueRow({ issue }) {
         <span className="flex items-center gap-3">
           <tab.icon size={15} style={{ color: tab.color, flexShrink: 0 }} />
           <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-1)' }}>{issue.title}</span>
-          {issue.affected_pages.length > 0 && (
+          {issue.affected_pages?.length > 0 && (
             <span style={{ fontSize: 11, color: 'var(--text-4)' }}>{issue.affected_pages.length} pages affected</span>
           )}
         </span>
@@ -53,7 +53,7 @@ function IssueRow({ issue }) {
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Why it matters</div>
             <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0, lineHeight: 1.6 }}>{issue.why}</p>
           </div>
-          {issue.affected_pages.length > 0 && (
+          {issue.affected_pages?.length > 0 && (
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>Affected pages</div>
               <div className="flex flex-wrap gap-1.5">
@@ -94,15 +94,23 @@ export default function SiteAuditPage() {
     setLoading(true)
     setError('')
     try {
-      const res = await runSiteAudit(url.trim())
+      const target = url.trim().match(/^https?:\/\//i) ? url.trim() : `https://${url.trim()}`
+      const res = await runSiteAudit(target)
       setAudit(res.data)
-    } catch {
-      setError('Could not run the audit. Please try again.')
+      try {
+        const project = JSON.parse(localStorage.getItem('seo_project') || '{}')
+        project.website = target
+        project.audit = res.data
+        localStorage.setItem('seo_project', JSON.stringify(project))
+      } catch { /* ignore cache */ }
+    } catch (e) {
+      const detail = e.response?.data?.detail
+      setError(typeof detail === 'string' ? detail : (e.message || 'Could not run the audit. Please try again.'))
     }
     setLoading(false)
   }
 
-  const issuesForTab = audit?.issues.filter(i => i.severity === activeTab) || []
+  const issuesForTab = (audit?.issues || []).filter(i => i.severity === activeTab)
 
   return (
     <div className="space-y-5 fade-in">
@@ -147,14 +155,14 @@ export default function SiteAuditPage() {
           <div className="card p-6 flex items-center gap-8 flex-wrap">
             <ScoreRing score={audit.overall_score} />
             <div style={{ flex: 1, minWidth: 260, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 24px' }}>
-              {audit.categories.map(c => <CategoryBar key={c.name} name={c.name} score={c.score} />)}
+              {audit.categories?.map(c => <CategoryBar key={c.name} name={c.name} score={c.score} />)}
             </div>
           </div>
 
           <div className="card">
             <div className="flex gap-0 border-b" style={{ borderColor: 'var(--border)' }}>
               {SEVERITY_TABS.map(t => {
-                const count = audit.issues.filter(i => i.severity === t.key).length
+                const count = (audit.issues || []).filter(i => i.severity === t.key).length
                 return (
                   <button key={t.key} onClick={() => setActiveTab(t.key)}
                     className={activeTab === t.key ? 'tab-active' : 'tab-inactive'}

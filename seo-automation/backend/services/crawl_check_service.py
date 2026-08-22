@@ -28,6 +28,8 @@ async def check_url(url: str) -> dict:
       "error": str,              # human-readable reason when ok=False
     }
     """
+    if url and "://" not in url:
+        url = "https://" + url.lstrip("/")
     parsed = urlparse(url)
     result = {
         "ok": False, "http_status": None, "robots_allowed": None,

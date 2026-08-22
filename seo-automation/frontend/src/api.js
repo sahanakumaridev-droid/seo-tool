@@ -78,7 +78,7 @@ export const researchKeywords = (keyword, location = 'US') =>
 
 // ── Site Audit ───────────────────────────────────────────────────
 export const runSiteAudit = (url) =>
-  api.post('/seo-audit/run', { url })
+  api.post('/seo-audit/run', { url }, { timeout: 90000 })
 
 // ── Rankings ─────────────────────────────────────────────────────
 export const getRankings = (businessType, baseLocation, website) =>
@@ -194,10 +194,10 @@ export const getSeoIndexingSetup = () =>
   api.get('/seo-indexing/setup')
 
 export const pushAllSeoIndexing = () =>
-  api.post('/seo-indexing/push-all')
+  api.post('/seo-indexing/push-all', null, { timeout: 120000 })
 
 export const refreshSeoIndexing = (id) =>
-  api.post('/seo-indexing/refresh', null, { params: id ? { id } : {} })
+  api.post('/seo-indexing/refresh', null, { params: id ? { id } : {}, timeout: 90000 })
 
 export const inspectSeoIndexingUrl = (data) =>
   api.post('/seo-indexing/inspect', data)

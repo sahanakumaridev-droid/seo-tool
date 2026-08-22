@@ -11,7 +11,7 @@ export default function RegisterPage({ onLogin }) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  if (alreadyAuthed) return <Navigate to="/dashboard" replace />
+  if (alreadyAuthed) return <Navigate to="/" replace />
 
   const handleSubmit = async (e) => {
     e.preventDefault()

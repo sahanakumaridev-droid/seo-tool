@@ -7,7 +7,7 @@ function useBackendStatus() {
   const [status, setStatus] = useState('checking')
   useEffect(() => {
     const check = async () => {
-      try { await axios.get('/api/../', { timeout: 3000 }); setStatus('online') }
+      try { await axios.get('/health', { timeout: 3000 }); setStatus('online') }
       catch { setStatus('offline') }
     }
     check()
@@ -45,7 +45,7 @@ export default function Topbar({ onLogout, onMenuClick }) {
         <Search size={13} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-4)', pointerEvents: 'none' }} />
         <input
           type="text"
-          placeholder="Search contacts, companies…"
+          placeholder="Search contacts, companies, keywords…"
           style={{ width: '100%', paddingLeft: 34, paddingRight: 40, paddingTop: 8, paddingBottom: 8, fontSize: 13 }}
         />
         <kbd style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 10, padding: '2px 5px', borderRadius: 4, color: 'var(--text-4)', background: 'var(--bg-raised)', border: '1px solid var(--border)', pointerEvents: 'none' }}>⌘K</kbd>
@@ -63,14 +63,14 @@ export default function Topbar({ onLogout, onMenuClick }) {
           onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-raised)'; e.currentTarget.style.color = 'var(--text-1)' }}
           onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-3)' }}>
           <Bell size={16} />
-          <span style={{ position: 'absolute', top: 7, right: 7, width: 5, height: 5, borderRadius: '50%', background: 'var(--brand)' }} />
+          <span style={{ position: 'absolute', top: 4, right: 4, minWidth: 14, height: 14, padding: '0 3px', borderRadius: 999, background: '#dc2626', color: '#fff', fontSize: 9, fontWeight: 700, display: 'grid', placeItems: 'center', lineHeight: 1 }}>3</span>
         </button>
 
         {/* User */}
         <div style={{ position: 'relative' }}>
           <button onClick={() => setShowMenu(m => !m)}
             style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 12, background: 'none', border: 'none', cursor: 'pointer', borderLeft: '1px solid var(--border)' }}>
-            <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg,#FF6B54,#E14636)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'white', flexShrink: 0 }}>A</div>
+            <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg,#6D6EF0,#5B5CE6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'white', flexShrink: 0 }}>A</div>
             <div style={{ textAlign: 'left' }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-1)', lineHeight: 1 }}>Admin</div>
               <div style={{ fontSize: 10, color: 'var(--text-4)', marginTop: 2 }}>admin@zeorbit.com</div>

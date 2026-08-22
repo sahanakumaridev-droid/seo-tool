@@ -34,12 +34,12 @@ function ModuleCard({ title, to, live, detail, blocking = [], docs, formCmd }) {
           {blocking.map((b, i) => <li key={i}>{b}</li>)}
         </ul>
       )}
-      {fixCmd && (
+      {formCmd && (
         <code style={{
           display: 'block', fontSize: 11.5, padding: '8px 10px', borderRadius: 8,
           background: 'var(--bg-raised)', color: 'var(--text-2)', overflowX: 'auto',
         }}>
-          {fixCmd}
+          {formCmd}
         </code>
       )}
       <div className="flex gap-2" style={{ marginTop: 'auto' }}>
@@ -65,10 +65,14 @@ export default function IntegrationsPage() {
     setError('')
     try {
       const [live, platforms] = await Promise.all([
-        getGoogleLiveStatus(),
+        getGoogleLiveStatus().catch(() => null),
         getSocialPlatforms().catch(() => ({ data: null })),
       ])
-      setData(live.data)
+      if (!live?.data) {
+        setError('Could not load Google integration status. Is the API running?')
+      } else {
+        setData(live.data)
+      }
       setSocial(platforms.data)
     } catch (e) {
       setError('Could not load integration status. Is the backend running?')

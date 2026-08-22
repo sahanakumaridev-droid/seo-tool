@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Zap, MapPin, Globe, Eye, X, RefreshCw, Save, CheckCircle,
          FileJson, Tag, Plus, Megaphone, Trash2, FileText, Newspaper } from 'lucide-react'
@@ -6,9 +6,11 @@ import { generateBulk, exportJson, generateSingle,
          savePage, publishToWeb, startBulkGenerateJob, getJob, publishAllToWeb, zeorbitBlogUrl, zeorbitArticleUrl,
          getNearbyCities, getSanDiegoCounty, deletePage, listPages } from '../api'
 import axios from 'axios'
+import LocationMap from '../components/LocationMap'
 
 const BUSINESS_TYPES = [
-  'Web Design', 'Website Redesign', 'Small Business Web Design', 'WordPress Development',
+  'Web Design', 'Website Redesign', 'Small Business Web Design', 'Small Business WordPress Web Design',
+  'WordPress Development', 'WordPress Website Design',
   'eCommerce Development', 'Mobile App Development', 'iOS App Development', 'Android App Development',
   'App MVP Development', 'Nonprofit Website Design', 'SEO Agency',
   'Education', 'Tutoring', 'Online Courses',
@@ -48,6 +50,33 @@ const US_CITY_OPTIONS = [
 
 function locKey(value) {
   return (value || '').toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+function collectSdCatalog(sdCounty) {
+  const areas = []
+  const streets = []
+  const pushCity = (city, parentLabel) => {
+    const cityName = city?.name || parentLabel
+    ;(city?.local_areas || []).forEach((name) => {
+      areas.push({ name, city: cityName, kind: 'area' })
+    })
+    ;(city?.streets || []).forEach((name) => {
+      streets.push({ name, city: cityName, kind: 'street' })
+    })
+    ;(city?.communities_with_streets || []).forEach((c) => {
+      ;(c.streets || []).forEach((s) => {
+        streets.push({ name: s, city: c.name || cityName, kind: 'street' })
+      })
+    })
+  }
+  ;(sdCounty?.cities || []).forEach((c) => pushCity(c, c.name))
+  if (sdCounty?.unincorporated) pushCity(sdCounty.unincorporated, 'Unincorporated')
+  return { areas, streets }
+}
+
+function placeChip(row) {
+  if (row.kind === 'street') return `${row.name}, ${row.city}`
+  return row.name
 }
 
 function splitLocations(raw) {
@@ -450,7 +479,7 @@ function ScoreBar({ label, value, color }) {
 
 // ── Main Page ──────────────────────────────────────────────────
 export default function ContentPage() {
-  const DEFAULTS = { business_type: '', base_location: 'San Diego, CA', num_cities: 10, industry: 'Contractors', audience: '' }
+  const DEFAULTS = { business_type: '', base_location: 'Chula Vista, CA', num_cities: 10, industry: 'Contractors', audience: '' }
   const navigate = useNavigate()
   const [form, setForm] = useState(() => {
     try {
@@ -499,7 +528,7 @@ export default function ContentPage() {
   const [customRequirements, setCustomRequirements] = useState('')
   const [postLocalize, setPostLocalize] = useState(false)
   const [sdCounty, setSdCounty] = useState(null)
-  const [sdPick, setSdPick] = useState('San Diego')
+  const [sdPick, setSdPick] = useState('Chula Vista')
   const [sdLayer, setSdLayer] = useState('areas')
   const [sdFilter, setSdFilter] = useState('')
 
@@ -632,15 +661,23 @@ export default function ContentPage() {
   const removeKeyword = (kw) => setTargetKeywords(prev => prev.filter(k => k !== kw))
 
   const sdCityNames = sdCounty?.incorporated_cities || []
-  const sdNode = sdPick === 'Unincorporated'
-    ? sdCounty?.unincorporated
-    : (sdCounty?.cities || []).find((c) => c.name === sdPick)
-  const sdItemsRaw = sdLayer === 'streets'
-    ? (sdPick === 'Unincorporated'
-      ? (sdNode?.communities_with_streets || []).flatMap((c) => (c.streets || []).map((s) => `${s} (${c.name})`))
-      : (sdNode?.streets || []))
-    : (sdNode?.local_areas || [])
-  const sdItems = sdItemsRaw.filter((n) => locKey(n).includes(locKey(sdFilter)))
+  const sdCatalog = useMemo(() => collectSdCatalog(sdCounty), [sdCounty])
+  const sdSearch = locKey(sdFilter)
+  const countyWide = sdSearch.length >= 2 || sdPick === 'All cities'
+  const sdMatches = useMemo(() => {
+    const pool = sdLayer === 'streets' ? sdCatalog.streets : sdCatalog.areas
+    let rows = pool
+    if (sdPick && sdPick !== 'All cities' && sdPick !== 'Unincorporated' && !countyWide) {
+      rows = pool.filter((r) => locKey(r.city) === locKey(sdPick))
+    } else if (sdPick === 'Unincorporated' && !countyWide) {
+      rows = pool.filter((r) => locKey(r.city) === 'unincorporated' || locKey(r.city).includes('unincorporated'))
+    }
+    if (sdSearch) {
+      rows = pool.filter((r) => locKey(r.name).includes(sdSearch) || locKey(r.city).includes(sdSearch) || locKey(placeChip(r)).includes(sdSearch))
+    }
+    return rows
+  }, [sdCatalog, sdLayer, sdPick, sdSearch, countyWide])
+  const sdItems = sdMatches.map(placeChip)
 
   const addSdItems = (names) => {
     addExtraLocation(names.join('\n'))
@@ -801,13 +838,24 @@ export default function ContentPage() {
         </div>
       )}
       {/* Page header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
+          <p className="crm-crumb">SEO Content &gt; Content Generation</p>
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-1)' }}>Content Generation</h1>
           <p className="text-sm mt-0.5" style={{ color: 'var(--text-3)' }}>
             Choose Page or Post first — each uses its own workflow and sitemap.
           </p>
         </div>
+      </div>
+      <div className="crm-stepper" aria-label="Generation steps">
+        {[
+          ['1', 'Target Keywords', contentKind === 'page'],
+          ['2', 'Page Setup', !!contentKind],
+          ['3', 'Locations / Areas', extraLocations.length > 0 || contentKind === 'post'],
+          ['4', 'Review & Generate', pages.length > 0],
+        ].map(([n, label, on]) => (
+          <span key={label} className={`crm-step${on ? ' is-on' : ''}`}><b>{n}</b> {label}</span>
+        ))}
       </div>
 
       <div id="content-kind-section" className="grid sm:grid-cols-2 gap-3">
@@ -1143,12 +1191,15 @@ export default function ContentPage() {
                   setSdFilter('')
                   updateForm((f) => ({
                     ...f,
-                    base_location: v === 'Unincorporated' ? 'San Diego County, CA' : `${v}, CA`,
+                    base_location: v === 'Unincorporated' || v === 'All cities'
+                      ? 'Chula Vista, CA'
+                      : `${v}, CA`,
                   }))
                 }}
                 className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
                 style={{ borderColor: 'var(--border)', color: 'var(--text-1)' }}
               >
+                <option value="All cities">All San Diego County cities</option>
                 {sdCityNames.map((n) => <option key={n} value={n}>{n}</option>)}
                 <option value="Unincorporated">Unincorporated county</option>
               </select>
@@ -1162,9 +1213,9 @@ export default function ContentPage() {
                 type="search"
                 value={sdFilter}
                 onChange={(e) => setSdFilter(e.target.value)}
-                placeholder={sdLayer === 'streets' ? 'Search streets…' : 'Search communities…'}
+                placeholder={sdLayer === 'streets' ? 'Search any street (e.g. Carlsbad Blvd)…' : 'Search any community (e.g. Eastlake, Downtown Chula Vista)…'}
                 className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--border)', color: 'var(--text-1)' }}
+                style={{ borderColor: sdFilter && !sdItems.length ? '#ef4444' : 'var(--border)', color: 'var(--text-1)' }}
               />
               <button
                 type="button"
@@ -1177,9 +1228,9 @@ export default function ContentPage() {
               </button>
             </div>
             <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto">
-              {sdItems.slice(0, 80).map((name) => (
+              {sdItems.slice(0, 80).map((name, i) => (
                 <button
-                  key={name}
+                  key={`${name}-${i}`}
                   type="button"
                   onClick={() => addExtraLocation(name)}
                   className="text-[11px] px-2 py-0.5 rounded font-medium"
@@ -1194,6 +1245,11 @@ export default function ContentPage() {
               ))}
               {sdItems.length > 80 && (
                 <span className="text-[11px]" style={{ color: 'var(--text-4)' }}>+{sdItems.length - 80} more — search or Add all</span>
+              )}
+              {sdFilter && !sdItems.length && (
+                <span className="text-[11px]" style={{ color: '#b91c1c' }}>
+                  No match in this list. Try All San Diego County cities, or pick the city (Carlsbad Blvd is in Carlsbad; Chula Vista communities are under Chula Vista).
+                </span>
               )}
             </div>
             <div className="flex gap-1.5">
@@ -1254,8 +1310,9 @@ export default function ContentPage() {
             )}
           </div>
           <p className="text-[10px] mt-2" style={{ color: 'var(--text-3)' }}>
-            Each chip is one {contentKind === 'post' ? 'blog post' : 'page'}. Use San Diego County → city → local areas or streets, then Add all. Max one place per chip.
+            Each chip is one {contentKind === 'post' ? 'blog post' : 'page'}. Type 2+ letters to search the whole county (streets and communities). Pick Chula Vista, then Local areas, then Add all for the 33 communities. Max one place per chip.
           </p>
+          <LocationMap places={extraLocations} city={form.base_location} />
         </div>
         ) : (
         <div className="card p-5 lg:col-span-2">

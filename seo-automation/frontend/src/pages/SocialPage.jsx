@@ -163,63 +163,40 @@ function buildCaption(block, platform, projectWebsite, pagePublicUrl) {
 }
 
 /* ── Platform Card ───────────────────────────────────────────── */
-function PlatformCard({ id, platform, onShare, hasPage }) {
-  const [hovered, setHovered] = useState(false)
-  const isGradient = typeof platform.bg === 'string' && platform.bg.startsWith('linear')
-
+function PlatformCard({ id, platform, onShare, hasPage, connected }) {
   return (
-    <div
-      style={{
-        borderRadius: 16, overflow: 'hidden',
-        border: '1px solid var(--border)',
-        background: 'var(--bg-surface)',
-        transition: 'transform 0.2s, box-shadow 0.2s',
-        transform: hovered ? 'translateY(-3px)' : 'none',
-        boxShadow: hovered ? 'var(--shadow-lg)' : 'var(--shadow-sm)',
-      }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      {/* Brand header */}
-      <div style={{ background: platform.bg, padding: '18px 18px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+    <div className="soc-card">
+      <div className="soc-card-top">
+        <div style={{ width: 44, height: 44, borderRadius: 12, background: platform.bg, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
           {platform.logo}
         </div>
-        <div>
-          <div style={{ color: 'white', fontWeight: 800, fontSize: 16, lineHeight: 1.2 }}>{platform.label}</div>
-          <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 2 }}>{platform.handle}</div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text-1)' }}>{platform.label}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-4)' }} className="truncate">{platform.handle}</div>
         </div>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#16a34a', background: '#dcfce7', padding: '3px 8px', borderRadius: 999 }}>
+          {connected ? 'Connected' : 'Visit'}
+        </span>
       </div>
-
-      {/* Buttons */}
-      <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 7 }}>
-        {/* Visit profile */}
-        <button onClick={() => window.open(platform.profileUrl, '_blank', 'noopener')}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 12px', borderRadius: 9, background: platform.bg, color: 'white', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
-          onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
-          onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><ExternalLink size={12} /> View Profile</span>
-          <ArrowRight size={12} />
+      <div className="soc-card-actions">
+        <button type="button" className="btn btn-secondary" style={{ flex: 1, fontSize: 12 }}
+          onClick={() => window.open(platform.profileUrl, '_blank', 'noopener')}>
+          {id === 'youtube' ? 'View Channel' : 'View Profile'}
         </button>
-
-        {/* FB has a separate page link */}
-        {id === 'facebook' && platform.pageUrl && (
-          <button onClick={() => window.open(platform.pageUrl, '_blank', 'noopener')}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 12px', borderRadius: 9, background: 'rgba(24,119,242,0.2)', color: '#60a5fa', border: '1px solid rgba(24,119,242,0.3)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(24,119,242,0.3)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(24,119,242,0.2)'}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><ExternalLink size={12} /> Business Page</span>
-            <ArrowRight size={12} />
-          </button>
-        )}
-
-        {/* Share post */}
-        <button onClick={() => onShare(id)} disabled={!hasPage}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 12px', borderRadius: 9, background: 'var(--bg-raised)', color: hasPage ? 'var(--text-1)' : 'var(--text-4)', border: '1px solid var(--border-bright)', cursor: hasPage ? 'pointer' : 'not-allowed', fontSize: 12, fontWeight: 600 }}
-          onMouseEnter={e => { if (hasPage) e.currentTarget.style.background = 'var(--bg-overlay)' }}
-          onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-raised)'}>
-          <Share2 size={12} /> Share SEO Post
+        <button type="button" onClick={() => {
+          if (id === 'facebook' && platform.pageUrl) window.open(platform.pageUrl, '_blank', 'noopener')
+          else onShare(id)
+        }} disabled={id !== 'facebook' && !hasPage}
+          style={{
+            flex: 1, border: 0, borderRadius: 10, color: '#fff', fontSize: 12, fontWeight: 700, cursor: hasPage ? 'pointer' : 'not-allowed',
+            opacity: hasPage ? 1 : 0.5, background: platform.bg, padding: '9px 10px',
+          }}>
+          {id === 'facebook' ? 'Business Page →' : 'Share SEO Post'}
         </button>
+      </div>
+      <div className="soc-card-foot">
+        <span style={{ color: '#16a34a', fontWeight: 700 }}>Auto-publish Enabled</span>
+        <button type="button" className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: 11 }}>Settings</button>
       </div>
     </div>
   )
@@ -320,22 +297,32 @@ export default function SocialPage() {
   return (
     <div className="space-y-6 fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-white">Social Media</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Visit platforms, share posts, and auto-publish with AI-generated content</p>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-start gap-3">
+          <div style={{ width: 40, height: 40, borderRadius: 12, background: '#eef2ff', color: 'var(--brand)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+            <Share2 size={18} />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold" style={{ color: 'var(--text-1)' }}>Social Media</h1>
+            <p className="text-sm mt-0.5" style={{ color: 'var(--text-3)' }}>Visit platforms, share posts, and auto-publish with AI-generated content.</p>
+          </div>
         </div>
-        {/* Page selector */}
+        <div className="flex items-center gap-2 flex-wrap">
         <select
           value={selected ? selected.slug : ''}
           onChange={e => { setSelected(pages.find(p => p.slug === e.target.value) || null); setError('') }}
-          className="bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500/50 max-w-xs"
+          className="rounded-lg px-3 py-2 text-sm"
+          style={{ border: '1px solid var(--border)', background: '#fff', color: 'var(--text-1)', maxWidth: 280 }}
         >
-          <option value="">— Select a page to share —</option>
+          <option value="">Select a page to share</option>
           {pages.map(p => (
             <option key={p.slug} value={p.slug}>{p.seo_block?.city} — {p.business_type}</option>
           ))}
         </select>
+        <button type="button" className="btn btn-secondary" style={{ fontSize: 12.5 }}>
+          How it works
+        </button>
+        </div>
       </div>
 
       {error && (
@@ -346,8 +333,11 @@ export default function SocialPage() {
 
       {/* ── Platform Cards Grid ── */}
       <div>
-        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Platforms — click to visit or share</p>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="mb-3">
+          <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: 'var(--text-1)' }}>Connected Platforms</h2>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-3)' }}>Manage your social platforms and share SEO content.</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {Object.entries(PLATFORMS).map(([id, platform]) => (
             <PlatformCard
               key={id}
@@ -355,8 +345,23 @@ export default function SocialPage() {
               platform={platform}
               onShare={handleShare}
               hasPage={!!selected}
+              connected={!!apiStatus[id]}
             />
           ))}
+        </div>
+      </div>
+
+      <div className="soc-banner">
+        <div>
+          <h3 style={{ margin: 0, fontSize: 16 }}>AI-Powered Social Sharing</h3>
+          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-3)' }}>
+            ZeOrbit writes platform-ready captions from your published SEO page, then opens the native share dialog.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 18, fontSize: 12.5, color: 'var(--text-2)', fontWeight: 650 }}>
+          <span>Auto-adapt content</span>
+          <span>Best time to post</span>
+          <span>Track performance</span>
         </div>
       </div>
 
@@ -367,7 +372,7 @@ export default function SocialPage() {
         <div className="card p-5">
           <div className="flex items-center gap-2 mb-3">
             <Sparkles size={14} className="text-violet-400" />
-            <span className="text-sm font-semibold text-white">AI Image</span>
+            <span className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>AI Image</span>
           </div>
           <div className="flex gap-2 mb-3">
             <input
@@ -375,7 +380,8 @@ export default function SocialPage() {
               value={imageUrl}
               onChange={e => setImageUrl(e.target.value)}
               placeholder="Paste URL or generate →"
-              className="flex-1 min-w-0 bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-violet-500/50"
+              className="flex-1 min-w-0 rounded-lg px-3 py-2 text-xs"
+              style={{ border: '1px solid var(--border)', background: '#fff', color: 'var(--text-1)' }}
             />
             <button
               onClick={handleGenerateImage}
@@ -390,7 +396,7 @@ export default function SocialPage() {
           {imageUrl ? (
             <img src={imageUrl} alt="AI" className="w-full h-40 object-cover rounded-xl border border-white/8" />
           ) : (
-            <div className="w-full h-40 rounded-xl border border-dashed border-white/10 flex items-center justify-center text-slate-600 text-xs">
+            <div className="w-full h-40 rounded-xl flex items-center justify-center text-xs" style={{ border: '1px dashed var(--border)', color: 'var(--text-4)' }}>
               No image yet
             </div>
           )}
@@ -399,12 +405,12 @@ export default function SocialPage() {
 
         {/* Post preview */}
         <div className="card p-5">
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Post Preview</div>
+          <div className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-3)' }}>Post Preview</div>
           {selectedBlock ? (
             <>
               {imageUrl && <img src={imageUrl} alt="" className="w-full h-28 object-cover rounded-lg mb-3 border border-white/8" />}
-              <div className="text-sm font-semibold text-white mb-1 line-clamp-2">{selectedBlock.title}</div>
-              <div className="text-xs text-slate-400 leading-relaxed mb-2 line-clamp-3">{selectedBlock.meta_description}</div>
+              <div className="text-sm font-semibold mb-1 line-clamp-2" style={{ color: 'var(--text-1)' }}>{selectedBlock.title}</div>
+              <div className="text-xs leading-relaxed mb-2 line-clamp-3" style={{ color: 'var(--text-3)' }}>{selectedBlock.meta_description}</div>
               <div className="text-xs text-indigo-400 truncate mb-3">
                 🔗 {selectedPostUrl || 'Publish or set website URL to share'}
               </div>
@@ -427,7 +433,7 @@ export default function SocialPage() {
         {/* API auto-share + captions */}
         <div className="card p-5 flex flex-col gap-4">
           <div>
-            <div className="text-sm font-semibold text-white mb-1">API Auto-Share</div>
+            <div className="text-sm font-semibold mb-1" style={{ color: 'var(--text-1)' }}>API Auto-Share</div>
             <p className="text-xs text-slate-500 mb-3">Posts automatically using stored API tokens</p>
             <div className="grid grid-cols-2 gap-1.5 mb-3">
               {['facebook','twitter','linkedin','instagram','pinterest','threads'].map(id => {

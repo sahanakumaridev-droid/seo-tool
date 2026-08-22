@@ -1,18 +1,25 @@
 import { useState } from 'react'
-import { useNavigate, Link, Navigate } from 'react-router-dom'
+import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom'
 import { Eye, EyeOff, ArrowRight } from 'lucide-react'
 import AuthLayout from '../components/auth/AuthLayout'
 import { loginUser } from '../api'
 
+function nextPath(location, hasProject) {
+  const from = location.state?.from?.pathname
+  if (from && !['/login', '/register', '/forgot-password'].includes(from)) return from
+  return hasProject ? '/' : '/onboarding'
+}
+
 export default function LoginPage({ onLogin }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const [alreadyAuthed] = useState(() => localStorage.getItem('seo_auth') === 'true')
   const [form, setForm] = useState({ email: '', password: '' })
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  if (alreadyAuthed) return <Navigate to="/dashboard" replace />
+  if (alreadyAuthed) return <Navigate to={nextPath(location, !!localStorage.getItem('seo_project'))} replace />
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -22,7 +29,7 @@ export default function LoginPage({ onLogin }) {
       await loginUser(form.email.trim(), form.password)
       onLogin()
       const hasProject = !!localStorage.getItem('seo_project')
-      navigate(hasProject ? '/dashboard' : '/onboarding')
+      navigate(nextPath(location, hasProject))
     } catch (err) {
       const detail = err.response?.data?.detail
       setError(typeof detail === 'string' ? detail : 'Invalid email or password. Register first if you are new.')

@@ -69,16 +69,22 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             elif hasattr(im, "url") and im.url:
                 used_featured.append(im.url)
 
-    for city_info in cities:
+    for keyword_index, city_info in enumerate(cities):
         # State chip is for Location Expansion UI; generate for cities + counties only.
         if getattr(city_info, "kind", "city") == "state":
             continue
         exclude = list(used_featured)
         from services.slug_utils import article_slug
+        from services.content_service import pick_primary_keyword, article_topic
+        focus = (
+            article_topic(req.custom_requirements, req.target_keywords, req.business_type)
+            if req.content_kind == "post"
+            else pick_primary_keyword(req.target_keywords, req.business_type, city_info.name, keyword_index)
+        )
         preview_slug = article_slug(
-            req.target_keywords,
+            [focus] + list(req.target_keywords or []),
             city_info.name,
-            req.custom_requirements if req.content_kind == "post" else req.business_type,
+            focus,
         )
         result = await session.execute(select(PageRecord).where(PageRecord.slug == preview_slug))
         existing = result.scalar_one_or_none()
@@ -106,6 +112,7 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             custom_requirements=req.custom_requirements,
             content_kind=req.content_kind,
             audience=req.audience,
+            keyword_index=keyword_index,
         )
         # Final uniqueness guard (same as async jobs path)
         if block.featured_image_url:
@@ -113,13 +120,13 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             key = normalize_image_key(block.featured_image_url)
             if key in taken:
                 images = await generate_article_images(
-                    f"{req.business_type} {city_info.name}",
+                    focus,
                     f"{city_info.name}, {city_info.state}".strip(", "),
-                    "",
+                    "ZeOrbit",
                     count=3,
                     exclude_urls=used_featured,
-                    industry=req.industry or "",
-                    niche=req.business_type or "",
+                    industry="" if req.content_kind == "post" else (req.industry or ""),
+                    niche=focus if req.content_kind == "post" else (req.business_type or ""),
                 )
                 if images:
                     block.in_content_images = images

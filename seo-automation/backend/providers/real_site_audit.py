@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 _MAX_LINKS_CHECKED = 25
 _LINK_CHECK_TIMEOUT = 8
-_OVERALL_TIMEOUT = 25
+_OVERALL_TIMEOUT = 55
 
 
 def _passed(id_, title, category) -> AuditIssue:

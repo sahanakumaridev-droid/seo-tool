@@ -51,7 +51,11 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
     except Exception as e:
         print(f"[Jobs] could not seed used images: {e}")
 
-    async def generate_task(city_info):
+    indexed = [{"i": i, "city": c} for i, c in enumerate(cities)]
+
+    async def generate_task(item):
+        city_info = item["city"]
+        keyword_index = item["i"]
         name = city_info.name if hasattr(city_info, "name") else city_info["name"]
         state = city_info.state if hasattr(city_info, "state") else city_info["state"]
         async with used_lock:
@@ -68,6 +72,7 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
             custom_requirements=req.custom_requirements,
             content_kind=req.content_kind,
             audience=req.audience,
+            keyword_index=keyword_index,
         )
         async with used_lock:
             # Re-check under lock in case another task claimed the same URL first
@@ -77,12 +82,12 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
                 key = normalize_image_key(block.featured_image_url)
                 if key in taken:
                     images = await generate_article_images(
-                        f"{req.business_type} {name}",
+                        f"{req.target_keywords[0] if req.target_keywords else req.business_type} {name}",
                         f"{name}, {state}".strip(", "),
-                        "",
+                        "ZeOrbit",
                         count=3,
                         exclude_urls=used_featured,
-                        industry=req.industry or "",
+                        industry="" if req.content_kind == "post" else (req.industry or ""),
                         niche=req.business_type or "",
                     )
                     if images:
@@ -98,7 +103,7 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
     background_tasks.add_task(
         run_bulk_job,
         job_id=job_id,
-        items=cities,
+        items=indexed,
         task_fn=generate_task,
         concurrency=3,
         retry_count=2,

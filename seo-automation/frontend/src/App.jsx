@@ -86,7 +86,7 @@ function RequireAuth({ authed, children }) {
 function HomeGate({ authed, onLogout }) {
   const isAuthed = authed || localStorage.getItem('seo_auth') === 'true'
   if (!isAuthed) return <LandingPage />
-  return <DashboardLayout onLogout={onLogout}><DashboardPage /></DashboardLayout>
+  return <DashboardLayout onLogout={onLogout}><ContentPage /></DashboardLayout>
 }
 
 export default function App() {
@@ -129,7 +129,9 @@ export default function App() {
 
       {/* Protected dashboard routes */}
       <Route path="/dashboard" element={
-        <DashboardLayout onLogout={logout}><DashboardPage /></DashboardLayout>
+        <RequireAuth authed={authed}>
+          <DashboardLayout onLogout={logout}><DashboardPage /></DashboardLayout>
+        </RequireAuth>
       } />
       <Route path="/site-audit" element={
         <RequireAuth authed={authed}>
