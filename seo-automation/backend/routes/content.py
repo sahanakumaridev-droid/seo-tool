@@ -6,9 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from models.schemas import (
     GenerateRequest, SEOBlock, BulkGenerateResponse,
-    ArticleRequest, WebsiteAnalysisRequest, WebsiteProfile,
+    ArticleRequest, WebsiteAnalysisRequest, WebsiteProfile, CityInfo,
 )
-from services.location_service import get_nearby_cities, LocationNotResolvedError, merge_extra_locations
+from services.location_service import get_nearby_cities, LocationNotResolvedError, merge_extra_locations, resolve_generation_cities
 from services.content_service import generate_seo_block, generate_articles
 from services.website_analysis_service import analyze_website
 from services.export_service import export_json, export_html, export_wordpress
@@ -29,16 +29,23 @@ async def llm_providers():
     return available_providers()
 
 
-@router.post("/generate", response_model=BulkGenerateResponse)
-async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(get_session)):
+async def _places_for_generate(req: GenerateRequest) -> List:
+    """Pages require locations. Posts may be a single topic article with no city."""
     try:
-        cities = await get_nearby_cities(req.base_location, req.num_cities)
-        cities = merge_extra_locations(cities, req.extra_locations)
-        cities = [c for c in cities if getattr(c, "kind", "city") != "state"]
+        cities = await resolve_generation_cities(req.base_location, req.num_cities, req.extra_locations)
     except LocationNotResolvedError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    if not cities:
-        raise HTTPException(status_code=404, detail="No cities found for the given location")
+    cities = [c for c in cities if getattr(c, "kind", "city") != "state"]
+    if cities:
+        return cities
+    if req.content_kind == "post":
+        return [CityInfo(name="", state="", country="US", latitude=0.0, longitude=0.0, kind="city")]
+    raise HTTPException(status_code=400, detail="Add at least one location (base city or bulk communities).")
+
+
+@router.post("/generate", response_model=BulkGenerateResponse)
+async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(get_session)):
+    cities = await _places_for_generate(req)
 
     pages: List[SEOBlock] = []
     used_featured: List[str] = []
@@ -68,7 +75,11 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             continue
         exclude = list(used_featured)
         from services.slug_utils import article_slug
-        preview_slug = article_slug(req.target_keywords, city_info.name, req.business_type)
+        preview_slug = article_slug(
+            req.target_keywords,
+            city_info.name,
+            req.custom_requirements if req.content_kind == "post" else req.business_type,
+        )
         result = await session.execute(select(PageRecord).where(PageRecord.slug == preview_slug))
         existing = result.scalar_one_or_none()
         if existing:
@@ -92,6 +103,9 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             use_ai=req.use_ai,
             llm_provider=req.llm_provider,
             exclude_image_urls=exclude,
+            custom_requirements=req.custom_requirements,
+            content_kind=req.content_kind,
+            audience=req.audience,
         )
         # Final uniqueness guard (same as async jobs path)
         if block.featured_image_url:

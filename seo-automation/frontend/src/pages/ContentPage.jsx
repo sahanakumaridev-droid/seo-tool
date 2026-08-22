@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Zap, MapPin, Globe, Eye, X, RefreshCw, Save, CheckCircle,
-         FileJson, Tag, Plus, Upload, ChevronDown, ChevronUp, Megaphone, Trash2 } from 'lucide-react'
-import { generateBulk, exportJson, exportWordpress, generateSingle,
-         savePage, publishToWordPress, publishBulkToWordPress, startBulkGenerateJob, getJob, publishAllToWeb, zeorbitBlogUrl, zeorbitArticleUrl,
-         getNearbyCities, deletePage, listPages } from '../api'
+         FileJson, Tag, Plus, Megaphone, Trash2, FileText, Newspaper } from 'lucide-react'
+import { generateBulk, exportJson, generateSingle,
+         savePage, publishToWeb, startBulkGenerateJob, getJob, publishAllToWeb, zeorbitBlogUrl, zeorbitArticleUrl,
+         getNearbyCities, getSanDiegoCounty, deletePage, listPages } from '../api'
 import axios from 'axios'
 
 const BUSINESS_TYPES = [
@@ -18,15 +18,25 @@ const BUSINESS_TYPES = [
 ]
 const INDUSTRIES = ['Contractors', 'Healthcare', 'Retail', 'Restaurants',
   'Professional Services', 'Real Estate', 'Legal', 'Finance', 'Education', 'Other']
+const AUDIENCES = [
+  'Small businesses', 'Startups', 'Local retailers', 'Healthcare practices',
+  'Restaurants & hospitality', 'Nonprofits', 'Homeowners', 'Enterprise teams',
+  'eCommerce brands', 'Professional services',
+]
 const KW_SUGGESTIONS = ['web design san diego', 'affordable web design', 'small business website',
   'website designer near me', 'wordpress website san diego', 'custom website design',
   'website redesign', 'mobile app development san diego', 'ecommerce website developer']
 
 const US_CITY_OPTIONS = [
-  'San Diego, CA', 'Coronado, CA', 'La Jolla, CA', 'Chula Vista, CA', 'El Cajon, CA',
-  'La Mesa, CA', 'National City, CA', 'Imperial Beach, CA', 'Lemon Grove, CA',
-  'Carlsbad, CA', 'Oceanside, CA', 'Encinitas, CA', 'Vista, CA', 'San Marcos, CA',
-  'Escondido, CA', 'Poway, CA', 'Del Mar, CA', 'Solana Beach, CA',
+  'San Diego, CA', 'Carlsbad, CA', 'Chula Vista, CA', 'Coronado, CA', 'Del Mar, CA',
+  'El Cajon, CA', 'Encinitas, CA', 'Escondido, CA', 'Imperial Beach, CA', 'La Mesa, CA',
+  'Lemon Grove, CA', 'National City, CA', 'Oceanside, CA', 'Poway, CA', 'San Marcos, CA',
+  'Santee, CA', 'Solana Beach, CA', 'Vista, CA',
+  'Spring Valley, CA', 'Lakeside, CA', 'Alpine, CA', 'Bonita, CA', 'Rancho San Diego, CA',
+  'Casa de Oro, CA', 'La Presa, CA', 'Jamul, CA', 'Ramona, CA', 'San Ysidro, CA',
+  'Otay Mesa, CA', 'Nestor, CA', 'Fallbrook, CA', 'Bonsall, CA', 'Valley Center, CA',
+  'Julian, CA', 'Pine Valley, CA', 'Descanso, CA', 'Campo, CA', 'Boulevard, CA',
+  'La Jolla, CA', 'Pacific Beach, CA', 'Mission Valley, CA',
   'Los Angeles, CA', 'San Francisco, CA', 'San Jose, CA', 'Sacramento, CA',
   'Oakland, CA', 'Fresno, CA', 'Long Beach, CA', 'Anaheim, CA', 'Riverside, CA',
   'Irvine, CA', 'Santa Ana, CA', 'Bakersfield, CA',
@@ -39,11 +49,87 @@ const US_CITY_OPTIONS = [
 function locKey(value) {
   return (value || '').toLowerCase().replace(/\s+/g, ' ').trim()
 }
-const SEO_PLUGINS = [
-  { value: 'rankmath', label: 'RankMath' },
-  { value: 'aioseo', label: 'All in One SEO' },
-  { value: 'yoast', label: 'Yoast SEO' },
-]
+
+function splitLocations(raw) {
+  const chunks = (raw || '').split(/[\n;]+/).flatMap((part) => {
+    const tokens = part.split(',').map((t) => t.trim()).filter(Boolean)
+    const out = []
+    for (let i = 0; i < tokens.length; i += 1) {
+      const name = tokens[i]
+      const next = tokens[i + 1]
+      if (next && /^[A-Za-z]{2}$/.test(next)) {
+        out.push(`${name}, ${next.toUpperCase()}`)
+        i += 1
+      } else {
+        out.push(name)
+      }
+    }
+    return out
+  })
+  return chunks.filter(Boolean)
+}
+
+function SearchSelect({ label, required, value, onChange, options, placeholder }) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const query = (q || '').trim().toLowerCase()
+  const filtered = options
+    .filter((o) => !query || o.toLowerCase().includes(query))
+    .slice(0, 12)
+  const exact = options.some((o) => locKey(o) === locKey(value))
+  const showCustom = Boolean((value || '').trim()) && !exact
+  return (
+    <div style={{ position: 'relative' }}>
+      <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-3)' }}>
+        {label}
+        {required ? <span className="ml-2 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ background: 'var(--amber-soft)', color: 'var(--amber)' }}>Required</span> : null}
+      </label>
+      <input
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setQ(e.target.value); setOpen(true) }}
+        onFocus={() => { setQ(''); setOpen(true) }}
+        onBlur={() => setTimeout(() => setOpen(false), 160)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            setOpen(false)
+          }
+        }}
+        placeholder={placeholder}
+        className="w-full rounded-lg px-3 py-2 text-sm"
+        style={{ background: '#fff', border: '1px solid var(--border-bright)', color: 'var(--text-1)' }}
+      />
+      {open && (filtered.length > 0 || showCustom) && (
+        <div className="absolute left-0 right-0 z-20 mt-1 rounded-lg overflow-hidden" style={{ background: '#fff', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)', maxHeight: 220, overflowY: 'auto' }}>
+          {showCustom && (
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { setOpen(false) }}
+              className="w-full text-left px-3 py-2 text-sm"
+              style={{ color: 'var(--brand)', background: 'var(--brand-soft)' }}
+            >
+              Use “{(value || '').trim()}”
+            </button>
+          )}
+          {filtered.map((opt) => (
+            <button
+              type="button"
+              key={opt}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { onChange(opt); setQ(''); setOpen(false) }}
+              className="w-full text-left px-3 py-2 text-sm"
+              style={{ background: locKey(opt) === locKey(value) ? 'var(--brand-soft)' : 'transparent', color: 'var(--text-1)' }}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      )}
+      <p className="mt-1 text-[10px]" style={{ color: 'var(--text-4)' }}>Search the list or type a custom value — both are saved.</p>
+    </div>
+  )
+}
 
 /** Map free-text niche / industry / keyword → category family for alignment checks. */
 function categoryFamily(text) {
@@ -129,7 +215,7 @@ function analyzeCategoryAlignment(niche, industry, keywords = []) {
 }
 
 // ── Preview Modal ──────────────────────────────────────────────
-function PreviewModal({ block, businessType, targetKeywords = [], wpConfig, onClose, onRegenerate }) {
+function PreviewModal({ block, businessType, targetKeywords = [], onClose, onRegenerate }) {
   const [tab, setTab] = useState('content')
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -151,12 +237,12 @@ function PreviewModal({ block, businessType, targetKeywords = [], wpConfig, onCl
   }
 
   const handlePublish = async () => {
-    if (!wpConfig.wp_url) return
     setPublishing(true)
     setPublishResult(null)
     try {
-      const res = await publishToWordPress(block, wpConfig)
-      setPublishResult(res.data)
+      const res = await publishToWeb(block)
+      const url = zeorbitArticleUrl(res.data.public_url || res.data.slug)
+      setPublishResult({ success: true, post_url: url })
     } catch (e) {
       setPublishResult({ success: false, error: e.response?.data?.detail || e.message })
     } finally { setPublishing(false) }
@@ -183,13 +269,11 @@ function PreviewModal({ block, businessType, targetKeywords = [], wpConfig, onCl
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors ${saved ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-white/5 border border-white/8 text-slate-300 hover:bg-white/8'}`}>
               {saved ? <><CheckCircle size={11} /> Saved</> : <><Save size={11} /> Save</>}
             </button>
-            {wpConfig.wp_url && (
-              <button onClick={handlePublish} disabled={publishing}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors ${publishResult?.success ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-indigo-600/20 border border-indigo-600/30 text-indigo-300 hover:bg-indigo-600/30'} disabled:opacity-50`}>
-                <Upload size={11} className={publishing ? 'animate-pulse' : ''} />
-                {publishing ? 'Publishing...' : publishResult?.success ? 'Published!' : 'Publish to WP'}
-              </button>
-            )}
+            <button onClick={handlePublish} disabled={publishing}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors ${publishResult?.success ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-indigo-600/20 border border-indigo-600/30 text-indigo-300 hover:bg-indigo-600/30'} disabled:opacity-50`}>
+              <Globe size={11} className={publishing ? 'animate-pulse' : ''} />
+              {publishing ? 'Publishing...' : publishResult?.success ? 'Published!' : 'Publish to ZeOrbit'}
+            </button>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/8 text-slate-400 hover:text-white transition-colors">
               <X size={16} />
             </button>
@@ -364,87 +448,9 @@ function ScoreBar({ label, value, color }) {
   )
 }
 
-// ── WordPress Config Panel ─────────────────────────────────────
-function WordPressPanel({ wpConfig, setWpConfig }) {
-  const [open, setOpen] = useState(false)
-  const connected = !!wpConfig.wp_url
-
-  return (
-    <div className="card border-violet-500/20">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-5 py-4"
-      >
-        <div className="flex items-center gap-2">
-          <Globe size={15} className="text-violet-400" />
-          <span className="text-sm font-semibold text-white">WordPress Auto-Publish</span>
-          {connected && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-400/10 text-emerald-400 border border-emerald-400/20">
-              Configured
-            </span>
-          )}
-        </div>
-        {open ? <ChevronUp size={14} className="text-slate-500" /> : <ChevronDown size={14} className="text-slate-500" />}
-      </button>
-      {open && (
-        <div className="px-5 pb-5 space-y-3 border-t border-white/5 pt-4">
-          <p className="text-xs text-slate-500">
-            Enter your WordPress credentials to auto-publish pages. Use an{' '}
-            <a href="https://wordpress.org/documentation/article/application-passwords/" target="_blank" rel="noreferrer"
-              className="text-indigo-400 underline">Application Password</a> (not your login password).
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">WordPress URL</label>
-              <input type="url" value={wpConfig.wp_url}
-                onChange={e => setWpConfig(c => ({ ...c, wp_url: e.target.value }))}
-                placeholder="https://yoursite.com"
-                className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Username</label>
-              <input type="text" value={wpConfig.wp_username}
-                onChange={e => setWpConfig(c => ({ ...c, wp_username: e.target.value }))}
-                placeholder="your_wp_username"
-                className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Application Password</label>
-              <input type="password" value={wpConfig.wp_app_password}
-                onChange={e => setWpConfig(c => ({ ...c, wp_app_password: e.target.value }))}
-                placeholder="Connected on server — leave blank"
-                className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">SEO Plugin</label>
-              <select value={wpConfig.seo_plugin}
-                onChange={e => setWpConfig(c => ({ ...c, seo_plugin: e.target.value }))}
-                className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500/50">
-                {SEO_PLUGINS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Publish Status</label>
-            <div className="flex gap-2">
-              {['draft', 'publish'].map(s => (
-                <button key={s} type="button"
-                  onClick={() => setWpConfig(c => ({ ...c, status: s }))}
-                  className={`px-3 py-1 rounded-md text-xs font-medium capitalize transition-colors ${wpConfig.status === s ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-600/30' : 'bg-white/4 text-slate-400 border border-white/6 hover:border-white/15'}`}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ── Main Page ──────────────────────────────────────────────────
 export default function ContentPage() {
-  const DEFAULTS = { business_type: '', base_location: 'San Diego, CA', num_cities: 10, industry: 'Contractors' }
+  const DEFAULTS = { business_type: '', base_location: 'San Diego, CA', num_cities: 10, industry: 'Contractors', audience: '' }
   const navigate = useNavigate()
   const [form, setForm] = useState(() => {
     try {
@@ -482,11 +488,6 @@ export default function ContentPage() {
   const [useAsync, setUseAsync] = useState(false)
   const [asyncJobId, setAsyncJobId] = useState('')
   const [jobProgress, setJobProgress] = useState(null)  // { completed, failed, total, status }
-  const [wpConfig, setWpConfig] = useState({
-    wp_url: 'https://zeorbit.com', wp_username: 'zeor@admnir', wp_app_password: '',
-    seo_plugin: 'aioseo', status: 'publish',
-  })
-  const [publishingAll, setPublishingAll] = useState(false)
   const [publishResults, setPublishResults] = useState({})
   const [toast, setToast] = useState(null)
   const resultsRef = useRef(null)
@@ -494,6 +495,13 @@ export default function ContentPage() {
   const [nearbyError, setNearbyError] = useState('')
   const [extraLocations, setExtraLocations] = useState([])
   const [extraLocDraft, setExtraLocDraft] = useState('')
+  const [contentKind, setContentKind] = useState('') // mandatory: 'page' | 'post'
+  const [customRequirements, setCustomRequirements] = useState('')
+  const [postLocalize, setPostLocalize] = useState(false)
+  const [sdCounty, setSdCounty] = useState(null)
+  const [sdPick, setSdPick] = useState('San Diego')
+  const [sdLayer, setSdLayer] = useState('areas')
+  const [sdFilter, setSdFilter] = useState('')
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type })
@@ -503,6 +511,11 @@ export default function ContentPage() {
   // Keep results + keywords alive when navigating to a page preview and back
   useEffect(() => { sessionStorage.setItem('seo_pages', JSON.stringify(pages)) }, [pages])
   useEffect(() => { sessionStorage.setItem('seo_keywords', JSON.stringify(targetKeywords)) }, [targetKeywords])
+  useEffect(() => {
+    getSanDiegoCounty()
+      .then((res) => setSdCounty(res.data))
+      .catch(() => setSdCounty(null))
+  }, [])
 
   // Prefill from Lead Engine "Generate in SEO Content"
   useEffect(() => {
@@ -558,6 +571,11 @@ export default function ContentPage() {
   // Location Expansion preview — reflect the real nearby cities for whatever
   // base_location is currently typed, instead of a hardcoded city list.
   useEffect(() => {
+    if (contentKind === 'post' && !postLocalize) {
+      setNearbyCities([])
+      setNearbyError('')
+      return
+    }
     const loc = form.base_location.trim()
     if (!loc) { setNearbyCities([]); setNearbyError(''); return }
     let cancelled = false
@@ -574,7 +592,7 @@ export default function ContentPage() {
       }
     }, 500)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [form.base_location, form.num_cities])
+  }, [form.base_location, form.num_cities, contentKind, postLocalize])
 
   // Poll an async job until it finishes, then drop the generated pages into
   // the results table (same review/publish flow as sync generation).
@@ -613,27 +631,75 @@ export default function ContentPage() {
   }
   const removeKeyword = (kw) => setTargetKeywords(prev => prev.filter(k => k !== kw))
 
+  const sdCityNames = sdCounty?.incorporated_cities || []
+  const sdNode = sdPick === 'Unincorporated'
+    ? sdCounty?.unincorporated
+    : (sdCounty?.cities || []).find((c) => c.name === sdPick)
+  const sdItemsRaw = sdLayer === 'streets'
+    ? (sdPick === 'Unincorporated'
+      ? (sdNode?.communities_with_streets || []).flatMap((c) => (c.streets || []).map((s) => `${s} (${c.name})`))
+      : (sdNode?.streets || []))
+    : (sdNode?.local_areas || [])
+  const sdItems = sdItemsRaw.filter((n) => locKey(n).includes(locKey(sdFilter)))
+
+  const addSdItems = (names) => {
+    addExtraLocation(names.join('\n'))
+  }
   const addExtraLocation = (raw) => {
-    const loc = (raw || extraLocDraft).trim()
-    if (!loc) return
-    setExtraLocations(prev => prev.some(x => locKey(x) === locKey(loc)) ? prev : [...prev, loc])
+    const parts = splitLocations(raw || extraLocDraft)
+    if (!parts.length) return
+    setExtraLocations((prev) => {
+      const next = [...prev]
+      parts.forEach((loc) => {
+        if (!next.some((x) => locKey(x) === locKey(loc))) next.push(loc)
+      })
+      return next
+    })
     setExtraLocDraft('')
   }
   const removeExtraLocation = (loc) => setExtraLocations(prev => prev.filter(x => locKey(x) !== locKey(loc)))
 
   const handleGenerate = async (e) => {
     e.preventDefault()
+    if (contentKind !== 'page' && contentKind !== 'post') {
+      setError('Choose Page or Post / Blog before generating.')
+      showToast('Content category is required')
+      document.getElementById('content-kind-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    const brief = (customRequirements || '').trim()
+    if (brief.length < 8) {
+      setError('Describe the content you want in Custom content requirements.')
+      showToast('Custom content requirements are required')
+      document.getElementById('custom-brief-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
     const niche = (form.business_type || '').trim()
-    if (!niche) {
+    if (contentKind === 'page' && !niche) {
       setError('Select or enter a Business Niche before generating pages.')
       showToast('Business Niche is required')
       document.getElementById('business-niche-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
-    if (!targetKeywords.length) {
+    if (contentKind === 'page' && !targetKeywords.length) {
       setError('Add at least one target keyword before generating pages.')
       showToast('Target keywords are required')
       document.getElementById('target-keywords-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    const pendingLocs = splitLocations(extraLocDraft)
+    const chips = [...extraLocations]
+    pendingLocs.forEach((loc) => {
+      if (!chips.some((x) => locKey(x) === locKey(loc))) chips.push(loc)
+    })
+    if (pendingLocs.length) {
+      setExtraLocations(chips)
+      setExtraLocDraft('')
+    }
+    const useLocations = contentKind === 'page' || postLocalize || chips.length > 0
+    if (contentKind === 'page' && !chips.length && !(form.base_location || '').trim()) {
+      setError('Add a base city or at least one location chip before generating.')
+      showToast('Location is required for pages')
       return
     }
     setLoading(true)
@@ -643,10 +709,14 @@ export default function ContentPage() {
     try {
       const payload = {
         ...form,
-        business_type: niche,
-        num_cities: Number(form.num_cities),
-        target_keywords: targetKeywords,
-        extra_locations: extraLocations,
+        business_type: niche || (contentKind === 'post' ? 'Digital Services' : niche),
+        num_cities: useLocations ? Number(form.num_cities) : 1,
+        base_location: useLocations ? (form.base_location || '') : '',
+        target_keywords: targetKeywords.length ? targetKeywords : [brief.slice(0, 80)],
+        extra_locations: useLocations ? chips : [],
+        content_kind: contentKind,
+        custom_requirements: brief,
+        audience: form.audience || '',
         use_ai: useAi,
         llm_provider: llmProvider || null,
       }
@@ -659,12 +729,16 @@ export default function ContentPage() {
       } else {
         const res = await generateBulk(payload)
         setPages(res.data.pages)
-        showToast(`${res.data.pages.length} pages generated successfully!`)
+        showToast(`${res.data.pages.length} ${contentKind === 'post' ? 'posts' : 'pages'} generated successfully!`)
         setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
       }
     } catch (err) {
+      const detail = err.response?.data?.detail
+      const detailText = Array.isArray(detail)
+        ? detail.map((d) => d.msg || d).join(' ')
+        : (typeof detail === 'string' ? detail : '')
       setError(
-        err.response?.data?.detail
+        detailText
         || (err.code === 'ERR_NETWORK'
             ? 'Cannot reach the backend. Start it with: uvicorn main:app --port 8000'
             : `Generation failed${err.message ? ` — ${err.message}` : ''}. Please try again.`)
@@ -672,44 +746,29 @@ export default function ContentPage() {
     } finally { setLoading(false) }
   }
 
-  const handleExport = async (type) => {
+  const handleExport = async () => {
     if (!pages.length) return
-    setExporting(type)
+    setExporting('json')
     try {
-      const res = type === 'json'
-        ? await exportJson({ ...form, num_cities: pages.length })
-        : await exportWordpress({ ...form, num_cities: pages.length })
+      const res = await exportJson({ ...form, num_cities: pages.length })
       const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${type}-${form.business_type.toLowerCase()}.json`
+      a.download = `${form.business_type.toLowerCase() || 'seo'}-pages.json`
       a.click()
       URL.revokeObjectURL(url)
     } finally { setExporting('') }
   }
 
   const handlePublishSingle = async (block, index) => {
-    if (!wpConfig.wp_url) return
     setPublishResults(r => ({ ...r, [index]: 'loading' }))
     try {
-      const res = await publishToWordPress(block, wpConfig)
-      setPublishResults(r => ({ ...r, [index]: res.data }))
+      const res = await publishToWeb(block)
+      setPublishResults(r => ({ ...r, [index]: { success: true, post_url: zeorbitArticleUrl(res.data.public_url || res.data.slug) } }))
     } catch (e) {
       setPublishResults(r => ({ ...r, [index]: { success: false, error: e.response?.data?.detail || e.message } }))
     }
-  }
-  const handlePublishAll = async () => {
-    if (!wpConfig.wp_url || !pages.length) return
-    setPublishingAll(true)
-    try {
-      const res = await publishBulkToWordPress(pages, wpConfig)
-      const map = {}
-      res.data.forEach((r, i) => { map[i] = r })
-      setPublishResults(map)
-    } catch (e) {
-      setError(e.response?.data?.detail || 'WordPress publish failed.')
-    } finally { setPublishingAll(false) }
   }
 
   const [webAll, setWebAll] = useState(null)   // { loading } | { links: [...] } | { error }
@@ -744,12 +803,52 @@ export default function ContentPage() {
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-white">Content Generation</h1>
-          <p className="text-sm text-slate-500 mt-0.5">AI-powered, SGE/Copilot/ChatGPT-optimized SEO pages at scale</p>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--text-1)' }}>Content Generation</h1>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--text-3)' }}>
+            Choose Page or Post first — each uses its own workflow and sitemap.
+          </p>
         </div>
       </div>
 
-      {/* Target Keywords — required */}
+      <div id="content-kind-section" className="grid sm:grid-cols-2 gap-3">
+        <button
+          type="button"
+          aria-pressed={contentKind === 'page'}
+          onClick={() => { setContentKind('page'); setPostLocalize(false) }}
+          className="kind-card text-left"
+          data-active={contentKind === 'page' ? 'true' : 'false'}
+        >
+          <div className="flex items-center gap-2 mb-1.5">
+            <FileText size={16} />
+            <span className="text-sm font-semibold">Page</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: 'var(--brand-soft)', color: 'var(--brand-dark)' }}>Required pick</span>
+          </div>
+          <p className="text-xs" style={{ color: 'var(--text-3)' }}>
+            Service and location pages. Goes to <strong>page-sitemap.xml</strong>.
+          </p>
+        </button>
+        <button
+          type="button"
+          aria-pressed={contentKind === 'post'}
+          onClick={() => { setContentKind('post'); updateForm((f) => ({ ...f, num_cities: 1 })) }}
+          className="kind-card text-left"
+          data-active={contentKind === 'post' ? 'true' : 'false'}
+        >
+          <div className="flex items-center gap-2 mb-1.5">
+            <Newspaper size={16} />
+            <span className="text-sm font-semibold">Post / Blog</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: 'var(--brand-soft)', color: 'var(--brand-dark)' }}>Required pick</span>
+          </div>
+          <p className="text-xs" style={{ color: 'var(--text-3)' }}>
+            How-to and educational articles. Goes to <strong>post-sitemap.xml</strong>.
+          </p>
+        </button>
+      </div>
+      {!contentKind && (
+        <p className="text-xs" style={{ color: 'var(--amber)' }}>Select Page or Post / Blog to open the matching generator.</p>
+      )}
+
+      {contentKind === 'page' && (
       <div id="target-keywords-section" className={`card p-5 ${targetKeywords.length ? 'border-indigo-500/20' : 'border-amber-500/40'}`}>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -802,83 +901,134 @@ export default function ContentPage() {
           ))}
         </div>
       </div>
+      )}
 
-      {/* Campaign Setup + City Preview */}
+      {contentKind === 'post' && (
+        <div id="target-keywords-section" className="card p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Tag size={15} className="text-indigo-400" />
+            <span className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>Target Keywords</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-raised)', color: 'var(--text-3)' }}>Optional</span>
+            <span className="text-xs" style={{ color: 'var(--text-4)' }}>— pulled from your topic if you skip this</span>
+          </div>
+          <div className="flex gap-2 mb-3">
+            <input type="text" value={kwInput}
+              onChange={e => setKwInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword() } }}
+              placeholder="e.g. 301 redirects — press Enter to add"
+              className="flex-1 rounded-lg px-4 py-2.5 text-sm"
+              style={{ background: '#fff', border: '1px solid var(--border-bright)', color: 'var(--text-1)' }} />
+            <button type="button" onClick={() => addKeyword()}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium"
+              style={{ background: 'var(--brand-soft)', color: 'var(--brand-dark)', border: '1px solid var(--border)' }}>
+              <Plus size={14} /> Add
+            </button>
+          </div>
+          {targetKeywords.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {targetKeywords.map(kw => (
+                <span key={kw} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: 'var(--brand-soft)', color: 'var(--brand-dark)' }}>
+                  {kw}
+                  <button type="button" onClick={() => removeKeyword(kw)}><X size={10} /></button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {contentKind && (
       <div className="grid lg:grid-cols-3 gap-4">
         <div className="card p-5">
-          <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-            <Zap size={14} className="text-indigo-400" /> Campaign Setup
+          <h3 className="text-sm font-semibold mb-1 flex items-center gap-2" style={{ color: 'var(--text-1)' }}>
+            <Zap size={14} style={{ color: 'var(--brand)' }} />
+            {contentKind === 'post' ? 'Blog post setup' : 'Page setup'}
           </h3>
+          <p className="text-[11px] mb-4" style={{ color: 'var(--text-4)' }}>
+            {contentKind === 'post'
+              ? 'Educational / how-to copy. Published URLs go to post-sitemap.xml.'
+              : 'Service / location landing pages. Published URLs go to page-sitemap.xml.'}
+          </p>
           <form onSubmit={handleGenerate} className="space-y-4">
-            <div id="business-niche-section">
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                Business Niche
-                <span className="ml-2 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">Required</span>
+            <div id="custom-brief-section">
+              <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-3)' }}>
+                Custom content requirements
+                <span className="ml-2 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ background: 'var(--amber-soft)', color: 'var(--amber)' }}>Required</span>
               </label>
-              <div className="flex flex-wrap gap-1.5 mb-2">
-                {BUSINESS_TYPES.map(bt => (
-                  <button key={bt} type="button" onClick={() => updateForm(f => ({ ...f, business_type: bt }))}
-                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${form.business_type === bt ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-600/30' : 'bg-white/4 text-slate-400 border border-white/6 hover:border-white/15 hover:text-slate-200'}`}>
-                    {bt}
-                  </button>
-                ))}
-              </div>
-              <input type="text" value={form.business_type}
-                onChange={e => updateForm(f => ({ ...f, business_type: e.target.value }))}
+              <textarea
+                value={customRequirements}
+                onChange={(e) => setCustomRequirements(e.target.value)}
+                rows={5}
                 required
-                aria-required="true"
-                placeholder="Select a chip or type a custom niche…"
-                className={`w-full bg-white/4 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50 ${(form.business_type || '').trim() ? 'border-white/8' : 'border-amber-500/40'}`} />
-              {!(form.business_type || '').trim() && (
-                <p className="mt-1.5 text-[10px] text-amber-400">Choose a niche chip or type one — required to generate.</p>
-              )}
-              {(form.business_type || '').trim() && (
-                <p className="mt-1.5 text-[10px] text-slate-500">This controls page topic, titles, and images.</p>
-              )}
+                minLength={8}
+                placeholder={contentKind === 'post'
+                  ? 'How to set 301 redirects on a website?'
+                  : 'WordPress Website Design Services for Automobile Businesses in San Diego'}
+                className="w-full rounded-lg px-3 py-2 text-sm"
+                style={{ background: '#fff', border: '1px solid var(--border-bright)', color: 'var(--text-1)', resize: 'vertical' }}
+              />
+              <p className="mt-1.5 text-[11px] leading-relaxed" style={{ color: 'var(--text-4)' }}>
+                {contentKind === 'post'
+                  ? 'Tell us the article: topic, intent, and what the reader should walk away knowing. We write it in American English — “Thinking about…?”, “Not sure where to start? We’re here to help.”'
+                  : 'Describe the service page: who it’s for, the offer, and the place. Copy stays user-focused: “Looking for a website or a custom digital solution?”'}
+              </p>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Industry / Audience</label>
-              <select
-                value={form.industry}
-                onChange={e => updateForm(f => ({ ...f, industry: e.target.value }))}
-                className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500/50">
-                {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
-              </select>
-              <p className="mt-1.5 text-[10px] text-slate-500">Optional. Shapes copy tone and related photos — any industry is allowed.</p>
+            <div id="business-niche-section">
+              <SearchSelect
+                label="Business Niche"
+                required={contentKind === 'page'}
+                value={form.business_type}
+                onChange={(v) => updateForm((f) => ({ ...f, business_type: v }))}
+                options={BUSINESS_TYPES}
+                placeholder="Search or type a niche…"
+              />
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                <MapPin size={10} className="inline mr-1" />Base Location
+            <SearchSelect
+              label="Industry"
+              value={form.industry}
+              onChange={(v) => updateForm((f) => ({ ...f, industry: v }))}
+              options={INDUSTRIES}
+              placeholder="Search or type an industry…"
+            />
+            <SearchSelect
+              label="Audience"
+              value={form.audience || ''}
+              onChange={(v) => updateForm((f) => ({ ...f, audience: v }))}
+              options={AUDIENCES}
+              placeholder="Who is this for?"
+            />
+            {contentKind === 'post' && (
+              <label className="flex items-start gap-2 text-xs" style={{ color: 'var(--text-2)' }}>
+                <input type="checkbox" checked={postLocalize} onChange={(e) => setPostLocalize(e.target.checked)} className="mt-0.5" />
+                <span>Mention a city in this article (optional). Leave off for a national how-to post.</span>
               </label>
-              <select
-                value={US_CITY_OPTIONS.find(c => locKey(c) === locKey(form.base_location)) || ''}
-                onChange={e => { if (e.target.value) updateForm(f => ({ ...f, base_location: e.target.value })) }}
-                className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500/50 mb-1.5">
-                <option value="">Choose a city…</option>
-                {US_CITY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <input type="text" value={form.base_location}
-                onChange={e => updateForm(f => ({ ...f, base_location: e.target.value }))}
-                placeholder="Or type a city — e.g. San Diego, CA"
-                className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50" />
-              {form.base_location.trim() && !form.base_location.includes(',') && (
-                <div className="mt-1.5 text-[10px] text-amber-400">
-                  Add the state (e.g. "{form.base_location.trim()}, TX") to avoid ambiguous same-named cities.
-                </div>
-              )}
-              {nearbyError && (
-                <div className="mt-1.5 text-[10px] text-red-400">{nearbyError}</div>
-              )}
-            </div>
+            )}
+            {(contentKind === 'page' || postLocalize) && (
             <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cities</label>
-                <span className="text-sm font-bold text-indigo-400">{form.num_cities}</span>
-              </div>
-              <input type="range" min="1" max="50" value={form.num_cities}
-                onChange={e => updateForm(f => ({ ...f, num_cities: Number(e.target.value) }))}
-                className="w-full accent-indigo-500" />
+              <SearchSelect
+                label={contentKind === 'page' ? 'Base city' : 'City to mention'}
+                required={contentKind === 'page'}
+                value={form.base_location}
+                onChange={(v) => updateForm((f) => ({ ...f, base_location: v }))}
+                options={US_CITY_OPTIONS}
+                placeholder="San Diego, CA"
+              />
+              {nearbyError && (
+                <div className="mt-1.5 text-[10px]" style={{ color: 'var(--red)' }}>{nearbyError}</div>
+              )}
             </div>
+            )}
+            {contentKind === 'page' && !extraLocations.length && (
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-3)' }}>Nearby cities to generate</label>
+                  <span className="text-sm font-bold" style={{ color: 'var(--brand)' }}>{form.num_cities}</span>
+                </div>
+                <input type="range" min="1" max="50" value={form.num_cities}
+                  onChange={e => updateForm(f => ({ ...f, num_cities: Number(e.target.value) }))}
+                  className="w-full accent-indigo-500" />
+              </div>
+            )}
             {error && <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 text-xs">{error}</div>}
 
             {/* AI + Async toggles */}
@@ -946,48 +1096,111 @@ export default function ContentPage() {
               )
             })()}
 
-            <button type="submit" disabled={loading || !!asyncJobId || !targetKeywords.length || !(form.business_type || '').trim()}
+            <button type="submit" disabled={
+              loading || !!asyncJobId
+              || (customRequirements || '').trim().length < 8
+              || (contentKind === 'page' && (!(form.business_type || '').trim() || !targetKeywords.length))
+            }
               className="btn-primary w-full py-2.5 rounded-lg text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
               title={
-                !(form.business_type || '').trim() ? 'Select a Business Niche first'
-                  : !targetKeywords.length ? 'Add at least one target keyword first'
+                (customRequirements || '').trim().length < 8 ? 'Add custom content requirements first'
+                  : contentKind === 'page' && !(form.business_type || '').trim() ? 'Select a Business Niche first'
+                  : contentKind === 'page' && !targetKeywords.length ? 'Add at least one target keyword first'
                     : undefined
               }>
               {loading || asyncJobId
-                ? <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.2)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/></svg>{asyncJobId ? 'Generating…' : `Generating ${form.num_cities} pages...`}</>
-                : <><Zap size={14} />{useAsync ? 'Start Async Job' : 'Generate Pages'}{useAi ? ' (AI)' : ''}</>}
+                ? <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.2)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/></svg>{asyncJobId ? 'Generating…' : `Generating ${contentKind === 'post' ? 'post' : 'pages'}…`}</>
+                : <><Zap size={14} />{useAsync ? 'Start Async Job' : (contentKind === 'post' ? 'Generate blog post' : 'Generate pages')}{useAi ? ' (AI)' : ''}</>}
             </button>
             <p className="text-[10px] text-center" style={{ color: 'var(--text-3)' }}>
-              Each page gets 3 related stock photos (1 hero + 2 in the article) from keyword + niche + industry.
+              {contentKind === 'post'
+                ? 'Writes one how-to / educational article from your brief. Lives on post-sitemap.xml after publish.'
+                : 'Each location page gets 3 related photos. Lives on page-sitemap.xml after publish.'}
             </p>
-            {!(form.business_type || '').trim() ? (
-              <p className="text-[11px] text-amber-400 text-center">Select a Business Niche to enable generate.</p>
-            ) : !targetKeywords.length ? (
-              <p className="text-[11px] text-amber-400 text-center">Add a target keyword above to enable generate.</p>
-            ) : null}
           </form>
         </div>
 
+        {(contentKind === 'page' || postLocalize) ? (
         <div className="card p-3 lg:col-span-2">
-          <h4 className="text-[11px] font-semibold uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: 'var(--text-2)' }}>
-            <Globe size={11} /> Location Expansion — {nearbyCities.length + extraLocations.length || form.num_cities} locations
+          <h4 className="text-[11px] font-semibold uppercase tracking-wider mb-2 flex items-center justify-between gap-1.5" style={{ color: 'var(--text-2)' }}>
+            <span className="inline-flex items-center gap-1.5"><Globe size={11} /> Bulk locations — {extraLocations.length || nearbyCities.length || form.num_cities} separate {contentKind === 'post' ? 'posts' : 'pages'}</span>
+            {extraLocations.length > 0 && (
+              <span className="inline-flex gap-2">
+                <button type="button" className="text-[11px]" style={{ color: 'var(--brand)' }}
+                  onClick={() => navigator.clipboard.writeText(extraLocations.join(', '))}>Copy</button>
+                <button type="button" className="text-[11px]" style={{ color: 'var(--red)' }}
+                  onClick={() => setExtraLocations([])}>Clear</button>
+              </span>
+            )}
           </h4>
-          <div className="flex flex-col sm:flex-row gap-1.5 mb-2">
-            <select
-              value=""
-              onChange={e => { if (e.target.value) addExtraLocation(e.target.value) }}
-              className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
-              style={{ borderColor: 'var(--border)', color: 'var(--text-1)' }}>
-              <option value="">Add from dropdown…</option>
-              {US_CITY_OPTIONS.filter(c => !extraLocations.some(x => locKey(x) === locKey(c)) && locKey(c) !== locKey(form.base_location)).map(c => (
-                <option key={c} value={c}>{c}</option>
+          <div className="flex flex-col gap-2 mb-2">
+            <div className="flex flex-col sm:flex-row gap-1.5">
+              <select
+                value={sdPick}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setSdPick(v)
+                  setSdFilter('')
+                  updateForm((f) => ({
+                    ...f,
+                    base_location: v === 'Unincorporated' ? 'San Diego County, CA' : `${v}, CA`,
+                  }))
+                }}
+                className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-1)' }}
+              >
+                {sdCityNames.map((n) => <option key={n} value={n}>{n}</option>)}
+                <option value="Unincorporated">Unincorporated county</option>
+              </select>
+              <div className="crm-seg" role="tablist" aria-label="Local areas or streets">
+                <button type="button" aria-pressed={sdLayer === 'areas'} onClick={() => setSdLayer('areas')}>Local areas</button>
+                <button type="button" aria-pressed={sdLayer === 'streets'} onClick={() => setSdLayer('streets')}>Streets</button>
+              </div>
+            </div>
+            <div className="flex gap-1.5">
+              <input
+                type="search"
+                value={sdFilter}
+                onChange={(e) => setSdFilter(e.target.value)}
+                placeholder={sdLayer === 'streets' ? 'Search streets…' : 'Search communities…'}
+                className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-1)' }}
+              />
+              <button
+                type="button"
+                disabled={!sdItems.length}
+                onClick={() => addSdItems(sdItems)}
+                className="px-3 py-2 rounded-lg text-xs font-semibold text-white flex-shrink-0 disabled:opacity-50"
+                style={{ background: 'var(--brand, #4f46e5)' }}
+              >
+                Add all {sdItems.length}
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto">
+              {sdItems.slice(0, 80).map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => addExtraLocation(name)}
+                  className="text-[11px] px-2 py-0.5 rounded font-medium"
+                  style={{
+                    background: extraLocations.some((x) => locKey(x) === locKey(name)) ? '#ecfdf5' : '#fff',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-2)',
+                  }}
+                >
+                  {name}
+                </button>
               ))}
-            </select>
-            <div className="flex gap-1.5 flex-1">
+              {sdItems.length > 80 && (
+                <span className="text-[11px]" style={{ color: 'var(--text-4)' }}>+{sdItems.length - 80} more — search or Add all</span>
+              )}
+            </div>
+            <div className="flex gap-1.5">
               <input type="text" value={extraLocDraft}
                 onChange={e => setExtraLocDraft(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addExtraLocation() } }}
-                placeholder="Or type City, ST"
+                placeholder="Or type / paste a list and press Add"
                 className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
                 style={{ borderColor: 'var(--border)', color: 'var(--text-1)' }} />
               <button type="button" onClick={() => addExtraLocation()}
@@ -1041,13 +1254,21 @@ export default function ContentPage() {
             )}
           </div>
           <p className="text-[10px] mt-2" style={{ color: 'var(--text-3)' }}>
-            Dropdown or type a city to include it. Nearby cities come from the base location. Live URL is the keyword plus city, e.g. /web-design-san-diego.
+            Each chip is one {contentKind === 'post' ? 'blog post' : 'page'}. Use San Diego County → city → local areas or streets, then Add all. Max one place per chip.
           </p>
         </div>
+        ) : (
+        <div className="card p-5 lg:col-span-2">
+          <h4 className="text-sm font-semibold mb-2" style={{ color: 'var(--text-1)' }}>Topic article — not a location page</h4>
+          <p className="text-sm leading-relaxed" style={{ color: 'var(--text-3)' }}>
+            We’ll write one post from your custom requirement (for example, how to set 301 redirects).
+            American, user-focused tone. After you publish to ZeOrbit it is listed on <strong>post-sitemap.xml</strong>.
+            Check “Mention a city” only if you want local examples.
+          </p>
+        </div>
+        )}
       </div>
-
-      {/* WordPress Panel */}
-      <WordPressPanel wpConfig={wpConfig} setWpConfig={setWpConfig} />
+      )}
 
       {/* ── SUCCESS BANNER — appears immediately after generation ── */}
       {pages.length > 0 && (
@@ -1057,14 +1278,18 @@ export default function ContentPage() {
               <CheckCircle size={18} style={{ color: '#047857' }} />
             </div>
             <div>
-              <p className="font-semibold text-sm" style={{ color: '#0f172a' }}>{pages.length} SEO pages generated</p>
+              <p className="font-semibold text-sm" style={{ color: '#0f172a' }}>
+                {pages.length} {pages[0]?.content_type === 'blog' || contentKind === 'post' ? 'blog posts' : 'pages'} generated
+              </p>
               <p className="text-xs mt-0.5" style={{ color: '#334155' }}>
-                {form.business_type} · {form.base_location} · Ready to download or publish
+                {(pages[0]?.content_type === 'blog' || contentKind === 'post')
+                  ? 'Will list on post-sitemap.xml after publish'
+                  : 'Will list on page-sitemap.xml after publish'}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={() => handleExport('json')} disabled={exporting === 'json'}
+            <button onClick={handleExport} disabled={exporting === 'json'}
               className="content-btn flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm disabled:opacity-50">
               <FileJson size={14} /> {exporting === 'json' ? 'Exporting...' : 'Download JSON'}
             </button>
@@ -1074,16 +1299,6 @@ export default function ContentPage() {
                 ? <><svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" strokeWidth="3" strokeLinecap="round"/></svg>Publishing all…</>
                 : <><Globe size={14} /> Publish All {pages.length} to ZeOrbit</>}
             </button>
-            <button onClick={() => handleExport('wp')} disabled={exporting === 'wp'}
-              className="content-btn flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm disabled:opacity-50">
-              <FileJson size={14} /> {exporting === 'wp' ? 'Exporting...' : 'WP Format'}
-            </button>
-            {wpConfig.wp_url && (
-              <button onClick={handlePublishAll} disabled={publishingAll}
-                className="content-btn-violet flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm disabled:opacity-50">
-                <Upload size={14} /> {publishingAll ? 'Publishing...' : 'Publish All to WordPress'}
-              </button>
-            )}
           </div>
         </div>
       )}
@@ -1138,7 +1353,9 @@ export default function ContentPage() {
         <div className="card" ref={resultsRef}>
           <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
             <div className="flex items-center gap-3">
-              <h3 className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{pages.length} Pages Generated</h3>
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>
+                {pages.length} {(pages[0]?.content_type === 'blog' || contentKind === 'post') ? 'Posts' : 'Pages'} Generated
+              </h3>
               <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #6ee7b7' }}>Complete</span>
             </div>
             <div className="flex items-center gap-2">
@@ -1168,8 +1385,8 @@ export default function ContentPage() {
                   <tr key={`${block.city}-${i}`}>
                     <td className="text-xs font-semibold" style={{ color: 'var(--text-3)' }}>{i + 1}</td>
                     <td>
-                      <div className="font-semibold text-sm" style={{ color: 'var(--text-1)' }}>{block.city}</div>
-                      <div className="text-xs muted-cell">{block.state}</div>
+                      <div className="font-semibold text-sm" style={{ color: 'var(--text-1)' }}>{block.city || (block.content_type === 'blog' ? 'Article' : '—')}</div>
+                      <div className="text-xs muted-cell">{block.state || (block.content_type === 'blog' ? 'Blog post' : '')}</div>
                     </td>
                     <td className="max-w-[240px]">
                       <div className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>{block.title}</div>
@@ -1187,7 +1404,7 @@ export default function ContentPage() {
                     <td className="text-xs font-medium max-w-[140px]" style={{ color: 'var(--text-2)' }}>{block.keywords?.primary}</td>
                     <td>
                       <div className="flex items-center gap-1.5">
-                        <button onClick={() => navigate('/page-preview', { state: { block, index: i, businessType: form.business_type, wpConfig } })}
+                        <button onClick={() => navigate('/page-preview', { state: { block, index: i, businessType: form.business_type, contentKind: block.content_type === 'blog' ? 'post' : 'page' } })}
                           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold"
                           style={{ background: '#fff', border: '1px solid var(--brand)', color: 'var(--brand-dark)' }}>
                           <Eye size={11} /> View
@@ -1200,19 +1417,17 @@ export default function ContentPage() {
                             <Trash2 size={11} /> {deletingSlug === block.slug ? '…' : 'Trash'}
                           </button>
                         )}
-                        {wpConfig.wp_url && (
-                          <button onClick={() => handlePublishSingle(block, i)}
-                            disabled={pr === 'loading'}
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
-                            style={{
-                              background: pr?.success ? '#ecfdf5' : pr?.error ? '#fef2f2' : '#fff',
-                              border: `1px solid ${pr?.success ? '#6ee7b7' : pr?.error ? '#fecaca' : '#94a3b8'}`,
-                              color: pr?.success ? '#047857' : pr?.error ? '#b91c1c' : '#0f172a',
-                            }}>
-                            <Upload size={11} />
-                            {pr === 'loading' ? '...' : pr?.success ? 'Done' : pr?.error ? 'Err' : 'WP'}
-                          </button>
-                        )}
+                        <button onClick={() => handlePublishSingle(block, i)}
+                          disabled={pr === 'loading'}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+                          style={{
+                            background: pr?.success ? '#ecfdf5' : pr?.error ? '#fef2f2' : '#fff',
+                            border: `1px solid ${pr?.success ? '#6ee7b7' : pr?.error ? '#fecaca' : '#94a3b8'}`,
+                            color: pr?.success ? '#047857' : pr?.error ? '#b91c1c' : '#0f172a',
+                          }}>
+                          <Globe size={11} />
+                          {pr === 'loading' ? '...' : pr?.success ? 'Live' : pr?.error ? 'Err' : 'Publish'}
+                        </button>
                       </div>
                     </td>
                   </tr>

@@ -660,6 +660,36 @@ def _build_schema(
     return schema
 
 
+VOICE_RULES = """
+VOICE — American English, user-first, conversational (ZeOrbit):
+- Write the way a helpful US teammate talks, not an agency brochure.
+- Short questions: "Thinking about a mobile app for your business?"
+- Direct help: "Looking for a website or a custom digital solution?"
+- Capability, not hype: "We help you turn your idea into an MVP, prototype, or fully functional product from concept to launch."
+- Soft next step: "Not sure where to start? We're here to help."
+- Use American spelling: optimize, color, center, organization, favorite.
+- Avoid stiff jargon (synergies, leverage, best-in-class, holistic solutions).
+- Second person ("you") over "businesses seeking world-class partners".
+"""
+
+LAYOUT_VARIANTS = ("qa", "steps", "story", "cards", "split", "timeline")
+
+LAYOUT_INSTRUCTIONS = {
+    "qa": "Use question-style H2s a real customer would ask. Body answers in short paragraphs, then a 3-item list.",
+    "steps": "Structure as a how-to: H2s are numbered steps (Step 1, Step 2…). Body is actionable, not a pitch.",
+    "story": "Open with a local situation, then proof, then what working together looks like. One H2 should be a short anecdote.",
+    "cards": "Each H2 is a distinct benefit/offer card (speed, local SEO, care plan, cost clarity). Keep each section 2-4 sentences.",
+    "split": "Alternate problem vs solution: first H2 is the pain in this city, next is how you fix it, then who it's for, then timeline, then next step.",
+    "timeline": "Walk the reader through a project timeline (week 1 discovery → design → build → launch → support).",
+}
+
+
+def pick_layout_variant(city: str, business_type: str, kind: str = "service") -> str:
+    seed = f"{kind}|{(business_type or '').lower()}|{(city or '').lower()}"
+    h = int(hashlib.md5(seed.encode()).hexdigest(), 16)
+    return LAYOUT_VARIANTS[h % len(LAYOUT_VARIANTS)]
+
+
 async def generate_seo_block(
     business_type: str,
     city: str,
@@ -669,29 +699,48 @@ async def generate_seo_block(
     use_ai: bool = False,
     llm_provider: Optional[str] = None,
     exclude_image_urls: Optional[list] = None,
+    custom_requirements: str = "",
+    content_kind: str = "page",
+    audience: str = "",
 ) -> SEOBlock:
     from services.image_service import resolve_campaign_niche
+    city, state = _one_place(city, state)
     original_niche = normalize_niche_text(business_type or "")
-    # Industry=Education + leftover "software engineer" niche → Education Services
     business_type = resolve_campaign_niche(
         original_niche,
         industry or "",
     )
+    kind = "blog" if (content_kind or "page") == "post" else "service"
+    layout = pick_layout_variant(city, business_type, kind)
     if use_ai:
         try:
-            block = await _generate_ai_block(business_type, city, state, target_keywords, industry, llm_provider)
+            block = await _generate_ai_block(
+                business_type, city, state, target_keywords, industry, llm_provider,
+                custom_requirements=custom_requirements, content_kind=kind, audience=audience,
+                layout_variant=layout,
+            )
         except Exception as e:
             print(f"[AI] LLM generation failed, falling back to templates: {e}")
-            block = await _generate_template_block(business_type, city, state, target_keywords, industry)
+            block = await _generate_template_block(
+                business_type, city, state, target_keywords, industry,
+                custom_requirements=custom_requirements, content_kind=kind, audience=audience,
+                layout_variant=layout,
+            )
     else:
-        block = await _generate_template_block(business_type, city, state, target_keywords, industry)
+        block = await _generate_template_block(
+            business_type, city, state, target_keywords, industry,
+            custom_requirements=custom_requirements, content_kind=kind, audience=audience,
+            layout_variant=layout,
+        )
 
     from services.slug_utils import article_slug
-    block.slug = article_slug(target_keywords, city, business_type)
+    slug_seed = (custom_requirements or business_type) if kind == "blog" else business_type
+    block.slug = article_slug(target_keywords, city, slug_seed)
+    block.content_type = kind
+    block.layout_variant = layout
+    block.city = city
+    block.state = state or block.state
 
-    # Auto-generate a featured image plus in-content images (so the article
-    # body has images distributed through it, not just at the top — mirrors
-    # what the Articles pipeline already does via generate_article_images()).
     try:
         from services.image_service import generate_article_images
         focus_keyword = block.keywords.primary if block.keywords and block.keywords.primary else f"{business_type} {city}"
@@ -709,10 +758,20 @@ async def generate_seo_block(
         print(f"[Image] Set {len(images)} image(s) for {business_type} in {city}")
     except Exception as e:
         print(f"[Image] Failed to set image: {e}")
-        # Final fallback — curated on-topic Unsplash, never random picsum
         block.featured_image_url = await _get_business_image(business_type, city)
 
     return block
+
+
+def _one_place(city: str, state: str) -> tuple:
+    """Never treat a bulk list as one city/state (that jammed titles together)."""
+    c = (city or "").strip()
+    s = (state or "").strip()
+    if "," in c:
+        c = c.split(",")[0].strip()
+    if s and ("," in s or (len(s) > 2 and not re.fullmatch(r"[A-Za-z]{2}", s))):
+        s = ""
+    return c, s
 
 
 async def _generate_ai_block(
@@ -722,34 +781,121 @@ async def _generate_ai_block(
     target_keywords: list = [],
     industry: str = "",
     llm_provider: Optional[str] = None,
+    custom_requirements: str = "",
+    content_kind: str = "service",
+    audience: str = "",
+    layout_variant: str = "",
 ) -> SEOBlock:
     """Generate SEO content using an LLM (GPT-4, Gemini, or Groq — whichever
     is configured/selected) for higher quality, unique content."""
     from services.llm_service import chat_json
 
-    keywords = await generate_keywords(business_type, city, state)
-    primary_kw = keywords.primary
-    secondary_kws = ", ".join(keywords.secondary[:5])
-    faq_questions = "\n".join([f"- {q}" for q in keywords.user_questions[:6]])
+    city, state = _one_place(city, state)
+    brief = (custom_requirements or "").strip()
+    place = f"{city}, {state}".strip(", ") if state else city
+    audience_line = f"Speak to: {audience}." if audience else "Speak to a US business owner or operator."
+    kw_line = ", ".join(target_keywords) if target_keywords else "None"
+    layout = layout_variant if layout_variant in LAYOUT_INSTRUCTIONS else pick_layout_variant(city, business_type, content_kind)
+    layout_note = LAYOUT_INSTRUCTIONS[layout]
 
-    prompt = f"""You are an expert SEO content writer. Generate a complete, high-quality SEO page for a local business.
+    if content_kind == "blog":
+        topic = brief or business_type
+        primary_kw = (target_keywords[0] if target_keywords else topic).strip()
+        keywords = KeywordSet(
+            primary=primary_kw.lower(),
+            secondary=[k.lower() for k in (target_keywords[1:6] or [topic.lower()])],
+            long_tail=[f"how to {primary_kw.lower()}", f"{primary_kw.lower()} guide", f"{primary_kw.lower()} explained"],
+            near_me=[],
+            user_questions=[
+                f"What is {primary_kw}?",
+                f"How do I {primary_kw.lower()}?",
+                f"Why does {primary_kw.lower()} matter?",
+                f"What mistakes should I avoid?",
+            ],
+        )
+        loc_note = (
+            f"Optional local color: you MAY mention {place} once if it helps, but this is NOT a location landing page."
+            if place else
+            "Do not force a city into the title, H1, or every paragraph. This is a topic article."
+        )
+        prompt = f"""You are a US content writer creating ONE blog post / article.
 
-Business Type: {business_type}
-City: {city}, {state}
-Primary Keyword: {primary_kw}
-Secondary Keywords: {secondary_kws}
+THIS ARTICLE'S TOPIC (follow exactly — do not replace it with a generic service pitch):
+{topic}
+
+Business context (only if relevant): {business_type}
 Industry: {industry or "General"}
-Target Keywords: {", ".join(target_keywords) if target_keywords else "None"}
+{audience_line}
+SEO keywords to weave in naturally: {kw_line}
+BODY LAYOUT ({layout}): {layout_note}
+Do not reuse a generic five-question local-service outline. This layout must be visibly different from a location landing page.
+{loc_note}
+
+{VOICE_RULES}
+
+Write an informational / educational / how-to article that actually answers the topic.
+If the topic is "How to set 301 redirects on a website", teach 301 redirects — steps, when to use them, common mistakes.
+Do NOT turn it into "web design services in San Diego".
 
 Generate a JSON response with EXACTLY this structure:
 {{
-  "title": "Meta title (50-60 chars, include primary keyword and city)",
-  "meta_description": "Meta description (150-160 chars, include primary keyword, city, and a CTA)",
-  "h1": "Main heading (include primary keyword and city)",
-  "h2s": ["5 H2 subheadings covering different aspects of the service in {city}"],
+  "title": "SEO title 50-60 chars, about the topic (not a list of cities)",
+  "meta_description": "150-160 chars, promise the reader will learn the topic, include a soft CTA",
+  "h1": "Clear article H1 that matches the topic (question or how-to is fine)",
+  "h2s": ["5 H2s that outline the article: what it is, steps, mistakes, tools, when to get help"],
+  "h3s": ["4 supporting H3s"],
+  "intro": "2-3 sentences. Open with a user-focused question or situation, then say what this post covers.",
+  "content": "4-6 paragraphs, 500+ words. Numbered or bulleted steps when teaching. Separate paragraphs with double newlines.",
+  "faqs": [
+    {{"question": "Practical FAQ 1 about the topic", "answer": "2-3 sentence answer"}},
+    {{"question": "FAQ 2", "answer": "2-3 sentence answer"}},
+    {{"question": "FAQ 3", "answer": "2-3 sentence answer"}},
+    {{"question": "FAQ 4", "answer": "2-3 sentence answer"}},
+    {{"question": "FAQ 5", "answer": "2-3 sentence answer"}},
+    {{"question": "FAQ 6", "answer": "2-3 sentence answer"}}
+  ],
+  "cta": "Soft American CTA: invite a conversation if they need help applying this — not a hard sell."
+}}
+
+Return ONLY valid JSON, no markdown."""
+    else:
+        keywords = await generate_keywords(business_type, city or "United States", state or "")
+        if target_keywords:
+            keywords.secondary = list(dict.fromkeys([k.lower() for k in target_keywords] + keywords.secondary))
+        primary_kw = keywords.primary
+        secondary_kws = ", ".join(keywords.secondary[:5])
+        faq_questions = "\n".join([f"- {q}" for q in keywords.user_questions[:6]])
+        brief_block = f"\nOFFER / PAGE BRIEF (this is the page purpose — honor it):\n{brief}\n" if brief else ""
+        prompt = f"""You are a US SEO writer creating ONE website SERVICE / LOCATION PAGE (not a blog post).
+
+Page purpose: {brief or business_type}
+Business Type: {business_type}
+Location (the ONLY place this page is about): {place or "the United States"}
+Do NOT list other cities, neighborhoods, or communities in the title, H1, meta, or body.
+Primary Keyword: {primary_kw}
+Secondary Keywords: {secondary_kws}
+Industry: {industry or "General"}
+{audience_line}
+Target Keywords: {kw_line}
+{brief_block}
+BODY LAYOUT ({layout}): {layout_note}
+Vary H2s and body shape for this layout — never the same five “what/how much/why” local-service headings on every page.
+{VOICE_RULES}
+
+This is a conversion page. Open like:
+- "Looking for WordPress website design for automobile businesses in San Diego?"
+- "Thinking about a new site for your auto shop?"
+Then explain how you help, what they get, and a calm next step.
+
+Generate a JSON response with EXACTLY this structure:
+{{
+  "title": "Meta title (50-60 chars, include primary keyword and {city or 'your area'} only)",
+  "meta_description": "Meta description (150-160 chars, include primary keyword and a helpful CTA)",
+  "h1": "Main heading (include primary keyword and {city or 'your business'} only — never a list of places)",
+  "h2s": ["5 H2 subheadings covering the service for this location"],
   "h3s": ["4 H3 subheadings for supporting sections"],
-  "intro": "2-3 sentence intro paragraph optimized for AI answer engines (AEO). Be direct, factual, and include the primary keyword naturally.",
-  "content": "3-4 paragraphs of body content (400+ words total). Include bullet points, local context for {city}, and naturally weave in secondary keywords. Separate paragraphs with double newlines.",
+  "intro": "2-3 sentence intro. User-focused question, then what you do.",
+  "content": "3-4 paragraphs of body content (400+ words total). Local context for {city or 'this market'} only. Separate paragraphs with double newlines.",
   "faqs": [
     {{"question": "FAQ question 1", "answer": "Detailed answer 1 (2-3 sentences)"}},
     {{"question": "FAQ question 2", "answer": "Detailed answer 2"}},
@@ -758,18 +904,17 @@ Generate a JSON response with EXACTLY this structure:
     {{"question": "FAQ question 5", "answer": "Detailed answer 5"}},
     {{"question": "FAQ question 6", "answer": "Detailed answer 6"}}
   ],
-  "cta": "Strong call-to-action paragraph (2-3 sentences, include city name and urgency)"
+  "cta": "Warm call-to-action (2-3 sentences). 'Not sure where to start? We're here to help.'"
 }}
 
 FAQ questions to address:
 {faq_questions}
 
 Requirements:
-- Content must be unique, not generic
-- Include {city}-specific context and local references
-- Optimize for both Google (SEO) and AI answer engines (AEO)
-- Use natural language, avoid keyword stuffing
-- Each FAQ answer should be 2-3 sentences minimum
+- Unique, not generic
+- One location only
+- No keyword stuffing
+- Each FAQ answer 2-3 sentences minimum
 - Return ONLY valid JSON, no markdown"""
 
     data = await chat_json(prompt, temperature=0.7, max_tokens=3000, provider=llm_provider)
@@ -808,7 +953,7 @@ Requirements:
         schema_markup=schema,
         readability_score=seo_score,
         keyword_density=density,
-        content_type="service",
+        content_type="blog" if content_kind == "blog" else "service",
     )
 
 
@@ -818,7 +963,70 @@ async def _generate_template_block(
     state: str,
     target_keywords: list = [],
     industry: str = "",
+    custom_requirements: str = "",
+    content_kind: str = "service",
+    audience: str = "",
+    layout_variant: str = "",
 ) -> SEOBlock:
+    brief = (custom_requirements or "").strip()
+    if content_kind == "blog":
+        topic = brief or business_type
+        primary = (target_keywords[0] if target_keywords else topic).strip()
+        slug = _slugify(primary)
+        title = (topic[:58] + "…") if len(topic) > 60 else topic
+        h1 = topic.rstrip("?") if topic.endswith("?") else topic
+        intro = (
+            f"Not sure where to start with {primary.lower()}? You're not alone. "
+            f"This guide walks you through it in plain American English — what it is, how to do it, and when to get help."
+        )
+        content = (
+            f"Looking for a clear answer on {primary.lower()}?\n\n"
+            f"Here's the short version: {topic.rstrip('.')}. "
+            f"We'll keep this practical so you can take the next step without the jargon.\n\n"
+            f"1. Understand the goal.\n2. Follow the steps in order.\n3. Test the result.\n4. Ask for help if you get stuck.\n\n"
+            f"We help you turn your idea into something that actually works — from concept to launch. "
+            f"Not sure where to start? We're here to help."
+        )
+        h2s = [
+            f"What {primary} actually means",
+            f"How to {primary.lower()} step by step",
+            "Common mistakes to avoid",
+            "Tools and checks that save time",
+            "When to bring in a specialist",
+        ]
+        h3s = [
+            "A simple starting point",
+            "What good looks like",
+            "How long it usually takes",
+            "A soft next step if you need a hand",
+        ]
+        faqs = [
+            FAQItem(question=f"What is {primary.lower()}?", answer=f"{primary} is easier than it sounds. This post covers the basics so you can decide what to do next."),
+            FAQItem(question="Can I do this myself?", answer="Many teams can handle the first pass. If the setup is messy or high-stakes, get a specialist involved."),
+            FAQItem(question="How long does it take?", answer="A straightforward setup can take minutes. Larger sites take longer because you should test every path."),
+            FAQItem(question="What if I get it wrong?", answer="Most issues are reversible if you catch them early. Test, keep a backup, and don't guess on production."),
+            FAQItem(question="Do I need a developer?", answer="Not always. If you're changing live URLs or app flows, a developer (or us) can keep things from breaking."),
+            FAQItem(question="What's the next step?", answer="Not sure where to start? We're here to help you turn the idea into a working plan."),
+        ]
+        kw = KeywordSet(
+            primary=primary.lower(),
+            secondary=[k.lower() for k in target_keywords[:5]] or [topic.lower()],
+            long_tail=[f"how to {primary.lower()}", f"{primary.lower()} guide"],
+            near_me=[],
+            user_questions=[f.question for f in faqs],
+        )
+        schema = _build_schema(business_type.title(), city or "United States", state, faqs, article_title=title)
+        seo_score = _seo_score(intro + " " + content, title, "", h2s, faqs, primary, city or "", slug)
+        return SEOBlock(
+            city=city, state=state, business_type=business_type.title(), industry=industry,
+            slug=slug, title=title, meta_description=f"A practical US-English guide to {primary.lower()}. Clear steps, fewer mistakes, and a next step if you need help.",
+            h1=h1, h2s=h2s, h3s=h3s, intro=intro, content=content, faqs=faqs,
+            cta="Not sure where to start? We're here to help you turn this into a working plan — from concept to launch.",
+            keywords=kw, schema_markup=schema, readability_score=seo_score,
+            keyword_density=_keyword_density(intro + " " + content, primary),
+            content_type="blog",
+        )
+
     rng = _seed_random(city, business_type)
     bt = business_type.title()
     bt_lower = business_type.lower()
@@ -837,6 +1045,47 @@ async def _generate_template_block(
     meta = _fill(rng.choice(META_VARIANTS), bt, city, state)
     h1 = _fill(rng.choice(H1_VARIANTS), bt, city, state)
     h2s = [_fill(h, bt, city, state) for h in rng.sample(H2_POOL, 5)]
+    layout = layout_variant if layout_variant in LAYOUT_INSTRUCTIONS else pick_layout_variant(city, business_type, content_kind)
+    if layout == "steps":
+        h2s = [
+            f"Step 1: Map what {city} visitors should do on your site",
+            f"Step 2: Design pages that match how {city} customers search",
+            f"Step 3: Build, test, and launch without the guesswork",
+            f"Step 4: Measure leads from {city} after go-live",
+            "Step 5: Keep the site current after launch",
+        ]
+    elif layout == "timeline":
+        h2s = [
+            f"Week 1 — discovery for your {city} business",
+            "Weeks 2–3 — design and content",
+            "Weeks 3–5 — build and reviews",
+            f"Launch week in {city}",
+            "30 days of support after you go live",
+        ]
+    elif layout == "split":
+        h2s = [
+            f"What's getting in the way for {city} businesses",
+            f"A clearer {bt_lower} path",
+            "Who this is a fit for",
+            "What you can expect on timeline and cost",
+            "A simple next step if you're ready",
+        ]
+    elif layout == "cards":
+        h2s = [
+            f"Local {bt_lower} that understands {city}",
+            "Clear pricing — no surprise invoices",
+            "Built to rank and convert, not just look pretty",
+            "Care after launch",
+            "Talk it through before you commit",
+        ]
+    elif layout == "story":
+        h2s = [
+            f"A familiar story for {city} owners",
+            "What changed when the site started working",
+            f"How we approach {bt_lower} here",
+            "Proof over promises",
+            "If this sounds like you",
+        ]
     h3s = [_fill(h, bt, city, state) for h in rng.sample(H3_POOL, 4)]
     intro = _fill(rng.choice(INTRO_VARIANTS), bt, city, state)
 
@@ -1078,9 +1327,9 @@ async def generate_articles(req: ArticleRequest, profile: WebsiteProfile) -> Lis
     also gets a featured image + 1-2 in-content images with full SEO metadata.
     """
     from services.image_service import generate_article_images
-    from services.location_service import get_nearby_cities
+    from services.location_service import resolve_generation_cities
 
-    cities = await get_nearby_cities(req.location, req.num_cities)
+    cities = await resolve_generation_cities(req.location, req.num_cities, getattr(req, "extra_locations", None))
     if not cities:
         c, s = _parse_location(req.location)
         from models.schemas import CityInfo
@@ -1125,4 +1374,7 @@ async def generate_articles(req: ArticleRequest, profile: WebsiteProfile) -> Lis
                 blocks.append(block)
             except Exception as e:
                 print(f"[Articles] generation failed for {city.name}: {e}")
+    kind = "blog" if (getattr(req, "content_kind", "post") or "post") == "post" else "service"
+    for b in blocks:
+        b.content_type = kind
     return blocks

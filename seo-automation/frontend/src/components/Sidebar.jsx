@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Search, Newspaper, TrendingUp, BarChart2,
   HelpCircle, Share2, Users, Shield,
@@ -12,9 +12,13 @@ import useProjectInfo from '../hooks/useProjectInfo'
 // "Coming Soon" placeholders cluttering the list in the meantime.
 // SEO Content leads the list — it's the primary, day-to-day feature and the
 // post-login landing page (see App.jsx).
+const CRM_NAV = [
+  { to: '/',          icon: Activity, label: 'Pipeline' },
+  { to: '/leads',     icon: UserPlus, label: 'Contacts' },
+]
+
 const SEO_NAV = [
   { to: '/content',    icon: LayoutDashboard, label: 'SEO Content' },
-  { to: '/dashboard',  icon: Activity,        label: 'Overview' },
   { to: '/keywords',   icon: Search,          label: 'Keyword Research' },
   { to: '/site-audit', icon: Target,          label: 'Site Audit' },
   { to: '/rankings',   icon: TrendingUp,      label: 'Rankings' },
@@ -27,7 +31,6 @@ const CONTENT_AUTOMATION_NAV = [
   { to: '/indexing',    icon: ScanSearch,      label: 'Google Indexing' },
   { to: '/social',      icon: Share2,          label: 'Social Media' },
   { to: '/google-ads',  icon: Megaphone,       label: 'Google Ads' },
-  { to: '/leads',       icon: UserPlus,        label: 'Leads' },
   { to: '/lead-engine', icon: Rocket,          label: 'Lead Engine' },
   { to: '/integrations',icon: Plug,            label: 'API Integrations' },
 ]
@@ -39,9 +42,11 @@ const navItemStyle = {
   textDecoration: 'none', transition: 'all 0.15s',
 }
 
-function NavItem({ to, icon: Icon, label, indent }) {
+function NavItem({ to, icon: Icon, label, indent, end }) {
+  const location = useLocation()
+  const crmHome = to === '/' && (location.pathname === '/landing' || location.pathname === '/revamp-preview' || location.pathname === '/dashboard')
   return (
-    <NavLink to={to} className={({ isActive }) => (isActive ? 'nav-active' : 'nav-inactive')}
+    <NavLink to={to} end={end} className={({ isActive }) => ((isActive || crmHome) ? 'nav-active' : 'nav-inactive')}
       style={{ ...navItemStyle, paddingLeft: indent ? 30 : 10 }}>
       {({ isActive }) => (
         <>
@@ -63,7 +68,7 @@ export default function Sidebar({ open = false }) {
       {/* Logo */}
       <div style={{ padding: '12px 12px 10px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         <Logo size={32} />
-        <div style={{ color: 'var(--text-3)', fontSize: 10, marginTop: 6, fontWeight: 600, textTransform: 'uppercase' }}>SEO Intelligence</div>
+        <div style={{ color: 'var(--text-3)', fontSize: 10, marginTop: 6, fontWeight: 600, textTransform: 'uppercase' }}>CRM + SEO</div>
       </div>
 
       {/* Workspace / project info */}
@@ -83,6 +88,14 @@ export default function Sidebar({ open = false }) {
 
       {/* Nav */}
       <nav style={{ flex: 1, minHeight: 0, padding: '6px 6px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <div style={{ color: 'var(--text-3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', padding: '4px 8px 2px' }}>
+          CRM
+        </div>
+        {CRM_NAV.map(item => <NavItem key={item.to} {...item} end={item.to === '/'} />)}
+
+        <div style={{ color: 'var(--text-3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', padding: '10px 8px 2px' }}>
+          SEO
+        </div>
         {SEO_NAV.map(item => <NavItem key={item.to} {...item} />)}
 
         <div style={{ color: 'var(--text-3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', padding: '10px 8px 2px' }}>

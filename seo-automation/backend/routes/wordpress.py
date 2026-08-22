@@ -48,20 +48,22 @@ async def _track_and_verify(result: PublishResult, block: SEOBlock, session: Asy
             return
 
         sitemap_url = settings.WP_SITEMAP_URL
-        if sitemap_url:
+        is_post = (getattr(block, "content_type", "") or "") in ("blog", "post")
+        extra_sm = (settings.WP_POST_SITEMAP_URL if is_post else settings.WP_PAGE_SITEMAP_URL) or ""
+        sitemaps = [u for u in (sitemap_url, extra_sm) if u]
+        in_sitemap = False
+        for sitemap_url in sitemaps:
             try:
                 async with httpx.AsyncClient(timeout=15) as client:
                     r = await client.get(sitemap_url)
-                in_sitemap = r.status_code == 200 and url in r.text
+                if r.status_code == 200 and url in r.text:
+                    in_sitemap = True
             except Exception as e:
                 logger.warning(f"Sitemap fetch failed for {sitemap_url}: {e}")
-                in_sitemap = False
-            if in_sitemap:
-                record.status = "sitemap_added"
-                record.sitemap_submitted_at = datetime.now(timezone.utc)
-            # Not yet in the sitemap is non-fatal — it can lag a few minutes;
-            # /api/seo-indexing/refresh re-checks later.
             search_console_service.submit_sitemap(sitemap_url)
+        if in_sitemap:
+            record.status = "sitemap_added"
+            record.sitemap_submitted_at = datetime.now(timezone.utc)
 
         inspect = search_console_service.inspect_url(url)
         if inspect.get("ok"):

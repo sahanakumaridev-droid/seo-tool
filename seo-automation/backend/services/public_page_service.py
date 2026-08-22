@@ -215,25 +215,25 @@ def _footer() -> str:
 
     # Reuse existing ZeOrbit destinations — remapped into clearer nav groups.
     services = [
-        ("Web Design", f"{WEBSITE}/web-development/"),
-        ("SEO Services", f"{WEBSITE}/seo-development/"),
-        ("Mobile Apps", f"{WEBSITE}/app-development/"),
-        ("WordPress Solutions", f"{WEBSITE}/wordpress-web-builder-solutions/"),
-        ("Ecommerce Stores", f"{WEBSITE}/ecommerce-store-management/"),
-        ("AI Consulting", f"{WEBSITE}/ai-consulting-strategy-development/"),
+        ("Custom Websites", f"{WEBSITE}/website-designing"),
+        ("Shopify & Ecommerce", f"{WEBSITE}/website-designing#ecommerce"),
+        ("Mobile Apps", f"{WEBSITE}/mobile-apps"),
+        ("SEO & Ads", f"{WEBSITE}/seo-ppc"),
+        ("API Integrations", f"{WEBSITE}/custom-software#integrations"),
+        ("Automation & Copilots", f"{WEBSITE}/custom-software#automation"),
     ]
     resources = [
-        ("Blog", f"{WEBSITE}/blog/"),
-        ("Portfolio", f"{WEBSITE}/portfolio/"),
-        ("Locations", f"{WEBSITE}/locations/"),
-        ("App Timeline Guide", f"{WEBSITE}/app-development-timeline-duration-for-designing-developing-and-launching-your-app/"),
-        ("Hosting & Domains", f"{WEBSITE}/web-hosting-and-domain-services/"),
+        ("Blog", f"{WEBSITE}/blog"),
+        ("Portfolio", f"{WEBSITE}/portfolio"),
+        ("Areas We Serve", f"{WEBSITE}/contact#areas"),
+        ("App Timeline", f"{WEBSITE}/mobile-apps#timeline"),
+        ("Website Care", f"{WEBSITE}/website-designing#care"),
     ]
     company = [
         ("About ZeOrbit", WEBSITE),
-        ("Contact", f"{WEBSITE}/contact/"),
-        ("Privacy Policy", f"{WEBSITE}/privacy-policy/"),
-        ("Terms of Service", f"{WEBSITE}/privacy-policy/"),
+        ("Contact", f"{WEBSITE}/contact"),
+        ("Privacy Policy", f"{WEBSITE}/privacy-policy"),
+        ("Let's Talk", f"{WEBSITE}/contact"),
     ]
 
     def _links(items):
@@ -393,15 +393,18 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
         lis = "".join(f'<li><a href="#{hid}">{h}</a></li>' for hid, h in toc)
         toc_html = f'<nav class="toc"><div class="toc-title">In this article</div><ol>{lis}</ol></nav>'
 
-    # Center nav stays on this page — never send users to WordPress/zeorbit.com.
-    mid_links = [('<a href="#overview">Overview</a>')]
-    content_secs = [(hid, h) for hid, h in toc if "frequently asked" not in h.lower()]
-    for hid, h in content_secs[:3]:
-        mid_links.append(f'<a href="#{hid}">{_esc(_short_nav_label(h))}</a>')
-    if block.faqs:
-        mid_links.append('<a href="#faq-heading">FAQ</a>')
-    mid_links.append('<a href="#contact">Contact</a>')
-    nav_mid_html = "\n      ".join(mid_links)
+    site_nav = [
+        ("Home", f"{WEBSITE}/"),
+        ("Websites", f"{WEBSITE}/website-designing"),
+        ("Mobile Apps", f"{WEBSITE}/mobile-apps"),
+        ("SEO & Ads", f"{WEBSITE}/seo-ppc"),
+        ("Software", f"{WEBSITE}/custom-software"),
+        ("Work", f"{WEBSITE}/portfolio"),
+        ("Contact", f"{WEBSITE}/contact"),
+    ]
+    nav_mid_html = "\n      ".join(
+        f'<a href="{href}">{_esc(label)}</a>' for label, href in site_nav
+    )
 
     title = _esc(block.title or block.h1 or f"{block.business_type} in {block.city}")
     desc = _esc(block.meta_description or "")
@@ -479,7 +482,7 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
           font-family:var(--apple); min-height:0; }}
   .brand {{ display:inline-flex; align-items:center; text-decoration:none; justify-self:start; }}
   .brand img {{ height:36px; width:auto; display:block; }}
-  .nav-mid {{ display:flex; align-items:center; justify-content:center; gap:2px 14px; flex-wrap:nowrap; }}
+  .nav-mid {{ display:flex; align-items:center; justify-content:center; gap:2px 12px; flex-wrap:wrap; }}
   .nav-mid a {{
     font-family:var(--apple); font-size:11px; font-weight:600; color:var(--ink); text-decoration:none;
     text-transform:uppercase; letter-spacing:.06em; padding:4px 0; border-bottom:2px solid transparent;
@@ -842,7 +845,7 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
     <a class="brand" href="{WEBSITE}" target="_blank" rel="noreferrer">
       <img src="{WEBSITE}/zeorbit-logo.webp?v=8" alt="ZeOrbit" width="180" height="52" />
     </a>
-    <nav class="nav-mid" aria-label="On this page">
+    <nav class="nav-mid" aria-label="Site">
       {nav_mid_html}
     </nav>
     <a class="cta" href="tel:6197249517">CALL NOW : 619-724-9517</a>

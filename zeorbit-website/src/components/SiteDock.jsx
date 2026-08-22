@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import {
   Accessibility,
   Contrast,
@@ -16,6 +16,7 @@ import {
   X,
   ZoomIn,
 } from 'lucide-react'
+import { goToHomepageTop } from '../utils/goHome'
 
 const A11Y_OPTIONS = [
   { id: 'text', label: 'Larger text', icon: Type, className: 'zo-a11y-text' },
@@ -39,6 +40,7 @@ export default function SiteDock() {
   const searchTitleId = useId()
   const a11yTitleId = useId()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
 
   useEffect(() => {
     const root = document.documentElement
@@ -86,7 +88,16 @@ export default function SiteDock() {
   return (
     <>
       <nav className="zo-site-dock" aria-label="Quick tools">
-        <Link to="/" className="zo-site-dock-btn" aria-label="Home" title="Home">
+        <Link
+          to="/"
+          className="zo-site-dock-btn"
+          aria-label="Home"
+          title="Home"
+          onClick={(event) => {
+            event.preventDefault()
+            goToHomepageTop(navigate, pathname)
+          }}
+        >
           <Home size={18} strokeWidth={2.1} />
         </Link>
         <a href="/#solutions" className="zo-site-dock-btn" aria-label="Sitemap" title="Sitemap">

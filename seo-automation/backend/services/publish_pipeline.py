@@ -19,9 +19,23 @@ from services import crawl_check_service, search_console_service
 logger = logging.getLogger(__name__)
 
 
-def _sitemap_url() -> str:
-    base = (settings.PUBLIC_BASE_URL or "").rstrip("/")
-    return f"{base}/sitemap.xml" if base else ""
+def _sitemap_urls() -> list[str]:
+    urls = []
+    for raw in (
+        getattr(settings, "WP_SITEMAP_URL", "") or "",
+        getattr(settings, "WP_PAGE_SITEMAP_URL", "") or "",
+        getattr(settings, "WP_POST_SITEMAP_URL", "") or "",
+    ):
+        u = raw.strip()
+        if u and u not in urls:
+            urls.append(u)
+    base = (settings.PUBLIC_BASE_URL or settings.MARKETING_SITE_URL or "").rstrip("/")
+    if base:
+        for path in ("/sitemap.xml", "/page-sitemap.xml", "/post-sitemap.xml"):
+            u = f"{base}{path}"
+            if u not in urls:
+                urls.append(u)
+    return urls
 
 
 async def track_public_publish(
@@ -66,9 +80,10 @@ async def track_public_publish(
             await session.commit()
             return out
 
-        sitemap = _sitemap_url()
-        if sitemap and settings.GSC_SITE_URL and settings.GOOGLE_INDEXING_KEY_FILE:
-            search_console_service.submit_sitemap(sitemap)
+        sitemaps = _sitemap_urls()
+        if sitemaps and settings.GSC_SITE_URL and settings.GOOGLE_INDEXING_KEY_FILE:
+            for sm in sitemaps:
+                search_console_service.submit_sitemap(sm)
             inspect = search_console_service.inspect_url(url)
             if inspect.get("ok"):
                 record.status = inspect.get("status") or "submitted"
@@ -80,7 +95,7 @@ async def track_public_publish(
                 record.sitemap_submitted_at = datetime.now(timezone.utc)
                 out["indexing"] = "sitemap_submitted"
                 out["detail"] = inspect.get("detail") or inspect.get("error") or ""
-        elif sitemap:
+        elif sitemaps:
             record.status = "published_awaiting_gsc"
             out["indexing"] = "awaiting_gsc_setup"
             out["detail"] = "Set GSC_SITE_URL + GOOGLE_INDEXING_KEY_FILE to auto-request indexing."

@@ -1,27 +1,23 @@
-import { useState, useEffect } from 'react'
-import { Users, Plus, Trash2, ExternalLink, Filter, Radar, MapPin } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { Users, Plus, Trash2, ExternalLink, Radar, MapPin, Search, LayoutGrid, List } from 'lucide-react'
 import { getLeads, createLead, updateLeadStatus, deleteLead, getLeadStats, prospectLeads } from '../api'
 
-const STATUS_COLORS = {
-  new:        'text-sky-400 bg-sky-400/10 border-sky-400/20',
-  contacted:  'text-amber-400 bg-amber-400/10 border-amber-400/20',
-  qualified:  'text-violet-400 bg-violet-400/10 border-violet-400/20',
-  closed:     'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
-}
+const STAGES = [
+  { id: 'new', label: 'New' },
+  { id: 'contacted', label: 'Contacted' },
+  { id: 'qualified', label: 'Qualified' },
+  { id: 'closed', label: 'Won' },
+]
 
-const SOURCE_COLORS = {
-  manual:          'text-slate-400 bg-slate-400/10',
-  prospecting:     'text-emerald-400 bg-emerald-400/10',
-  website:         'text-cyan-400 bg-cyan-400/10',
-  'instant-quote': 'text-violet-400 bg-violet-400/10',
+function leadTitle(lead) {
+  return lead.business_name || lead.name || lead.contact_name || 'Untitled'
 }
-
-const STATUSES = ['new', 'contacted', 'qualified', 'closed']
 
 function ProspectPanel({ onDone }) {
   const [form, setForm] = useState({ industry: '', location: '', limit: 20 })
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState('')
+  const [open, setOpen] = useState(false)
 
   const run = async () => {
     if (!form.industry || !form.location) { setMsg('Industry and location required.'); return }
@@ -36,34 +32,43 @@ function ProspectPanel({ onDone }) {
   }
 
   return (
-    <div className="card p-5 border-emerald-500/20">
-      <div className="flex items-center gap-2 mb-3">
-        <Radar size={15} className="text-emerald-400" />
-        <span className="text-sm font-semibold text-white">Prospect New Leads</span>
-        <span className="text-xs text-slate-500">— discover businesses via Google Places</span>
-      </div>
-      <div className="flex flex-wrap gap-2 items-end">
-        <div className="flex-1 min-w-[140px]">
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Industry</label>
-          <input value={form.industry} onChange={e => setForm(f => ({ ...f, industry: e.target.value }))}
-            placeholder="e.g. roofing" className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500/50" />
+    <div className="card" style={{ padding: 14 }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="btn btn-ghost"
+        style={{ width: '100%', justifyContent: 'space-between' }}
+      >
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <Radar size={15} /> Prospect businesses
+        </span>
+        <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{open ? 'Hide' : 'Show'}</span>
+      </button>
+      {open && (
+        <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'end' }}>
+          <div style={{ flex: 1, minWidth: 140 }}>
+            <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--text-3)' }}>Industry</label>
+            <input value={form.industry} onChange={(e) => setForm((f) => ({ ...f, industry: e.target.value }))}
+              placeholder="e.g. roofing" style={{ width: '100%', padding: '8px 10px', background: '#fff' }} />
+          </div>
+          <div style={{ flex: 1, minWidth: 140 }}>
+            <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--text-3)' }}>
+              <MapPin size={10} className="inline mr-1" />Location
+            </label>
+            <input value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
+              placeholder="e.g. Austin, TX" style={{ width: '100%', padding: '8px 10px', background: '#fff' }} />
+          </div>
+          <div style={{ width: 80 }}>
+            <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--text-3)' }}>Limit</label>
+            <input type="number" min="1" max="60" value={form.limit} onChange={(e) => setForm((f) => ({ ...f, limit: e.target.value }))}
+              style={{ width: '100%', padding: '8px 10px', background: '#fff' }} />
+          </div>
+          <button type="button" onClick={run} disabled={loading} className="btn btn-secondary">
+            {loading ? 'Prospecting…' : 'Discover'}
+          </button>
+          {msg && <p className="text-xs" style={{ color: 'var(--text-3)', width: '100%', margin: 0 }}>{msg}</p>}
         </div>
-        <div className="flex-1 min-w-[140px]">
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1"><MapPin size={10} className="inline mr-1" />Location</label>
-          <input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
-            placeholder="e.g. Austin, TX" className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500/50" />
-        </div>
-        <div className="w-20">
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Limit</label>
-          <input type="number" min="1" max="60" value={form.limit} onChange={e => setForm(f => ({ ...f, limit: e.target.value }))}
-            className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500/50" />
-        </div>
-        <button onClick={run} disabled={loading}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600/20 border border-emerald-600/30 text-emerald-300 hover:bg-emerald-600/30 transition-colors text-sm font-medium disabled:opacity-50">
-          <Radar size={14} className={loading ? 'animate-pulse' : ''} /> {loading ? 'Prospecting...' : 'Discover'}
-        </button>
-      </div>
-      {msg && <p className="text-xs text-slate-400 mt-2">{msg}</p>}
+      )}
     </div>
   )
 }
@@ -88,49 +93,46 @@ function AddLeadModal({ onClose, onAdded }) {
 
   const field = (label, key, type = 'text', placeholder = '') => (
     <div>
-      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{label}</label>
-      <input type={type} value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-        placeholder={placeholder}
-        className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50" />
+      <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--text-3)' }}>{label}</label>
+      <input type={type} value={form[key]} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+        placeholder={placeholder} style={{ width: '100%', padding: '8px 10px', background: '#fff' }} />
     </div>
   )
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      <form className="relative w-full max-w-lg card rounded-2xl p-6 space-y-4" onClick={e => e.stopPropagation()} onSubmit={handleSubmit}>
-        <h2 className="text-base font-bold text-white">Add Lead</h2>
+    <div className="modal-overlay" onClick={onClose}>
+      <form className="crm-modal" onClick={(e) => e.stopPropagation()} onSubmit={handleSubmit}>
+        <h2 style={{ margin: '0 0 14px', fontSize: 18 }}>New lead</h2>
         <div className="grid grid-cols-2 gap-3">
-          {field('Business Name', 'business_name', 'text', 'Acme Roofing')}
-          {field('Contact Name', 'contact_name', 'text', 'John Smith')}
+          {field('Business', 'business_name', 'text', 'Acme Roofing')}
+          {field('Contact', 'contact_name', 'text', 'Jane Smith')}
           {field('Website', 'website', 'url', 'https://acme.com')}
           {field('Industry', 'industry', 'text', 'Roofing')}
-          {field('Email', 'email', 'email', 'john@example.com')}
+          {field('Email', 'email', 'email', 'jane@example.com')}
           {field('Phone', 'phone', 'tel', '+1 555-0000')}
           {field('Service', 'service', 'text', 'Web Design')}
           {field('Location', 'location', 'text', 'San Diego, CA')}
-          {field('Budget', 'budget', 'text', '$500-$2000')}
         </div>
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Source</label>
-          <select value={form.source} onChange={e => setForm(f => ({ ...f, source: e.target.value }))}
-            className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500/50">
+        <div style={{ marginTop: 12 }}>
+          <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--text-3)' }}>Source</label>
+          <select value={form.source} onChange={(e) => setForm((f) => ({ ...f, source: e.target.value }))}
+            style={{ width: '100%', padding: '8px 10px', background: '#fff' }}>
             <option value="manual">Manual</option>
             <option value="website">Website</option>
             <option value="instant-quote">Instant Quote</option>
           </select>
         </div>
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Message</label>
-          <textarea value={form.message} onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
-            rows={2} placeholder="Lead message or notes..."
-            className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50 resize-none" />
+        <div style={{ marginTop: 12 }}>
+          <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--text-3)' }}>Notes</label>
+          <textarea value={form.message} onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
+            rows={2} placeholder="Context, budget, next step…"
+            style={{ width: '100%', padding: '8px 10px', background: '#fff', resize: 'none' }} />
         </div>
-        <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 px-4 py-2 rounded-lg text-sm text-slate-400 border border-white/8 hover:bg-white/4 transition-colors">Cancel</button>
-          <button type="submit" disabled={loading || (!form.name && !form.business_name)}
-            className="flex-1 btn-primary px-4 py-2 rounded-lg text-sm text-white font-semibold disabled:opacity-50">
-            {loading ? 'Adding...' : 'Add Lead'}
+        <div className="flex gap-2" style={{ marginTop: 16 }}>
+          <button type="button" onClick={onClose} className="btn btn-secondary" style={{ flex: 1 }}>Cancel</button>
+          <button type="submit" disabled={loading || (!form.name && !form.business_name && !form.contact_name)}
+            className="btn btn-primary" style={{ flex: 1 }}>
+            {loading ? 'Saving…' : 'Save lead'}
           </button>
         </div>
       </form>
@@ -143,6 +145,9 @@ export default function LeadsPage() {
   const [stats, setStats] = useState({})
   const [filterStatus, setFilterStatus] = useState('')
   const [filterSource, setFilterSource] = useState('')
+  const [query, setQuery] = useState('')
+  const [view, setView] = useState('pipeline')
+  const [selectedId, setSelectedId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
 
@@ -153,8 +158,8 @@ export default function LeadsPage() {
         getLeads({ status: filterStatus, source: filterSource }),
         getLeadStats(),
       ])
-      setLeads(leadsRes.data)
-      setStats(statsRes.data)
+      setLeads(Array.isArray(leadsRes.data) ? leadsRes.data : [])
+      setStats(statsRes.data || {})
     } catch (e) {
       console.error(e)
     } finally {
@@ -167,7 +172,7 @@ export default function LeadsPage() {
   const handleStatusChange = async (leadId, status) => {
     try {
       await updateLeadStatus(leadId, status)
-      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status } : l))
+      setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, status } : l)))
     } catch (e) { console.error(e) }
   }
 
@@ -175,136 +180,221 @@ export default function LeadsPage() {
     if (!confirm('Delete this lead?')) return
     try {
       await deleteLead(leadId)
-      setLeads(prev => prev.filter(l => l.id !== leadId))
+      setLeads((prev) => prev.filter((l) => l.id !== leadId))
+      if (selectedId === leadId) setSelectedId(null)
     } catch (e) { console.error(e) }
   }
 
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return leads
+    return leads.filter((l) =>
+      [l.business_name, l.name, l.contact_name, l.email, l.service, l.location, l.industry, l.phone]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q))
+    )
+  }, [leads, query])
+
+  const selected = filtered.find((l) => l.id === selectedId) || null
+
   return (
-    <div className="space-y-5 fade-in">
-      <div className="flex items-center justify-between">
+    <div className="crm-page fade-in">
+      <div className="crm-head">
         <div>
-          <h1 className="text-xl font-bold text-white">Lead Generation</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Your CRM for inbound + prospected contacts — not a purchased lead marketplace</p>
+          <h1>Contacts</h1>
+          <p>Pipeline, records, and prospecting — white-label CRM for this workspace</p>
         </div>
-        <button onClick={() => setShowAdd(true)}
-          className="btn-primary flex items-center gap-1.5 px-4 py-2 rounded-lg text-white text-sm font-semibold">
-          <Plus size={14} /> Add Lead
+        <button type="button" onClick={() => setShowAdd(true)} className="btn btn-primary">
+          <Plus size={14} /> New lead
         </button>
       </div>
 
-      <div className="card p-3 text-xs text-slate-400 border border-white/8">
-        Leads come from your published SEO/quote forms, manual entry, and Google Places prospecting.
-        Integrations (Ads, Search Console, social) help you generate demand; this page stores and works the contacts you capture.
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="crm-kpis">
         {[
-          { label: 'Total Leads', value: stats.total || 0, color: 'text-white' },
-          { label: 'New', value: stats.by_status?.new || 0, color: 'text-sky-400' },
-          { label: 'Qualified', value: stats.by_status?.qualified || 0, color: 'text-violet-400' },
-          { label: 'Closed', value: stats.by_status?.closed || 0, color: 'text-emerald-400' },
-        ].map(s => (
-          <div key={s.label} className="card p-4">
-            <div className="text-xs text-slate-500 mb-1">{s.label}</div>
-            <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+          { label: 'Total', value: stats.total || 0, hint: 'Every captured contact' },
+          { label: 'New', value: stats.by_status?.new || 0, hint: 'Waiting on first touch' },
+          { label: 'Qualified', value: stats.by_status?.qualified || 0, hint: 'Ready to close' },
+          { label: 'Won', value: stats.by_status?.closed || 0, hint: 'Closed this workspace' },
+        ].map((s) => (
+          <div key={s.label} className="crm-kpi">
+            <div className="lbl">{s.label}</div>
+            <div className="val">{s.value}</div>
+            <div className="hint">{s.hint}</div>
           </div>
         ))}
       </div>
 
-      {/* Prospecting */}
       <ProspectPanel onDone={loadLeads} />
 
-      {/* Filters */}
-      <div className="flex items-center gap-3">
-        <Filter size={13} className="text-slate-500" />
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-          className="bg-white/4 border border-white/8 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500/50">
-          <option value="">All Statuses</option>
-          {STATUSES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+      <div className="crm-toolbar">
+        <div className="crm-seg" role="tablist" aria-label="View">
+          <button type="button" aria-pressed={view === 'pipeline'} onClick={() => setView('pipeline')}>
+            <LayoutGrid size={13} style={{ display: 'inline', marginRight: 4 }} /> Pipeline
+          </button>
+          <button type="button" aria-pressed={view === 'table'} onClick={() => setView('table')}>
+            <List size={13} style={{ display: 'inline', marginRight: 4 }} /> Table
+          </button>
+        </div>
+        <div className="crm-search">
+          <Search size={14} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#86868b' }} />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search contacts…" aria-label="Search contacts" />
+        </div>
+        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
+          style={{ padding: '8px 10px', background: '#fff', fontSize: 13 }}>
+          <option value="">All stages</option>
+          {STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
-        <select value={filterSource} onChange={e => setFilterSource(e.target.value)}
-          className="bg-white/4 border border-white/8 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500/50">
-          <option value="">All Sources</option>
-          {['prospecting', 'manual', 'website', 'instant-quote'].map(s => <option key={s} value={s}>{s}</option>)}
+        <select value={filterSource} onChange={(e) => setFilterSource(e.target.value)}
+          style={{ padding: '8px 10px', background: '#fff', fontSize: 13 }}>
+          <option value="">All sources</option>
+          {['prospecting', 'manual', 'website', 'instant-quote'].map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        <span className="text-xs text-slate-500">{leads.length} leads</span>
+        <span style={{ fontSize: 12, color: '#86868b' }}>{filtered.length} records</span>
       </div>
 
-      {/* Table */}
-      <div className="card">
-        {loading ? (
-          <div className="flex items-center justify-center py-16 text-slate-500 text-sm">Loading leads...</div>
-        ) : leads.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-slate-500">
-            <Users size={32} className="mb-3 opacity-30" />
-            <p className="text-sm">No leads yet. Add manually, prospect, or use Instant Quote.</p>
+      {view === 'pipeline' ? (
+        <div className="crm-split">
+          <div className="crm-board">
+            {STAGES.map((stage) => {
+              const cards = filtered.filter((l) => (l.status || 'new') === stage.id)
+              return (
+                <section key={stage.id} className="crm-col">
+                  <div className="crm-col-h">
+                    <span>{stage.label}</span>
+                    <span className="crm-count">{cards.length}</span>
+                  </div>
+                  <div className="crm-col-body">
+                    {cards.length === 0 ? (
+                      <div className="crm-empty-col">{loading ? 'Loading…' : 'No records'}</div>
+                    ) : cards.map((lead) => (
+                      <button
+                        type="button"
+                        key={lead.id}
+                        className={`crm-card${selectedId === lead.id ? ' selected' : ''}`}
+                        onClick={() => setSelectedId(lead.id)}
+                      >
+                        <div className="crm-card-title">{leadTitle(lead)}</div>
+                        <div className="crm-card-meta">
+                          {[lead.contact_name, lead.service, lead.location].filter(Boolean).join(' · ') || 'No details yet'}
+                        </div>
+                        <div className="crm-card-foot">
+                          <span className={`crm-chip crm-chip-${lead.status || 'new'}`}>{lead.status || 'new'}</span>
+                          <span className="crm-chip crm-chip-source">{lead.source || 'manual'}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )
+            })}
           </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Service</th>
-                <th>Location</th>
-                <th>Source</th>
-                <th>Budget</th>
-                <th>Status</th>
-                <th>Date</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {leads.map(lead => (
-                <tr key={lead.id}>
-                  <td>
-                    <div className="font-semibold text-slate-200">{lead.business_name || lead.name || '—'}</div>
-                    {lead.contact_name && <div className="text-[11px] text-slate-400">{lead.contact_name}</div>}
-                    {lead.website && (
-                      <a href={lead.website} target="_blank" rel="noreferrer"
-                        className="text-[11px] text-indigo-400 hover:underline inline-flex items-center gap-1">
-                        <ExternalLink size={9} />{lead.website.replace(/^https?:\/\//, '').slice(0, 30)}
-                      </a>
-                    )}
-                    {lead.email && <div className="text-[11px] text-slate-500">{lead.email}</div>}
-                    {lead.phone && <div className="text-[11px] text-slate-500">{lead.phone}</div>}
-                  </td>
-                  <td className="text-slate-300">{lead.service || '—'}</td>
-                  <td className="text-slate-400 text-xs">{lead.location || '—'}</td>
-                  <td>
-                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${SOURCE_COLORS[lead.source] || SOURCE_COLORS.manual}`}>
-                      {lead.source}
-                    </span>
-                  </td>
-                  <td className="text-slate-400 text-xs">{lead.budget || '—'}</td>
-                  <td>
-                    <select
-                      value={lead.status}
-                      onChange={e => handleStatusChange(lead.id, e.target.value)}
-                      className={`text-xs px-2 py-1 rounded-lg border bg-transparent cursor-pointer focus:outline-none ${STATUS_COLORS[lead.status] || STATUS_COLORS.new}`}
+          <aside className="crm-drawer">
+            {selected ? (
+              <>
+                <h2>{leadTitle(selected)}</h2>
+                <div className="crm-field">
+                  <label>Stage</label>
+                  <select value={selected.status || 'new'} onChange={(e) => handleStatusChange(selected.id, e.target.value)}
+                    style={{ width: '100%', padding: '8px 10px', background: '#fff' }}>
+                    {STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </select>
+                </div>
+                <div className="crm-field"><label>Email</label><div>{selected.email || '—'}</div></div>
+                <div className="crm-field"><label>Phone</label><div>{selected.phone || '—'}</div></div>
+                <div className="crm-field">
+                  <label>Website</label>
+                  {selected.website ? (
+                    <a href={selected.website} target="_blank" rel="noreferrer">{selected.website.replace(/^https?:\/\//, '')}</a>
+                  ) : <div>—</div>}
+                </div>
+                <div className="crm-field"><label>Notes</label><div style={{ whiteSpace: 'pre-wrap' }}>{selected.message || '—'}</div></div>
+                <button type="button" className="btn btn-ghost" style={{ marginTop: 16, color: 'var(--red)' }} onClick={() => handleDelete(selected.id)}>
+                  <Trash2 size={13} /> Delete
+                </button>
+              </>
+            ) : (
+              <>
+                <h2>Record</h2>
+                <p style={{ marginTop: 8, fontSize: 13, color: '#6e6e73' }}>Select a card to inspect and move the deal.</p>
+              </>
+            )}
+          </aside>
+        </div>
+      ) : (
+        <div className="crm-table-wrap">
+          {loading ? (
+            <div className="flex items-center justify-center py-16 text-sm" style={{ color: 'var(--text-3)' }}>Loading…</div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16" style={{ color: 'var(--text-3)' }}>
+              <Users size={28} className="mb-3 opacity-40" />
+              <p className="text-sm">No leads yet. Add one, prospect, or capture from Instant Quote.</p>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Company</th>
+                    <th>Service</th>
+                    <th>Location</th>
+                    <th>Source</th>
+                    <th>Budget</th>
+                    <th>Stage</th>
+                    <th>Date</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((lead) => (
+                    <tr
+                      key={lead.id}
+                      className={selectedId === lead.id ? 'crm-row-active' : ''}
+                      onClick={() => setSelectedId(lead.id)}
                     >
-                      {STATUSES.map(s => <option key={s} value={s} className="bg-slate-900 text-slate-200">{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-                    </select>
-                  </td>
-                  <td className="text-slate-500 text-xs">
-                    {lead.created_at ? new Date(lead.created_at).toLocaleDateString() : '—'}
-                  </td>
-                  <td>
-                    <button onClick={() => handleDelete(lead.id)}
-                      className="p-1.5 rounded hover:bg-red-500/10 text-slate-600 hover:text-red-400 transition-colors">
-                      <Trash2 size={13} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-        )}
-      </div>
+                      <td>
+                        <div style={{ fontWeight: 600, color: 'var(--text-1)' }}>{leadTitle(lead)}</div>
+                        {lead.contact_name && <div className="text-[11px]" style={{ color: 'var(--text-3)' }}>{lead.contact_name}</div>}
+                        {lead.website && (
+                          <a href={lead.website} target="_blank" rel="noreferrer"
+                            className="text-[11px] inline-flex items-center gap-1" style={{ color: 'var(--brand)' }}
+                            onClick={(e) => e.stopPropagation()}>
+                            <ExternalLink size={9} />{lead.website.replace(/^https?:\/\//, '').slice(0, 30)}
+                          </a>
+                        )}
+                      </td>
+                      <td>{lead.service || '—'}</td>
+                      <td className="muted-cell">{lead.location || '—'}</td>
+                      <td><span className="crm-chip crm-chip-source">{lead.source}</span></td>
+                      <td className="muted-cell">{lead.budget || '—'}</td>
+                      <td>
+                        <select
+                          value={lead.status}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => handleStatusChange(lead.id, e.target.value)}
+                          style={{ padding: '4px 8px', background: '#fff', fontSize: 12 }}
+                        >
+                          {STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                        </select>
+                      </td>
+                      <td className="muted-cell">
+                        {lead.created_at ? new Date(lead.created_at).toLocaleDateString() : '—'}
+                      </td>
+                      <td>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); handleDelete(lead.id) }}
+                          className="p-1.5 rounded" style={{ color: 'var(--text-4)', background: 'none', border: 0, cursor: 'pointer' }}>
+                          <Trash2 size={13} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
-      {showAdd && <AddLeadModal onClose={() => setShowAdd(false)} onAdded={lead => { setLeads(prev => [lead, ...prev]); loadLeads() }} />}
+      {showAdd && <AddLeadModal onClose={() => setShowAdd(false)} onAdded={() => { loadLeads() }} />}
     </div>
   )
 }

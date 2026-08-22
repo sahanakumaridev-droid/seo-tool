@@ -13,10 +13,10 @@ const HIGHLIGHTS = [
 export default function AuthLayout({ title, subtitle, children, footer }) {
   const navigate = useNavigate()
   return (
-    <div style={{ display: 'flex', minHeight: '100dvh', height: '100dvh', background: 'var(--bg-base)', fontFamily: 'var(--font-sans)', overflow: 'hidden' }}>
+    <div className="crm-shell" style={{ display: 'flex', minHeight: '100dvh', height: '100dvh', background: '#ffffff', fontFamily: 'var(--font-sans)', overflow: 'hidden' }}>
       {/* Left — brand panel */}
       <div className="hide-mobile" style={{
-        flex: '0 0 min(420px, 40%)', background: 'var(--text-1)', color: '#fff',
+        flex: '0 0 min(420px, 40%)', background: '#F5F5F7', color: '#1d1d1f',
         display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
         padding: '32px 36px', position: 'relative', overflow: 'auto', minHeight: 0,
       }}>
@@ -24,25 +24,25 @@ export default function AuthLayout({ title, subtitle, children, footer }) {
 
         <div style={{ position: 'relative', zIndex: 1 }}>
           <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-            <Logo size={40} onDark />
+            <Logo size={40} />
           </button>
         </div>
 
         <div style={{ position: 'relative', zIndex: 1 }}>
-          <h2 style={{ fontSize: 30, fontWeight: 800, lineHeight: 1.2, margin: '0 0 16px', letterSpacing: '-0.5px' }}>
+          <h2 style={{ fontSize: 30, fontWeight: 800, lineHeight: 1.2, margin: '0 0 16px', letterSpacing: '-0.5px', color: '#1d1d1f' }}>
             Grow your search visibility. Turn rankings into revenue.
           </h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 28 }}>
             {HIGHLIGHTS.map(h => (
               <div key={h} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <CheckCircle2 size={16} color="#FF6B54" style={{ flexShrink: 0 }} />
-                <span style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.8)' }}>{h}</span>
+                <span style={{ fontSize: 13.5, color: '#6e6e73' }}>{h}</span>
               </div>
             ))}
           </div>
         </div>
 
-        <div style={{ position: 'relative', zIndex: 1, fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>
+        <div style={{ position: 'relative', zIndex: 1, fontSize: 12, color: '#86868b' }}>
           © 2026 ZeOrbit · zeorbit.com
         </div>
       </div>

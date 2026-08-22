@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ChevronDown, ChevronLeft, Menu, Phone, X } from 'lucide-react'
 import Logo from '../Logo'
 import SocialBrandIcon from '../SocialBrandIcon'
 import { PRIMARY_NAV, SITE_CONTACT } from '../../data/revampContent'
 import { scrollToHashId } from '../../hooks/useHashScroll'
+import { goToHomepageTop } from '../../utils/goHome'
 
 function isActive(pathname, href) {
   if (href === '/') return pathname === '/'
@@ -28,6 +29,12 @@ export default function RevampHeader() {
   const [mobilePanel, setMobilePanel] = useState(null)
   const headerRef = useRef(null)
   const { pathname, hash } = useLocation()
+  const navigate = useNavigate()
+  const onHome = (event) => {
+    event.preventDefault()
+    closeMobile()
+    goToHomepageTop(navigate, pathname)
+  }
 
   useEffect(() => {
     setOpen(false)
@@ -96,7 +103,7 @@ export default function RevampHeader() {
       <div className="zo-navbar">
         <div className="zo-navbar-inner">
           <div className="zo-brand">
-            <Link to="/" className="zo-logo" aria-label="ZeOrbit home" onClick={closeMobile}>
+            <Link to="/" className="zo-logo" aria-label="ZeOrbit home" onClick={onHome}>
               <Logo size={48} onDark={false} />
             </Link>
           </div>
@@ -110,7 +117,17 @@ export default function RevampHeader() {
               if (!hasChildren) {
                 return (
                   <div key={item.label} className="zo-nav-item">
-                    <Link to={item.href} className={active ? 'active' : undefined} onClick={() => setOpenMenu(null)}>
+                    <Link
+                      to={item.href}
+                      className={active ? 'active' : undefined}
+                      onClick={(event) => {
+                        setOpenMenu(null)
+                        if (item.href === '/') {
+                          event.preventDefault()
+                          goToHomepageTop(navigate, pathname)
+                        }
+                      }}
+                    >
                       {item.label}
                     </Link>
                   </div>
@@ -230,7 +247,14 @@ export default function RevampHeader() {
                       <Link
                         to={item.href}
                         className={isActive(pathname, item.href) ? 'active' : undefined}
-                        onClick={closeMobile}
+                        onClick={(event) => {
+                          if (item.href === '/') {
+                            event.preventDefault()
+                            onHome(event)
+                            return
+                          }
+                          closeMobile()
+                        }}
                       >
                         {item.label}
                       </Link>

@@ -66,6 +66,9 @@ export const exportWordpress = (data) =>
 export const getNearbyCities = (baseLocation, numCities) =>
   api.get('/locations/nearby', { params: { base_location: baseLocation, num_cities: numCities } })
 
+export const getSanDiegoCounty = () =>
+  api.get('/locations/san-diego-county')
+
 // ── Keywords ─────────────────────────────────────────────────────
 export const getKeywords = (businessType, city, state = 'CA') =>
   api.get('/keywords/generate', { params: { business_type: businessType, city, state } })

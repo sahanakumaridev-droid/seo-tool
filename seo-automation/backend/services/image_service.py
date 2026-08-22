@@ -214,6 +214,22 @@ async def fetch_image_bytes(url: str) -> Optional[bytes]:
     return None
 
 
+def natural_place_caption(keyword: str, location: str) -> str:
+    """Avoid 'Web Design Spring Valley in Spring Valley, CA'."""
+    kw = re.sub(r"\s+", " ", (keyword or "").strip())
+    loc = re.sub(r"\s+", " ", (location or "").strip())
+    if not loc:
+        return kw.title() if kw else "Local services"
+    city = loc.split(",")[0].strip()
+    if city:
+        kw = re.sub(re.escape(city), "", kw, flags=re.I)
+        kw = re.sub(r"\s+", " ", kw).strip(" -–,")
+    core = kw or (keyword or "Services")
+    if re.search(rf"\bin\s+{re.escape(city)}\b", core, re.I) if city else False:
+        return core[0].upper() + core[1:] if core else loc
+    return f"{core[0].upper() + core[1:] if core else 'Services'} in {loc}"
+
+
 def build_image_metadata(
     focus_keyword: str,
     location: str,
@@ -226,18 +242,18 @@ def build_image_metadata(
     loc = location.strip()
     biz = business_name.strip()
     filename = f"{_slug(kw)}-{_slug(loc) or 'local'}-{idx + 1}.webp"
-    where = f" in {loc}" if loc else ""
+    phrase = natural_place_caption(kw, loc)
     by = f" by {biz}" if biz else ""
 
     if is_featured:
-        alt = f"{kw.title()}{where}{by}"
-        title = f"{kw.title()}{where}"
-        caption = f"Professional {kw.lower()}{where}."
+        alt = f"{phrase}{by}"
+        title = phrase
+        caption = f"{phrase}."
     else:
-        alt = f"{kw.title()} services{where} — detail {idx + 1}"
-        title = f"{kw.title()} — {loc or 'Overview'}"
-        caption = f"{kw.title()}{where}{by}."
-    description = f"Image illustrating {kw.lower()}{where}{by}. Optimized for SEO and web performance (WebP)."
+        alt = f"{phrase} — detail {idx + 1}"
+        title = phrase
+        caption = f"{phrase}."
+    description = f"Image illustrating {phrase.lower()}{by}. Optimized for SEO and web performance (WebP)."
     return {
         "filename": filename,
         "alt_text": alt,

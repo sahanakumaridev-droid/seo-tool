@@ -1,24 +1,24 @@
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from 'recharts'
-import { AlertTriangle, ChevronRight } from 'lucide-react'
-import { DASHBOARD_KPIS, SEO_OPPORTUNITIES, ORGANIC_PERFORMANCE } from '../data/mockData'
-import ScoreRing from '../components/ScoreRing'
+import { Plus, Search } from 'lucide-react'
+import { getLeads, getLeadStats, updateLeadStatus } from '../api'
 import useProjectInfo from '../hooks/useProjectInfo'
 
-const ChartTip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="card px-3 py-2 text-xs" style={{ boxShadow: 'var(--shadow-md)' }}>
-      <div style={{ color: 'var(--text-3)', marginBottom: 4 }}>{label}</div>
-      <span style={{ color: 'var(--text-1)', fontWeight: 700 }}>{payload[0].value?.toLocaleString?.() ?? payload[0].value}</span>
-    </div>
-  )
-}
+const STAGES = [
+  { id: 'new', label: 'New' },
+  { id: 'contacted', label: 'Contacted' },
+  { id: 'qualified', label: 'Qualified' },
+  { id: 'closed', label: 'Won' },
+]
 
-const TONE_DOT = { red: 'var(--red)', amber: 'var(--amber)', green: 'var(--green)' }
-const byKey = (key) => DASHBOARD_KPIS.find(k => k.key === key)
+const DEMO_LEADS = [
+  { id: 'd1', business_name: 'Harbor Roofing', contact_name: 'Maya Chen', status: 'new', source: 'website', service: 'Local SEO pages', location: 'San Diego, CA', email: 'maya@harbor.co', phone: '(619) 555-0142', budget: '$2–4k', message: 'Wants service pages for 12 coastal cities.' },
+  { id: 'd2', business_name: 'Pacific Dental', contact_name: 'James Ortiz', status: 'new', source: 'instant-quote', service: 'Website + SEO', location: 'La Jolla, CA', email: 'james@pacificdental.com', phone: '(858) 555-0190', budget: '$8k', message: 'Quote request from homepage form.' },
+  { id: 'd3', business_name: 'North County HVAC', contact_name: 'Priya Shah', status: 'contacted', source: 'prospecting', service: 'Google Ads', location: 'Carlsbad, CA', email: 'priya@nchvac.com', phone: '(760) 555-0118', budget: '$1.5k/mo', message: 'Follow-up scheduled Thursday.' },
+  { id: 'd4', business_name: 'Solana Surf Co', contact_name: 'Evan Brooks', status: 'contacted', source: 'manual', service: 'Content', location: 'Solana Beach, CA', email: 'evan@solanasurf.co', budget: '$900', message: 'Sent draft outlines.' },
+  { id: 'd5', business_name: 'Vista Auto Care', contact_name: 'Luis Mendoza', status: 'qualified', source: 'website', service: 'GBP + reviews', location: 'Vista, CA', email: 'luis@vistaauto.com', budget: '$3k', message: 'Decision maker confirmed.' },
+  { id: 'd6', business_name: 'Coronado Inn', contact_name: 'Helen Park', status: 'closed', source: 'manual', service: 'SEO retainer', location: 'Coronado, CA', email: 'helen@coronadoinn.com', budget: '$2.2k/mo', message: 'Signed. Kickoff next week.' },
+]
 
 function greeting() {
   const h = new Date().getHours()
@@ -27,143 +27,216 @@ function greeting() {
   return 'Good evening'
 }
 
+function leadTitle(lead) {
+  return lead.business_name || lead.name || lead.contact_name || 'Untitled'
+}
+
+function leadSub(lead) {
+  return [lead.contact_name && lead.contact_name !== lead.business_name ? lead.contact_name : null, lead.service || lead.industry, lead.location]
+    .filter(Boolean)
+    .join(' · ')
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate()
   const project = useProjectInfo()
+  const [leads, setLeads] = useState([])
+  const [stats, setStats] = useState({})
+  const [query, setQuery] = useState('')
+  const [selectedId, setSelectedId] = useState(null)
+  const [loading, setLoading] = useState(true)
 
-  const website = project.website || ''
-  const seoHealth = project.audit?.overall_score ?? byKey('seoHealth').value
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      try {
+        const [leadsRes, statsRes] = await Promise.all([getLeads(), getLeadStats()])
+        if (cancelled) return
+        const rows = Array.isArray(leadsRes.data) ? leadsRes.data : []
+        setLeads(rows.length ? rows : DEMO_LEADS)
+        setStats(statsRes.data?.total ? statsRes.data : {
+          total: DEMO_LEADS.length,
+          by_status: { new: 2, contacted: 2, qualified: 1, closed: 1 },
+        })
+      } catch {
+        if (!cancelled) {
+          setLeads(DEMO_LEADS)
+          setStats({ total: DEMO_LEADS.length, by_status: { new: 2, contacted: 2, qualified: 1, closed: 1 } })
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return leads
+    return leads.filter((l) =>
+      [l.business_name, l.name, l.contact_name, l.email, l.service, l.location, l.industry]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q))
+    )
+  }, [leads, query])
+
+  const selected = filtered.find((l) => l.id === selectedId) || null
+
+  const move = async (leadId, status) => {
+    try {
+      await updateLeadStatus(leadId, status)
+      setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, status } : l)))
+    } catch {
+      /* keep local UI if API fails silently */
+    }
+  }
+
+  const website = project.website || 'Workspace'
+  const closed = stats.by_status?.closed || 0
+  const total = stats.total || leads.length || 0
 
   return (
-    <div
-      className="fade-in dash-overview"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 14,
-        width: '100%',
-        maxWidth: 1120,
-        minHeight: 'calc(100vh - 78px)',
-      }}
-    >
-      {/* Compact header */}
-      <div className="flex items-end justify-between gap-3 flex-wrap">
+    <div className="crm-page fade-in">
+      <div className="crm-head">
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-1)', margin: 0, letterSpacing: '-0.02em' }}>
-            {greeting()}, {project.business_name || 'there'}
-          </h1>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--text-3)', margin: 0 }}>
-            {website || 'Add website in Onboarding'} · Last 30 days
-          </p>
+          <h1>{greeting()}, {project.business_name || 'there'}</h1>
+          <p>{website} · Pipeline for inbound and prospected contacts</p>
+        </div>
+        <div className="crm-toolbar">
+          <button type="button" className="btn btn-secondary" onClick={() => navigate('/leads')}>
+            Open contacts
+          </button>
+          <button type="button" className="btn btn-primary" onClick={() => navigate('/leads')}>
+            <Plus size={14} /> New lead
+          </button>
         </div>
       </div>
 
-      {/* Main grid — fits at 100% zoom without horizontal sprawl */}
-      <div
-        className="dash-overview-grid"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1.05fr) minmax(0, 1.35fr)',
-          gap: 14,
-          alignItems: 'stretch',
-          flex: 1,
-        }}
-      >
-        {/* Left: score + KPIs */}
-        <div className="card p-4" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <ScoreRing score={seoHealth} size={88} />
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-3)' }}>
-                SEO Health
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 4, lineHeight: 1.35 }}>
-                Snapshot of traffic, keywords, and visibility for this workspace.
-              </div>
-            </div>
-          </div>
+      <div className="crm-kpis">
+        <div className="crm-kpi">
+          <div className="lbl">Open pipeline</div>
+          <div className="val">{loading ? '—' : total}</div>
+          <div className="hint">All contacts in this workspace</div>
+        </div>
+        <div className="crm-kpi">
+          <div className="lbl">New</div>
+          <div className="val">{loading ? '—' : stats.by_status?.new || 0}</div>
+          <div className="hint">Not yet contacted</div>
+        </div>
+        <div className="crm-kpi">
+          <div className="lbl">In conversation</div>
+          <div className="val">{loading ? '—' : (stats.by_status?.contacted || 0) + (stats.by_status?.qualified || 0)}</div>
+          <div className="hint">Contacted + qualified</div>
+        </div>
+        <div className="crm-kpi">
+          <div className="lbl">Won</div>
+          <div className="val">{loading ? '—' : closed}</div>
+          <div className="hint">Closed deals</div>
+        </div>
+      </div>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-              gap: 10,
-            }}
-          >
-            {['traffic', 'keywords', 'backlinks', 'avgPosition', 'aiVisibility'].map(key => {
-              const kpi = byKey(key)
-              if (!kpi) return null
-              return (
-                <div
-                  key={key}
-                  style={{
-                    padding: '10px 12px',
-                    borderRadius: 10,
-                    background: 'var(--bg-raised)',
-                    border: '1px solid var(--border)',
-                  }}
-                >
-                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-1)', lineHeight: 1.1 }}>
-                    {kpi.value}
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 3 }}>{kpi.label}</div>
-                  {kpi.delta ? (
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--green)', marginTop: 4 }}>▲ {kpi.delta}</div>
-                  ) : null}
+      <div className="crm-toolbar">
+        <div className="crm-search">
+          <Search size={14} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#86868b' }} />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search companies, people, cities…"
+            aria-label="Search pipeline"
+          />
+        </div>
+        <span style={{ fontSize: 12, color: '#86868b', fontVariantNumeric: 'tabular-nums' }}>
+          {filtered.length} shown
+        </span>
+      </div>
+
+      <div className="crm-split">
+        <div className="crm-board" role="list">
+          {STAGES.map((stage) => {
+            const cards = filtered.filter((l) => (l.status || 'new') === stage.id)
+            return (
+              <section key={stage.id} className="crm-col" aria-label={stage.label}>
+                <div className="crm-col-h">
+                  <span>{stage.label}</span>
+                  <span className="crm-count">{cards.length}</span>
                 </div>
-              )
-            })}
-          </div>
+                <div className="crm-col-body">
+                  {cards.length === 0 ? (
+                    <div className="crm-empty-col">{loading ? 'Loading…' : 'No records'}</div>
+                  ) : (
+                    cards.map((lead) => (
+                      <button
+                        type="button"
+                        key={lead.id}
+                        className={`crm-card${selectedId === lead.id ? ' selected' : ''}`}
+                        onClick={() => setSelectedId(lead.id)}
+                      >
+                        <div className="crm-card-title">{leadTitle(lead)}</div>
+                        <div className="crm-card-meta">{leadSub(lead) || 'No details yet'}</div>
+                        <div className="crm-card-foot">
+                          <span className="crm-chip crm-chip-source">{lead.source || 'manual'}</span>
+                          {lead.budget ? <span style={{ fontSize: 11, color: '#6e6e73' }}>{lead.budget}</span> : null}
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </section>
+            )
+          })}
         </div>
 
-        {/* Right: traffic + opportunities stacked to fill height */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
-          <div className="card p-4" style={{ flex: '1 1 auto', minHeight: 0 }}>
-            <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', margin: '0 0 10px' }}>Organic Traffic</h2>
-            <ResponsiveContainer width="100%" height={168}>
-              <AreaChart data={ORGANIC_PERFORMANCE} margin={{ top: 4, right: 6, left: -22, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="og" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#FF5A4E" stopOpacity={0.18} />
-                    <stop offset="100%" stopColor="#FF5A4E" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#98A2B3' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: '#98A2B3' }} axisLine={false} tickLine={false} width={36} />
-                <Tooltip content={<ChartTip />} />
-                <Area type="monotone" dataKey="traffic" stroke="#FF5A4E" strokeWidth={2} fill="url(#og)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="card p-4">
-            <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', margin: '0 0 8px' }}>Top Opportunities</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {SEO_OPPORTUNITIES.slice(0, 4).map(o => (
-                <button
-                  key={o.label}
-                  onClick={() => navigate(o.to)}
-                  className="btn"
-                  style={{
-                    justifyContent: 'space-between',
-                    width: '100%',
-                    padding: '8px 6px',
-                    background: 'none',
-                    border: 'none',
-                    textAlign: 'left',
-                  }}
+        <aside className="crm-drawer">
+          {selected ? (
+            <>
+              <h2>{leadTitle(selected)}</h2>
+              <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6e6e73' }}>{leadSub(selected) || 'Contact'}</p>
+              <div className="crm-field">
+                <label>Stage</label>
+                <select
+                  value={selected.status || 'new'}
+                  onChange={(e) => move(selected.id, e.target.value)}
+                  style={{ width: '100%', padding: '8px 10px', background: '#fff' }}
                 >
-                  <span className="flex items-center gap-2" style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
-                    <AlertTriangle size={13} style={{ color: TONE_DOT[o.tone], flexShrink: 0 }} />
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.label}</span>
-                  </span>
-                  <ChevronRight size={13} style={{ color: 'var(--text-4)', flexShrink: 0 }} />
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+                  {STAGES.map((s) => (
+                    <option key={s.id} value={s.id}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="crm-field">
+                <label>Email</label>
+                <div>{selected.email || '—'}</div>
+              </div>
+              <div className="crm-field">
+                <label>Phone</label>
+                <div>{selected.phone || '—'}</div>
+              </div>
+              <div className="crm-field">
+                <label>Website</label>
+                {selected.website ? (
+                  <a href={selected.website} target="_blank" rel="noreferrer">{selected.website.replace(/^https?:\/\//, '')}</a>
+                ) : <div>—</div>}
+              </div>
+              <div className="crm-field">
+                <label>Notes</label>
+                <div style={{ color: selected.message ? '#1d1d1f' : '#86868b', whiteSpace: 'pre-wrap' }}>
+                  {selected.message || 'No notes'}
+                </div>
+              </div>
+              <button type="button" className="btn btn-secondary" style={{ marginTop: 16, width: '100%' }} onClick={() => navigate('/leads')}>
+                Manage in contacts
+              </button>
+            </>
+          ) : (
+            <>
+              <h2>Record</h2>
+              <p style={{ margin: '8px 0 0', fontSize: 13, color: '#6e6e73', lineHeight: 1.5 }}>
+                Select a card to see contact details, move the stage, and open the full contacts view.
+              </p>
+            </>
+          )}
+        </aside>
       </div>
     </div>
   )

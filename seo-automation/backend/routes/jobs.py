@@ -1,10 +1,10 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 import asyncio
-from models.schemas import BulkGenerateResponse, GenerateRequest, BulkPublishRequest
+from models.schemas import BulkGenerateResponse, GenerateRequest, BulkPublishRequest, CityInfo
 from services.job_service import create_job, get_job, run_bulk_job, cleanup_old_jobs
 from services.content_service import generate_seo_block
 from services.wordpress_service import publish_to_wordpress
-from services.location_service import get_nearby_cities, LocationNotResolvedError, merge_extra_locations
+from services.location_service import get_nearby_cities, LocationNotResolvedError, resolve_generation_cities
 
 router = APIRouter()
 
@@ -13,13 +13,15 @@ router = APIRouter()
 async def start_bulk_generate_job(req: GenerateRequest, background_tasks: BackgroundTasks):
     """Start an async bulk content generation job. Returns job_id for polling."""
     try:
-        cities = await get_nearby_cities(req.base_location, req.num_cities)
-        cities = merge_extra_locations(cities, req.extra_locations)
-        cities = [c for c in cities if getattr(c, "kind", "city") != "state"]
+        cities = await resolve_generation_cities(req.base_location, req.num_cities, req.extra_locations)
     except LocationNotResolvedError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    cities = [c for c in cities if getattr(c, "kind", "city") != "state"]
     if not cities:
-        raise HTTPException(status_code=400, detail="No cities found for location")
+        if req.content_kind == "post":
+            cities = [CityInfo(name="", state="", country="US", latitude=0.0, longitude=0.0, kind="city")]
+        else:
+            raise HTTPException(status_code=400, detail="Add at least one location (base city or bulk communities).")
 
     job_id = create_job(total=len(cities))
     cleanup_old_jobs()
@@ -63,6 +65,9 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
             use_ai=req.use_ai,
             llm_provider=req.llm_provider,
             exclude_image_urls=exclude,
+            custom_requirements=req.custom_requirements,
+            content_kind=req.content_kind,
+            audience=req.audience,
         )
         async with used_lock:
             # Re-check under lock in case another task claimed the same URL first

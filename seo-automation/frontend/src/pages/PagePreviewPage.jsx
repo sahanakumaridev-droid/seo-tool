@@ -92,6 +92,7 @@ export default function PagePreviewPage() {
   const [webError, setWebError] = useState('')
 
   const businessType = state?.businessType || block?.business_type || ''
+  const isPost = (state?.contentKind === 'post') || (block?.content_type === 'blog')
   const wpConfig = state?.wpConfig
 
   const handlePublishWeb = async () => {
@@ -179,10 +180,10 @@ export default function PagePreviewPage() {
           </button>
           <div>
             <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
-              {block.city}, {block.state}
+              {isPost ? (block.h1 || block.title || 'Blog post') : `${block.city}${block.state ? `, ${block.state}` : ''}`}
             </h1>
             <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
-              {businessType} · {block.slug}
+              {isPost ? 'Post · post-sitemap.xml' : 'Page · page-sitemap.xml'} · {block.slug}
             </p>
           </div>
         </div>
@@ -325,7 +326,7 @@ export default function PagePreviewPage() {
                 onChange={v => setBlock(prev => ({ ...prev, slug: v.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') }))} />
               <MetaRow label="H1" value={block.h1}
                 onChange={v => setBlock(prev => ({ ...prev, h1: v }))} />
-              <EditableList label="H2 Headings — Question Based" items={block.h2s || []} color="var(--brand)"
+              <EditableList label={isPost ? 'H2 Headings — Article sections' : 'H2 Headings — Question Based'} items={block.h2s || []} color="var(--brand)"
                 onChange={v => setBlock(prev => ({ ...prev, h2s: v }))} />
               <EditableList label="H3 Headings" items={block.h3s || []} color="var(--brand-violet)"
                 onChange={v => setBlock(prev => ({ ...prev, h3s: v }))} />

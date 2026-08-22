@@ -2,7 +2,6 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import Sidebar from './components/Sidebar'
 import Topbar from './components/Topbar'
-import LandingPage from './pages/LandingPage'
 import BlogPage from './pages/BlogPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
@@ -29,6 +28,7 @@ import SocialPage from './pages/SocialPage'
 import LeadsPage from './pages/LeadsPage'
 import LeadEnginePage from './pages/LeadEnginePage'
 import InstantQuotePage from './pages/InstantQuotePage'
+import LandingPage from './pages/LandingPage'
 // Marketplace module
 import MarketplacePage from './pages/MarketplacePage'
 import MyRequestsPage from './pages/MyRequestsPage'
@@ -57,7 +57,7 @@ function DashboardLayout({ children, onLogout }) {
   // Close the mobile drawer on route change
   useEffect(() => { setNavOpen(false) }, [location.pathname])
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-base)', color: 'var(--text-1)' }}>
+    <div className="crm-shell" style={{ display: 'flex', minHeight: '100vh', background: '#ffffff', color: '#1d1d1f' }}>
       <Sidebar open={navOpen} />
       {navOpen && <div className="sidebar-backdrop" onClick={() => setNavOpen(false)} />}
       <div className="main-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
@@ -79,8 +79,14 @@ function RequireAuth({ authed, children }) {
   // localStorage is written synchronously, so fall back to it to avoid
   // bouncing through "/" on that first render.
   const isAuthed = authed || localStorage.getItem('seo_auth') === 'true'
-  if (!isAuthed) return <Navigate to="/" state={{ from: location }} replace />
+  if (!isAuthed) return <Navigate to="/login" state={{ from: location }} replace />
   return children
+}
+
+function HomeGate({ authed, onLogout }) {
+  const isAuthed = authed || localStorage.getItem('seo_auth') === 'true'
+  if (!isAuthed) return <LandingPage />
+  return <DashboardLayout onLogout={onLogout}><DashboardPage /></DashboardLayout>
 }
 
 export default function App() {
@@ -91,12 +97,10 @@ export default function App() {
       {/* Premium Dashboard - Full screen, no sidebar */}
       <Route path="/premium" element={<PremiumDashboard />} />
       
-      {/* Marketing homepage — always public so the product can be sold from `/`. */}
-      <Route path="/" element={<LandingPage />} />
-
-      {/* Marketing landing page — also reachable directly at these aliases */}
-      <Route path="/revamp-preview" element={<LandingPage />} />
-      <Route path="/landing" element={<LandingPage />} />
+      {/* White CRM is the app home — including /landing (no dark marketing). */}
+      <Route path="/" element={<HomeGate authed={authed} onLogout={logout} />} />
+      <Route path="/landing" element={<HomeGate authed={authed} onLogout={logout} />} />
+      <Route path="/revamp-preview" element={<HomeGate authed={authed} onLogout={logout} />} />
 
       {/* Public blog — live published SEO content */}
       <Route path="/blog" element={<BlogPage />} />
@@ -125,9 +129,7 @@ export default function App() {
 
       {/* Protected dashboard routes */}
       <Route path="/dashboard" element={
-        <RequireAuth authed={authed}>
-          <DashboardLayout onLogout={logout}><DashboardPage /></DashboardLayout>
-        </RequireAuth>
+        <DashboardLayout onLogout={logout}><DashboardPage /></DashboardLayout>
       } />
       <Route path="/site-audit" element={
         <RequireAuth authed={authed}>
@@ -185,9 +187,7 @@ export default function App() {
         </RequireAuth>
       } />
       <Route path="/leads" element={
-        <RequireAuth authed={authed}>
-          <DashboardLayout onLogout={logout}><LeadsPage /></DashboardLayout>
-        </RequireAuth>
+        <DashboardLayout onLogout={logout}><LeadsPage /></DashboardLayout>
       } />
       <Route path="/lead-engine" element={
         <RequireAuth authed={authed}>

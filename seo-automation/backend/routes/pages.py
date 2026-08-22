@@ -441,6 +441,7 @@ async def get_page(slug: str, session: AsyncSession = Depends(get_session)):
         "state": row.state,
         "slug": row.slug,
         "seo_block": row.seo_block,
+        "public_url": f"{_reader_base()}/{row.slug}",
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
 

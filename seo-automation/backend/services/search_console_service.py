@@ -11,6 +11,7 @@ webmasters/searchconsole scope instead of the indexing scope.
 """
 import os
 import logging
+from urllib.parse import quote, urlparse, urlunparse
 
 from config import settings
 
@@ -49,6 +50,39 @@ def is_configured() -> bool:
     return _get_session() is not None and bool(settings.GSC_SITE_URL)
 
 
+def _inspection_url(url: str) -> str:
+    """Map apex/www so inspection stays under the verified www.zeorbit.com property."""
+    site = (settings.GSC_SITE_URL or "").strip()
+    if not site.startswith("http") or not url:
+        return url
+    try:
+        su = urlparse(site)
+        uu = urlparse(url)
+
+        def root(host: str) -> str:
+            h = (host or "").lower()
+            return h[4:] if h.startswith("www.") else h
+
+        if su.netloc and uu.netloc and root(su.netloc) == root(uu.netloc) and su.netloc.lower() != uu.netloc.lower():
+            return urlunparse((su.scheme or uu.scheme, su.netloc, uu.path, uu.params, uu.query, uu.fragment))
+    except Exception:
+        pass
+    return url
+
+
+def ping_google_sitemap(sitemap_url: str) -> dict:
+    """Public sitemap ping — complements Search Console submit."""
+    if not sitemap_url:
+        return {"ok": False, "detail": "no sitemap_url"}
+    try:
+        import httpx
+        r = httpx.get("https://www.google.com/ping", params={"sitemap": sitemap_url}, timeout=15)
+        return {"ok": r.status_code < 400, "status": r.status_code}
+    except Exception as e:
+        logger.warning(f"Google sitemap ping failed: {e}")
+        return {"ok": False, "detail": str(e)}
+
+
 def submit_sitemap(sitemap_url: str) -> dict:
     """PUT the sitemap to Search Console's Sitemaps API — an official hint
     for Google to (re)fetch it. Idempotent, safe to call after every publish."""
@@ -65,6 +99,7 @@ def submit_sitemap(sitemap_url: str) -> dict:
         ok = r.status_code in (200, 204)
         if not ok:
             logger.warning(f"Sitemap submit {sitemap_url} -> {r.status_code}: {r.text[:200]}")
+        ping_google_sitemap(sitemap_url)
         return {"ok": ok, "status": r.status_code, "detail": r.text[:300]}
     except Exception as e:
         logger.error(f"Sitemap submit error for {sitemap_url}: {e}")
@@ -75,8 +110,8 @@ _COVERAGE_TO_STATUS = {
     "submitted and indexed": "indexed",
     "indexed, though blocked by robots.txt": "not_indexed",
     "indexed without content": "indexed",
-    "discovered - currently not indexed": "discovered",
-    "crawled - currently not indexed": "discovered",
+    "discovered - currently not indexed": "submitted",
+    "crawled - currently not indexed": "crawled",
     "url is unknown to google": "not_indexed",
     "page with redirect": "not_indexed",
 }
@@ -92,7 +127,7 @@ def inspect_url(url: str) -> dict:
     try:
         r = session.post(
             _INSPECT_ENDPOINT,
-            json={"inspectionUrl": url, "siteUrl": site_url},
+            json={"inspectionUrl": _inspection_url(url), "siteUrl": site_url},
             timeout=20,
         )
         if r.status_code != 200:
@@ -102,7 +137,17 @@ def inspect_url(url: str) -> dict:
         result = data.get("inspectionResult", {})
         index_result = result.get("indexStatusResult", {})
         coverage_state = index_result.get("coverageState", "")
-        status = _COVERAGE_TO_STATUS.get(coverage_state.lower(), "not_indexed")
+        key = coverage_state.lower().strip()
+        status = _COVERAGE_TO_STATUS.get(key)
+        if status is None:
+            if "crawled" in key:
+                status = "crawled"
+            elif "discovered" in key:
+                status = "submitted"
+            elif "indexed" in key and "not indexed" not in key:
+                status = "indexed"
+            else:
+                status = "not_indexed"
         return {
             "ok": True,
             "status": status,

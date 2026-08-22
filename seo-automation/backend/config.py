@@ -80,8 +80,11 @@ class Settings(BaseSettings):
     # "https://zeorbit.com/" or "sc-domain:zeorbit.com". WP_SITEMAP_URL is the
     # exact sitemap URL your SEO plugin (RankMath/AIOSEO) already publishes,
     # e.g. "https://zeorbit.com/sitemap_index.xml".
-    GSC_SITE_URL: str = ""
-    WP_SITEMAP_URL: str = ""
+    # Python app sitemaps on zeorbit.com (not WordPress / RankMath).
+    GSC_SITE_URL: str = "https://www.zeorbit.com/"
+    WP_SITEMAP_URL: str = "https://zeorbit.com/sitemap.xml"
+    WP_PAGE_SITEMAP_URL: str = "https://zeorbit.com/page-sitemap.xml"
+    WP_POST_SITEMAP_URL: str = "https://zeorbit.com/post-sitemap.xml"
     # Optional: paste the google-site-verification content token from Search Console
     # (URL-prefix property → HTML tag). Injected into every /p/{slug} page <head>.
     GSC_VERIFICATION_META: str = ""

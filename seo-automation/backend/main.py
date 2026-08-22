@@ -168,7 +168,7 @@ app.include_router(marketplace.router,      prefix="/api/marketplace",  tags=["M
 
 
 # ── Health & Observability ─────────────────────────────────────
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health_check():
     """Health check endpoint."""
     return {
@@ -200,14 +200,40 @@ async def root():
     }
 
 
-@app.get("/robots.txt", response_class=PlainTextResponse, tags=["Public Pages"])
+@app.api_route("/robots.txt", methods=["GET", "HEAD"], response_class=PlainTextResponse, tags=["Public Pages"])
 async def robots_txt(request: Request):
-    """Permissive robots.txt for this app's own /p/{slug} pages, pointing
-    crawlers at the sitemap. (The real WordPress site has its own, generated
-    by its SEO plugin — this only covers pages hosted on this domain.)"""
+    """Allow search + LLM crawlers; point them at page/post sitemaps and llms.txt."""
     from routes.pages import _public_base
-    base = _public_base(request)
-    return f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n"
+    base = _public_base(request).rstrip("/")
+    return (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Allow: /llms.txt\n"
+        "Allow: /.well-known/llms.txt\n"
+        "\n"
+        "User-agent: Googlebot\nAllow: /\n"
+        "User-agent: Google-Extended\nAllow: /\nAllow: /llms.txt\n"
+        "User-agent: Google-CloudVertexBot\nAllow: /\nAllow: /llms.txt\n"
+        "User-agent: Google-InspectionTool\nAllow: /\n"
+        "User-agent: bingbot\nAllow: /\n"
+        "User-agent: Applebot\nAllow: /\n"
+        "User-agent: Applebot-Extended\nAllow: /\nAllow: /llms.txt\n"
+        "User-agent: GPTBot\nAllow: /\nAllow: /llms.txt\n"
+        "User-agent: ChatGPT-User\nAllow: /\nAllow: /llms.txt\n"
+        "User-agent: OAI-SearchBot\nAllow: /\n"
+        "User-agent: ClaudeBot\nAllow: /\nAllow: /llms.txt\n"
+        "User-agent: Claude-User\nAllow: /\n"
+        "User-agent: Claude-SearchBot\nAllow: /\n"
+        "User-agent: PerplexityBot\nAllow: /\nAllow: /llms.txt\n"
+        "User-agent: Amazonbot\nAllow: /\n"
+        "User-agent: DuckDuckBot\nAllow: /\n"
+        "User-agent: Bytespider\nAllow: /\n"
+        "User-agent: CCBot\nAllow: /\n"
+        "User-agent: meta-externalagent\nAllow: /\n"
+        f"\nSitemap: {base}/sitemap.xml\n"
+        f"Sitemap: {base}/page-sitemap.xml\n"
+        f"Sitemap: {base}/post-sitemap.xml\n"
+    )
 
 
 @app.get("/google{token}.html", response_class=PlainTextResponse, tags=["Public Pages"])
@@ -221,30 +247,70 @@ async def google_site_verification_file(token: str):
     return PlainTextResponse(body, media_type="text/html")
 
 
-@app.get("/sitemap.xml", tags=["Public Pages"])
-async def sitemap_xml(request: Request, session=Depends(get_session)):
-    """Standard XML sitemap listing every published /p/{slug} page on this
-    app's own domain (WordPress posts have their own sitemap via RankMath/
-    AIOSEO on the real site — this only covers this app's demo pages)."""
+def _content_kind_of(block) -> str:
+    if isinstance(block, dict):
+        ct = (block.get("content_type") or "service").lower()
+    else:
+        ct = "service"
+    return "post" if ct in ("blog", "post") else "page"
+
+
+async def _sitemap_urlset(request, session, kind: str | None):
     from sqlalchemy import select
     from db import PageRecord
     from routes.pages import _public_base
 
     base = _public_base(request)
-    rows = (await session.execute(select(PageRecord.slug, PageRecord.updated_at))).all()
-    urls = "".join(
-        f"<url><loc>{base}/{slug}</loc>"
-        f"<lastmod>{updated_at.date().isoformat() if updated_at else ''}</lastmod></url>"
-        for slug, updated_at in rows
+    rows = (await session.execute(select(PageRecord))).scalars().all()
+    parts = []
+    for row in rows:
+        block = row.seo_block if isinstance(row.seo_block, dict) else {}
+        row_kind = _content_kind_of(block)
+        if kind and row_kind != kind:
+            continue
+        slug = row.slug
+        updated = row.updated_at
+        loc = f"{base}/{slug}"
+        last = updated.date().isoformat() if updated else ""
+        parts.append(f"<url><loc>{loc}</loc><lastmod>{last}</lastmod></url>")
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        + "".join(parts)
+        + "</urlset>"
     )
-    xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>'
     return Response(content=xml, media_type="application/xml")
+
+
+@app.api_route("/sitemap.xml", methods=["GET", "HEAD"], tags=["Public Pages"])
+async def sitemap_xml(request: Request, session=Depends(get_session)):
+    """Sitemap index pointing at page vs post sitemaps."""
+    from routes.pages import _public_base
+    base = _public_base(request)
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        f"<sitemap><loc>{base}/page-sitemap.xml</loc></sitemap>"
+        f"<sitemap><loc>{base}/post-sitemap.xml</loc></sitemap>"
+        "</sitemapindex>"
+    )
+    return Response(content=xml, media_type="application/xml")
+
+
+@app.api_route("/page-sitemap.xml", methods=["GET", "HEAD"], tags=["Public Pages"])
+async def page_sitemap_xml(request: Request, session=Depends(get_session)):
+    return await _sitemap_urlset(request, session, "page")
+
+
+@app.api_route("/post-sitemap.xml", methods=["GET", "HEAD"], tags=["Public Pages"])
+async def post_sitemap_xml(request: Request, session=Depends(get_session)):
+    return await _sitemap_urlset(request, session, "post")
 
 
 # ── Public published articles at /{slug} (never /p/ in the address bar) ──
 _RESERVED_ARTICLE_SLUGS = {
     "docs", "redoc", "openapi.json", "health", "metrics", "static",
-    "robots.txt", "sitemap.xml", "favicon.ico", "api",
+    "robots.txt", "sitemap.xml", "page-sitemap.xml", "post-sitemap.xml", "favicon.ico", "api",
 }
 
 

@@ -1,24 +1,55 @@
-from pydantic import BaseModel, Field
+import re
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime
 
 class GenerateRequest(BaseModel):
-    business_type: str = Field(..., min_length=1, example="Web Design", description="Business niche (required)")
-    base_location: str = Field(..., example="San Diego, CA")
+    business_type: str = Field(default="", example="Web Design", description="Business niche (required for pages)")
+    base_location: str = Field(default="", example="San Diego, CA")
     num_cities: int = Field(default=10, ge=1, le=100)
     extra_locations: List[str] = Field(
         default_factory=list,
         description="Extra cities typed or picked in the UI, e.g. ['Coronado, CA']",
     )
     target_keywords: List[str] = Field(
-        ...,
-        min_length=1,
+        default_factory=list,
         example=["web design san diego"],
-        description="At least one target keyword is required",
+        description="Target keywords (required for pages; optional for posts if a brief is set)",
     )
     industry: str = Field(default="", example="Contractors")
+    audience: str = Field(default="", description="Who the copy speaks to")
+    content_kind: Literal["page", "post"] = Field(..., description="Mandatory: website page vs blog post")
+    custom_requirements: str = Field(..., min_length=8, description="What to generate — topic, intent, and purpose")
     use_ai: bool = Field(default=False, description="Use an LLM for content generation")
     llm_provider: Optional[str] = Field(default=None, description="auto | groq | gemini | openai | anthropic — overrides server default for this request")
+
+    @field_validator("custom_requirements")
+    @classmethod
+    def _brief_not_blank(cls, v: str) -> str:
+        text = (v or "").strip()
+        if len(text) < 8:
+            raise ValueError("Describe the content you want in Custom content requirements (at least a short sentence).")
+        return text
+
+    @model_validator(mode="after")
+    def _page_needs_niche_and_keywords(self):
+        kind = self.content_kind
+        niche = (self.business_type or "").strip()
+        kws = [k.strip() for k in (self.target_keywords or []) if k and str(k).strip()]
+        self.target_keywords = kws
+        self.business_type = niche
+        if kind == "page":
+            if not niche:
+                raise ValueError("Business niche is required for Page generation.")
+            if not kws:
+                raise ValueError("Add at least one target keyword for Page generation.")
+        if kind == "post" and not kws:
+            # Derive a keyword from the brief so slugs and SEO still work.
+            brief = re.sub(r"[?!.]+$", "", self.custom_requirements).strip()
+            self.target_keywords = [brief[:80]] if brief else ["guide"]
+        if kind == "post" and not niche:
+            self.business_type = "Digital Services"
+        return self
 
 class KeywordSet(BaseModel):
     primary: str
@@ -70,6 +101,7 @@ class SEOBlock(BaseModel):
     in_content_images: List[ImageAsset] = Field(default=[])
     source_url: str = ""               # the analyzed website this article was grounded on
     content_type: Literal["service", "blog"] = "service"  # pillar/service page vs. supporting blog post — drives WordPress category
+    layout_variant: str = Field(default="", description="Body layout: qa, steps, story, cards, split, timeline")
 
 # ── Website Analysis Models ──────────────────────────────────────
 class SitePage(BaseModel):
@@ -99,7 +131,11 @@ class ArticleRequest(BaseModel):
     # Number of US locations (target + nearby) to cover — one article per city.
     num_cities: int = Field(default=5, ge=1, le=25)
     num_articles: int = Field(default=1, ge=1, le=10, description="Articles per city (angle variety)")
+    extra_locations: List[str] = Field(default_factory=list, description="One article per extra location when provided")
     industry: str = Field(default="")
+    audience: str = Field(default="")
+    content_kind: Literal["page", "post"] = Field(default="post")
+    custom_requirements: str = Field(default="")
     use_ai: bool = Field(default=True, description="Use an LLM when available; template fallback otherwise")
     llm_provider: Optional[str] = Field(default=None, description="auto | groq | gemini | openai | anthropic — overrides server default for this request")
 

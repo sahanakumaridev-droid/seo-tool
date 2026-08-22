@@ -12,7 +12,7 @@ export default function LoginPage({ onLogin }) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  if (alreadyAuthed) return <Navigate to="/content" replace />
+  if (alreadyAuthed) return <Navigate to="/dashboard" replace />
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -22,7 +22,7 @@ export default function LoginPage({ onLogin }) {
       await loginUser(form.email.trim(), form.password)
       onLogin()
       const hasProject = !!localStorage.getItem('seo_project')
-      navigate(hasProject ? '/content' : '/onboarding')
+      navigate(hasProject ? '/dashboard' : '/onboarding')
     } catch (err) {
       const detail = err.response?.data?.detail
       setError(typeof detail === 'string' ? detail : 'Invalid email or password. Register first if you are new.')

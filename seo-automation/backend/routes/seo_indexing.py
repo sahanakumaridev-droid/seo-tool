@@ -237,7 +237,7 @@ async def setup_checklist():
             "id": "gsc_property",
             "label": "Search Console property",
             "done": bool(settings.GSC_SITE_URL),
-            "detail": settings.GSC_SITE_URL or "Set GSC_SITE_URL (URL-prefix of your /p/ host)",
+            "detail": settings.GSC_SITE_URL or "Set GSC_SITE_URL=https://www.zeorbit.com/",
             "href": "https://search.google.com/search-console",
         },
         {
@@ -308,11 +308,20 @@ async def push_all_to_google(session: AsyncSession = Depends(get_session)):
         created += 1
     await session.commit()
 
-    sitemap = f"{base}/sitemap.xml"
+    sitemap_index = f"{base}/sitemap.xml"
+    page_sm = f"{base}/page-sitemap.xml"
+    post_sm = f"{base}/post-sitemap.xml"
+    live_page = (settings.WP_PAGE_SITEMAP_URL or "https://zeorbit.com/page-sitemap.xml").strip()
+    live_post = (settings.WP_POST_SITEMAP_URL or "https://zeorbit.com/post-sitemap.xml").strip()
     sitemap_result = {"ok": False, "detail": "Search Console not configured"}
     gsc = search_console_service.is_configured()
     if gsc:
-        sitemap_result = search_console_service.submit_sitemap(sitemap)
+        results = [
+            search_console_service.submit_sitemap(u)
+            for u in [sitemap_index, page_sm, post_sm, live_page, live_post]
+            if u
+        ]
+        sitemap_result = next((r for r in results if r.get("ok")), results[-1] if results else sitemap_result)
 
     # Crawl-check a sample of newest tracked URLs so the UI isn't empty of status
     rows = (
@@ -357,7 +366,7 @@ async def push_all_to_google(session: AsyncSession = Depends(get_session)):
         "gsc_configured": gsc,
         "pages_tracked_new": created,
         "sitemap": sitemap_result,
-        "sitemap_url": sitemap,
+        "sitemap_url": live_page or sitemap_index,
         "inspected": inspected,
         "mode": "gsc" if gsc else "crawl",
         "urls": [_to_dict(r) for r in all_rows[:100]],

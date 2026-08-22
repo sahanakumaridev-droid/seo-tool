@@ -32,7 +32,7 @@ export default function Topbar({ onLogout, onMenuClick }) {
     <header style={{
       height: 54, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       padding: '0 24px', flexShrink: 0, position: 'sticky', top: 0, zIndex: 30,
-      background: 'var(--bg-base)', borderBottom: '1px solid var(--border)',
+      background: '#fff', borderBottom: '1px solid var(--border)',
     }}>
       {/* Mobile menu toggle */}
       <button className="mobile-only" onClick={onMenuClick} aria-label="Toggle navigation"
@@ -45,7 +45,7 @@ export default function Topbar({ onLogout, onMenuClick }) {
         <Search size={13} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-4)', pointerEvents: 'none' }} />
         <input
           type="text"
-          placeholder="Search keywords, pages, cities..."
+          placeholder="Search contacts, companies…"
           style={{ width: '100%', paddingLeft: 34, paddingRight: 40, paddingTop: 8, paddingBottom: 8, fontSize: 13 }}
         />
         <kbd style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 10, padding: '2px 5px', borderRadius: 4, color: 'var(--text-4)', background: 'var(--bg-raised)', border: '1px solid var(--border)', pointerEvents: 'none' }}>⌘K</kbd>
@@ -81,7 +81,7 @@ export default function Topbar({ onLogout, onMenuClick }) {
           {showMenu && (
             <>
               <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setShowMenu(false)} />
-              <div style={{ position: 'absolute', right: 0, top: 44, zIndex: 50, width: 164, borderRadius: 10, padding: 4, background: 'var(--bg-overlay)', border: '1px solid var(--border-bright)', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
+              <div style={{ position: 'absolute', right: 0, top: 44, zIndex: 50, width: 164, borderRadius: 10, padding: 4, background: 'var(--bg-overlay)', border: '1px solid var(--border-bright)', boxShadow: 'var(--shadow-lg)' }}>
                 <div style={{ padding: '8px 10px 6px', borderBottom: '1px solid var(--border)', marginBottom: 2 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-1)' }}>Admin</div>
                   <div style={{ fontSize: 10, color: 'var(--text-4)', marginTop: 1 }}>admin@zeorbit.com</div>

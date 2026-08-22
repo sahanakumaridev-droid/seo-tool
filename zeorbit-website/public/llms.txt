@@ -1,3 +1,7 @@
+# ZeOrbit
+
+> Official machine-readable information for LLMs (Gemini, ChatGPT, Claude, and others). UTF-8 text/plain. Canonical URL: https://zeorbit.com/llms.txt
+
 # ZeOrbit - Website Designer & Mobile App Development 
 
 > ZeOrbit is an award-winning technology company based in San Diego, California, providing website design, WordPress development, mobile app development, custom software development, SEO, PPC, AI, eCommerce, and digital technology solutions to businesses throughout the United States.

@@ -1,8 +1,9 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Mail, Phone } from 'lucide-react'
 import Logo from './Logo'
 import SocialBrandIcon from './SocialBrandIcon'
 import { SITE_CONTACT } from '../data/revampContent'
+import { goToHomepageTop } from '../utils/goHome'
 
 const OFFER_LINKS = [
   { label: 'Custom Websites', to: '/website-designing#business' },
@@ -28,13 +29,23 @@ const SPECIAL_LINKS = [
 
 export default function SiteFooter() {
   const year = new Date().getFullYear()
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
 
   return (
     <footer id="about" className="zo-site-footer">
       <div className="zo-site-footer-stage">
         <div className="rv-shell zo-site-footer-main">
           <div className="zo-site-footer-brand">
-            <Link to="/" className="zo-site-footer-logo" aria-label="ZeOrbit home">
+            <Link
+              to="/"
+              className="zo-site-footer-logo"
+              aria-label="ZeOrbit home"
+              onClick={(event) => {
+                event.preventDefault()
+                goToHomepageTop(navigate, pathname)
+              }}
+            >
               <Logo size={40} />
             </Link>
             <p>

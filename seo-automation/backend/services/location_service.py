@@ -11,6 +11,7 @@ Falls back to OpenCage geocoding (free tier) when needed.
 import os
 import json
 import math
+import re
 import httpx
 from typing import List, Optional, Tuple
 from models.schemas import CityInfo
@@ -219,28 +220,116 @@ def _city_info(name: str, state: str, lat: float, lon: float, kind: str = "city"
     )
 
 
-def city_from_label(text: str) -> Optional[CityInfo]:
+_STATE_ABBR = re.compile(r"^[A-Za-z]{2}$")
+
+
+def split_location_labels(raw: str) -> List[str]:
+    """Turn pasted lists into one location each.
+
+    'San Diego, CA, Chula Vista, CA' → two cities.
+    'Balboa Park, Banker's Hill, Bay Terraces' → three communities.
+    'San Diego, CA' stays a single city+state.
+    """
+    text = (raw or "").strip()
+    if not text:
+        return []
+    chunks = re.split(r"[\n;]+", text)
+    out: List[str] = []
+    for chunk in chunks:
+        tokens = [t.strip() for t in chunk.split(",") if t.strip()]
+        i = 0
+        while i < len(tokens):
+            name = tokens[i]
+            if i + 1 < len(tokens) and _STATE_ABBR.fullmatch(tokens[i + 1]):
+                out.append(f"{name}, {tokens[i + 1].upper()}")
+                i += 2
+            else:
+                out.append(name)
+                i += 1
+    seen = set()
+    unique = []
+    for label in out:
+        key = re.sub(r"\s+", " ", label).strip().lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(label)
+    return unique
+
+
+def city_from_label(text: str, default_state: str = "") -> Optional[CityInfo]:
     """Parse a typed or dropdown location like 'Coronado, CA' into CityInfo."""
     raw = (text or "").strip()
     if not raw:
         return None
     if "," in raw:
-        name, state = [p.strip() for p in raw.split(",", 1)]
+        name, rest = [p.strip() for p in raw.split(",", 1)]
+        # Only treat the remainder as a state if it is a 2-letter code.
+        # Otherwise this was a bulk list stuffed into one field.
+        if _STATE_ABBR.fullmatch(rest):
+            state = rest.upper()
+        else:
+            name = split_location_labels(raw)[0] if split_location_labels(raw) else name
+            state = default_state
+            if "," in name and _STATE_ABBR.fullmatch(name.split(",")[-1].strip()):
+                name, st = [p.strip() for p in name.rsplit(",", 1)]
+                state = st.upper()
     else:
-        name, state = raw, ""
+        name, state = raw, default_state
     if not name:
         return None
-    return _city_info(name, state, 0.0, 0.0, "city")
+    return _city_info(name, state or "", 0.0, 0.0, "city")
+
+
+def flatten_extra_locations(extra_labels: Optional[List[str]], default_state: str = "") -> List[CityInfo]:
+    """Expand chips / pasted lists into one CityInfo per place."""
+    out: List[CityInfo] = []
+    seen = set()
+    for label in extra_labels or []:
+        for part in split_location_labels(label):
+            info = city_from_label(part, default_state=default_state)
+            if not info:
+                continue
+            key = (info.name.lower(), (info.state or "").lower())
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(info)
+    return out
+
+
+async def resolve_generation_cities(
+    base_location: str,
+    num_cities: int,
+    extra_labels: Optional[List[str]] = None,
+) -> List[CityInfo]:
+    """One CityInfo per generated page. Bulk extras never merge into a single title.
+
+    If the user added community/city chips, those chips ARE the page list.
+    Nearby expansion is used only when no extras were added.
+    """
+    default_state = ""
+    if base_location and "," in base_location:
+        maybe = base_location.split(",")[-1].strip()
+        if _STATE_ABBR.fullmatch(maybe):
+            default_state = maybe.upper()
+    extras = flatten_extra_locations(extra_labels, default_state=default_state)
+    if extras:
+        return extras
+    loc = (base_location or "").strip()
+    if not loc:
+        return []
+    cities = await get_nearby_cities(loc, num_cities)
+    cities = [c for c in cities if getattr(c, "kind", "city") != "state"]
+    return cities
 
 
 def merge_extra_locations(cities: List[CityInfo], extra_labels: Optional[List[str]]) -> List[CityInfo]:
     """Prepend manually added locations without duplicating nearby results."""
     out: List[CityInfo] = []
     seen = set()
-    for label in extra_labels or []:
-        info = city_from_label(label)
-        if not info:
-            continue
+    extras = flatten_extra_locations(extra_labels)
+    for info in extras:
         key = (info.name.lower(), (info.state or "").lower())
         if key in seen:
             continue
@@ -262,7 +351,10 @@ _STATE_MAJOR_CITIES = {
     "AZ": ["Phoenix", "Tucson", "Mesa", "Scottsdale", "Chandler", "Flagstaff"],
     "AR": ["Little Rock", "Fayetteville", "Fort Smith", "Springdale"],
     "CA": ["Los Angeles", "San Diego", "San Francisco", "San Jose", "Sacramento",
-           "Oakland", "Fresno", "Long Beach", "Anaheim", "Riverside", "Bakersfield"],
+           "Oakland", "Fresno", "Long Beach", "Anaheim", "Riverside", "Bakersfield",
+           "Chula Vista", "Oceanside", "Escondido", "Carlsbad", "El Cajon", "Vista",
+           "San Marcos", "Encinitas", "National City", "La Mesa", "Santee",
+           "Poway", "Imperial Beach", "Lemon Grove", "Coronado", "Solana Beach"],
     "CO": ["Denver", "Colorado Springs", "Aurora", "Fort Collins", "Boulder"],
     "CT": ["Hartford", "New Haven", "Stamford", "Bridgeport", "Waterbury", "Norwalk"],
     "DE": ["Wilmington", "Dover", "Newark"],

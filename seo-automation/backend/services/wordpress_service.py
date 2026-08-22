@@ -205,12 +205,12 @@ def _build_seo_meta(block: SEOBlock, plugin: str) -> dict:
         }
 
 
-async def _check_duplicate(slug: str, wp_api_base: str, headers: dict) -> Optional[int]:
-    """Check if a post with this slug already exists. Returns post_id if found."""
+async def _check_duplicate(slug: str, wp_api_base: str, headers: dict, resource: str = "posts") -> Optional[int]:
+    """Check if a post/page with this slug already exists. Returns id if found."""
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.get(
-                f"{wp_api_base}/posts",
+                f"{wp_api_base}/{resource}",
                 params={"slug": slug, "status": "any"},
                 headers=headers,
             )
@@ -270,7 +270,9 @@ async def publish_to_wordpress(
 
     slug = block.slug or f"{block.business_type.lower().replace(' ', '-')}-{block.city.lower().replace(' ', '-')}"
     wp_api_base = config.wp_url.rstrip('/') + "/wp-json/wp/v2"
-    wp_api = f"{wp_api_base}/posts"
+    is_wp_page = (block.content_type or "service") not in ("blog", "post")
+    resource = "pages" if is_wp_page else "posts"
+    wp_api = f"{wp_api_base}/{resource}"
 
     # ── Featured image ──────────────────────────────────────────
     featured_media_id = None
@@ -301,7 +303,7 @@ async def publish_to_wordpress(
                 img_result = await get_image_for_content(block.business_type, block.city)
                 if img_result:
                     img_bytes, img_filename = img_result
-                    alt_text = f"{block.business_type} services in {block.city}"
+                    alt_text = f"{block.business_type} in {block.city}"
                     media = await upload_image_to_wordpress(
                         img_bytes, img_filename,
                         config.wp_url, config.wp_username, config.wp_app_password,
@@ -314,7 +316,7 @@ async def publish_to_wordpress(
             print(f"[WP] Image upload failed for {block.city}: {e}")
 
     # ── Check for duplicate ──────────────────────────────────────
-    existing_id = await _check_duplicate(slug, wp_api_base, headers)
+    existing_id = await _check_duplicate(slug, wp_api_base, headers, resource=resource)
 
     # ── Build post data ──────────────────────────────────────────
     post_data: dict = {

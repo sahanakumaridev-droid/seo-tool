@@ -3,14 +3,16 @@ import { ScanSearch, RefreshCw, ExternalLink, CheckCircle2, AlertTriangle, Clock
 import { getSeoIndexingStatus, getSeoIndexingSetup, pushAllSeoIndexing, refreshSeoIndexing, inspectSeoIndexingUrl } from '../api'
 
 const STATUS_META = {
-  published:              { label: 'Crawl-ready',          color: 'var(--text-3)',  bg: 'var(--bg-raised)',   icon: Clock },
-  published_awaiting_gsc: { label: 'Awaiting GSC',         color: 'var(--amber)',   bg: 'var(--amber-soft)',  icon: AlertTriangle },
-  sitemap_added:          { label: 'Sitemap / Ready',      color: 'var(--brand)',   bg: 'var(--brand-soft)',  icon: CheckCircle2 },
-  sitemap_submitted:      { label: 'Sitemap submitted',    color: 'var(--brand)',   bg: 'var(--brand-soft)',  icon: CheckCircle2 },
-  discovered:             { label: 'Google Discovered',    color: 'var(--amber)',   bg: 'var(--amber-soft)',  icon: HelpCircle },
-  indexed:                { label: 'Indexed',              color: 'var(--green)',   bg: 'var(--green-soft)',  icon: CheckCircle2 },
-  not_indexed:            { label: 'Not Indexed',          color: 'var(--amber)',   bg: 'var(--amber-soft)',  icon: AlertTriangle },
-  error:                  { label: 'Error',                color: 'var(--red)',     bg: 'var(--red-soft)',    icon: XCircle },
+  published:              { label: 'Submitted',     color: 'var(--text-3)',  bg: 'var(--bg-raised)',   icon: Clock },
+  published_awaiting_gsc: { label: 'Submitted',     color: 'var(--amber)',   bg: 'var(--amber-soft)',  icon: AlertTriangle },
+  sitemap_added:          { label: 'Submitted',     color: 'var(--brand)',   bg: 'var(--brand-soft)',  icon: CheckCircle2 },
+  sitemap_submitted:      { label: 'Submitted',     color: 'var(--brand)',   bg: 'var(--brand-soft)',  icon: CheckCircle2 },
+  submitted:              { label: 'Submitted',     color: 'var(--brand)',   bg: 'var(--brand-soft)',  icon: CheckCircle2 },
+  crawled:                { label: 'Crawled',       color: 'var(--amber)',   bg: 'var(--amber-soft)',  icon: Clock },
+  discovered:             { label: 'Crawled',       color: 'var(--amber)',   bg: 'var(--amber-soft)',  icon: HelpCircle },
+  indexed:                { label: 'Indexed',       color: 'var(--green)',   bg: 'var(--green-soft)',  icon: CheckCircle2 },
+  not_indexed:            { label: 'Not Indexed',   color: 'var(--amber)',   bg: 'var(--amber-soft)',  icon: AlertTriangle },
+  error:                  { label: 'Error / Failed', color: 'var(--red)',    bg: 'var(--red-soft)',    icon: XCircle },
 }
 
 function StatusBadge({ status }) {
@@ -129,7 +131,7 @@ export default function IndexingStatusPage() {
         <div>
           <h1 className="font-display" style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-1)' }}>Google Search</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--text-3)' }}>
-            Get published pages into Google — sitemap, Search Console, then wait for indexing.
+            Get published URLs into Google on <strong>www.zeorbit.com</strong> — sitemap ping, then track Submitted / Crawled / Indexed.
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -157,8 +159,9 @@ export default function IndexingStatusPage() {
             <div>
               <strong className="text-amber-200">Indexing status needs Google Search Console.</strong>
               <p className="text-xs text-slate-400 mt-1">
-                Crawl-ready means your live page is public. “Indexed” can only be confirmed after the live website
-                (or property) is verified in Search Console and connected here. Until then we show crawl / sitemap status only.
+                Crawl-ready means the live URL is public. Indexing is confirmed against{" "}
+                <strong>https://www.zeorbit.com/</strong> in Search Console. Add the service-account
+                email as Owner on that property (not the old nip.io host). Until then we show crawl / sitemap status only.
               </p>
             </div>
           </div>
