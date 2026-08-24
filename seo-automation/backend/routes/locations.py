@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query
 from services.location_service import get_nearby_cities, LocationNotResolvedError
-from typing import List
+from typing import List, Optional
 from models.schemas import CityInfo
 from pathlib import Path
 import json
@@ -8,6 +8,7 @@ import json
 router = APIRouter()
 
 _SD_COUNTY = None
+_US_CITIES = None
 
 
 def _san_diego_county():
@@ -18,10 +19,63 @@ def _san_diego_county():
     return _SD_COUNTY
 
 
+def _us_cities():
+    global _US_CITIES
+    if _US_CITIES is None:
+        path = Path(__file__).resolve().parents[1] / "data" / "us_cities.json"
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        # Normalize to "City, ST" strings once
+        out = []
+        seen = set()
+        for row in raw:
+            if not isinstance(row, dict):
+                continue
+            city = (row.get("city") or "").strip()
+            state = (row.get("state") or "").strip().upper()
+            if not city or not state:
+                continue
+            label = f"{city}, {state}"
+            key = label.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(label)
+        _US_CITIES = out
+    return _US_CITIES
+
+
 @router.get("/san-diego-county")
 async def san_diego_county_breakdown():
     """County → 18 cities + unincorporated → local areas → streets."""
     return _san_diego_county()
+
+
+@router.get("/cities")
+async def search_cities(
+    q: str = Query(default="", description="City name search"),
+    limit: int = Query(default=40, ge=1, le=100),
+):
+    """Search ~30k US cities for the Base city picker."""
+    query = (q or "").strip().lower()
+    cities = _us_cities()
+    if not query:
+        # Prefer California + major hubs when the field is empty/focused
+        preferred = [c for c in cities if c.endswith(", CA")][:limit]
+        if len(preferred) < limit:
+            preferred = (preferred + [c for c in cities if c not in preferred])[:limit]
+        return {"cities": preferred, "total": len(cities)}
+    starts = []
+    contains = []
+    for c in cities:
+        cl = c.lower()
+        if cl.startswith(query) or cl.startswith(query.split(",")[0].strip()):
+            starts.append(c)
+        elif query in cl:
+            contains.append(c)
+        if len(starts) >= limit:
+            break
+    merged = starts + [c for c in contains if c not in starts]
+    return {"cities": merged[:limit], "total": len(cities)}
 
 
 @router.get("/nearby", response_model=List[CityInfo])

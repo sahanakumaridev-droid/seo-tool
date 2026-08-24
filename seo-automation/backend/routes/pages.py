@@ -187,10 +187,45 @@ async def publish_to_web(
     block: SEOBlock,
     request: Request,
     session: AsyncSession = Depends(get_session),
+    force: bool = False,
 ):
-    """Save an already-generated page and expose it at a public /p/{slug} URL.
-    Also runs crawl/indexing tracking and optional paused Ads auto-create."""
+    """Save an already-generated page and expose it at a public /{slug} URL.
+
+    Refuses publish when master quality gates fail unless force=true.
+    """
     from services.publish_pipeline import track_public_publish, maybe_auto_create_ads
+    from services.zeorbit_local_seo import MIN_PUBLISH_SCORE, MIN_KEYWORD_USE_SCORE, scores_meet_floor
+
+    q = float(getattr(block, "quality_score", None) or getattr(block, "readability_score", None) or 0)
+    kw = float(getattr(block, "keyword_density", None) or 0)
+    if not force and getattr(block, "content_type", "service") == "service":
+        if block.publishable is False or not scores_meet_floor(q, kw):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": (
+                        f"Scores must both be {int(MIN_PUBLISH_SCORE)}%+ before publish "
+                        f"(Quality {round(q)}%, Keyword use {round(kw)}%). "
+                        "Correct the copy or use AI fix on the preview."
+                    ),
+                    "quality_score": q,
+                    "keyword_density": kw,
+                    "min_score": MIN_PUBLISH_SCORE,
+                    "min_keyword_use": MIN_KEYWORD_USE_SCORE,
+                    "quality_breakdown": block.quality_breakdown,
+                },
+            )
+
+    # Canonical image sync: featured/footer from the same in_content set.
+    imgs = block.in_content_images or []
+    if imgs:
+        from services.image_service import assign_canonical_images
+        feat, foot, cleaned = assign_canonical_images(list(imgs))
+        block.in_content_images = cleaned
+        if feat:
+            block.featured_image_url = feat
+        if foot:
+            block.footer_image_url = foot
 
     slug = _block_slug(block)
     block.slug = slug
@@ -221,6 +256,8 @@ async def publish_to_web(
         "published": True,
         "indexing": indexing,
         "ads": ads,
+        "quality_score": block.quality_score,
+        "publishable": block.publishable,
         "automation": {
             "ads_auto_create": bool(settings.GOOGLE_ADS_AUTO_CREATE_ON_PUBLISH),
             "ads_auto_enable": bool(settings.GOOGLE_ADS_AUTO_ENABLE),

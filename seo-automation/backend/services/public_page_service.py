@@ -420,12 +420,50 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
     desc = _esc(block.meta_description or "")
     h1 = _esc(block.h1 or title)
     featured = block.featured_image_url or ""
+    footer_img = getattr(block, "footer_image_url", None) or ""
+    # Canonical set: if footer missing/same as hero, use first distinct in-content image.
+    try:
+        from services.image_service import normalize_image_key, assign_canonical_images
+        imgs = list(block.in_content_images or [])
+        if imgs:
+            feat2, foot2, cleaned = assign_canonical_images(imgs)
+            if feat2:
+                featured = featured or feat2
+            if foot2 and normalize_image_key(foot2) != normalize_image_key(featured or ""):
+                footer_img = foot2
+            elif not footer_img:
+                footer_img = foot2 or featured
+            block.in_content_images = cleaned
+    except Exception:
+        pass
+    # Prefer asset alt_text from canonical image set
+    hero_alt = h1
+    for im in (block.in_content_images or []):
+        url = getattr(im, "url", None) or (im.get("url") if isinstance(im, dict) else "")
+        if url and featured and url.split("?")[0] == featured.split("?")[0]:
+            alt = getattr(im, "alt_text", None) or (im.get("alt_text") if isinstance(im, dict) else "")
+            if alt:
+                hero_alt = _esc(alt)
+            break
+    footer_alt = "Related website design example"
+    for im in (block.in_content_images or []):
+        url = getattr(im, "url", None) or (im.get("url") if isinstance(im, dict) else "")
+        if url and footer_img and url.split("?")[0] == footer_img.split("?")[0]:
+            alt = getattr(im, "alt_text", None) or (im.get("alt_text") if isinstance(im, dict) else "")
+            if alt:
+                footer_alt = _esc(alt)
+            break
     location = _esc(f"{block.city}, {block.state}".strip(", "))
     biz = _esc(block.business_type or "")
     mins = _read_time(block)
     og_img = f'<meta property="og:image" content="{_esc(featured)}" />' if featured else ""
     canonical_tag = f'<link rel="canonical" href="{_esc(public_url)}" />' if public_url else ""
-    hero = f'<div class="hero-wrap"><img src="{_esc(featured)}" alt="{h1}" /></div>' if featured else ""
+    hero = f'<div class="hero-wrap"><img src="{_esc(featured)}" alt="{hero_alt}" /></div>' if featured else ""
+    footer_figure = (
+        f'<figure class="article-footer-image"><img src="{_esc(footer_img)}" alt="{footer_alt}" /></figure>'
+        if footer_img and footer_img.split("?")[0] != (featured or "").split("?")[0]
+        else ""
+    )
     quick = f'<aside class="quick"><div class="quick-l">Quick answer</div><p>{desc}</p></aside>' if desc else ""
     gtm_head, gtm_body = _gtm_snippets()
     adsense_head = _adsense_head_snippet()
@@ -580,6 +618,12 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
   figure, .wp-block-image {{
     margin:28px 0; padding:0; background:var(--soft); border:1px solid var(--line); border-radius:12px;
     overflow:hidden; width:100%;
+  }}
+  .article-footer-image {{
+    margin:28px 0 16px; padding:0; border:1px solid var(--line); border-radius:12px; overflow:hidden;
+  }}
+  .article-footer-image img {{
+    width:100%; max-height:min(42vh, 360px); object-fit:cover; display:block;
   }}
   figure img, .wp-block-image img {{
     width:100%; max-height:min(48vh, 440px); object-fit:cover; display:block; border-radius:0;
@@ -889,6 +933,7 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
     {toc_html}
     {ad_unit}
     {body}
+    {footer_figure}
     {share_bar}
     <div class="article-end">
       <div class="contact-card" id="contact">

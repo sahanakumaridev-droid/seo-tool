@@ -27,6 +27,7 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
     cleanup_old_jobs()
 
     used_featured: list = []
+    existing_bodies: list = []
     used_lock = asyncio.Lock()
 
     # Seed exclude list from already-published pages in this niche
@@ -48,6 +49,9 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
                     u = im.get("url") if isinstance(im, dict) else None
                     if u:
                         used_featured.append(u)
+                body0 = f"{(block0 or {}).get('intro') or ''}\n{(block0 or {}).get('content') or ''}".strip()
+                if body0:
+                    existing_bodies.append(body0)
     except Exception as e:
         print(f"[Jobs] could not seed used images: {e}")
 
@@ -60,6 +64,7 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
         state = city_info.state if hasattr(city_info, "state") else city_info["state"]
         async with used_lock:
             exclude = list(used_featured)
+            bodies_snapshot = list(existing_bodies)
         block = await generate_seo_block(
             business_type=req.business_type,
             city=name,
@@ -73,6 +78,7 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
             content_kind=req.content_kind,
             audience=req.audience,
             keyword_index=keyword_index,
+            existing_bodies=bodies_snapshot,
         )
         async with used_lock:
             # Re-check under lock in case another task claimed the same URL first
@@ -89,15 +95,31 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
                         exclude_urls=used_featured,
                         industry="" if req.content_kind == "post" else (req.industry or ""),
                         niche=req.business_type or "",
+                        search_intent=getattr(block, "search_intent", "") or "",
+                        image_concept_text=getattr(block, "image_concept", "") or "",
+                        keyword_index=keyword_index,
                     )
                     if images:
-                        block.in_content_images = images
-                        block.featured_image_url = images[0].url
+                        from services.image_service import assign_canonical_images
+                        feat, foot, cleaned = assign_canonical_images(images)
+                        block.in_content_images = cleaned
+                        block.featured_image_url = feat
+                        block.footer_image_url = foot
                 if block.featured_image_url:
                     used_featured.append(block.featured_image_url)
                 for im in block.in_content_images or []:
                     if im.url:
                         used_featured.append(im.url)
+            existing_bodies.append(f"{block.intro or ''}\n{block.content or ''}")
+        from services.zeorbit_local_seo import MIN_PUBLISH_SCORE, MIN_KEYWORD_USE_SCORE, scores_meet_floor
+        q = float(getattr(block, "quality_score", None) or getattr(block, "readability_score", None) or 0)
+        kw = float(getattr(block, "keyword_density", None) or 0)
+        if not scores_meet_floor(q, kw):
+            raise ValueError(
+                f"Scores below {int(MIN_PUBLISH_SCORE)}% floor "
+                f"(Quality {round(q)}%, Keyword use {round(kw)}% — both need "
+                f"{int(MIN_KEYWORD_USE_SCORE)}%+). Not saved."
+            )
         return block.model_dump()
 
     background_tasks.add_task(

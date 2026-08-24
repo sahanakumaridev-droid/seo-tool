@@ -281,11 +281,79 @@ def pretty_keyword(text: str) -> str:
     return " ".join(parts)
 
 
+_BRIEF_LABEL_RE = re.compile(
+    r"(?im)^\s*(working title\s*/\s*topic|search intent|customer problem|pricing|"
+    r"key points to cover|faqs? to answer|cta direction|tone\s*/\s*voice notes|"
+    r"extra editor notes)\s*:\s*"
+)
+
+
+def parse_structured_brief(brief: str) -> dict:
+    """Pull labeled editor fields out of the composed brief (never publish labels)."""
+    raw = (brief or "").strip()
+    out = {
+        "topic_title": "",
+        "search_intent": "",
+        "customer_problem": "",
+        "pricing": "",
+        "key_points": "",
+        "faq_ideas": "",
+        "cta_direction": "",
+        "tone_notes": "",
+        "extra_notes": "",
+    }
+    if not raw:
+        return out
+    key_map = {
+        "working title / topic": "topic_title",
+        "search intent": "search_intent",
+        "customer problem": "customer_problem",
+        "pricing": "pricing",
+        "key points to cover": "key_points",
+        "faq to answer": "faq_ideas",
+        "faqs to answer": "faq_ideas",
+        "cta direction": "cta_direction",
+        "tone / voice notes": "tone_notes",
+        "extra editor notes": "extra_notes",
+    }
+    matches = list(_BRIEF_LABEL_RE.finditer(raw))
+    if not matches:
+        return out
+    for i, m in enumerate(matches):
+        label = re.sub(r"\s+", " ", m.group(1).strip().lower())
+        field = key_map.get(label)
+        if not field:
+            continue
+        start = m.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(raw)
+        out[field] = raw[start:end].strip()
+    return out
+
+
+def extract_brief_topic(brief: str, target_keywords: Optional[list] = None, business_type: str = "") -> str:
+    """Clean topic / keyword from a structured brief — never the labeled blob."""
+    parsed = parse_structured_brief(brief)
+    topic = (parsed.get("topic_title") or "").strip()
+    if topic:
+        return re.sub(r"[?!.]+$", "", topic).strip()[:80]
+    kws = [str(k).strip() for k in (target_keywords or []) if str(k).strip()]
+    for k in kws:
+        if not _BRIEF_LABEL_RE.search(k) and "working title" not in k.lower():
+            return k[:80]
+    # Unlabeled short brief → use as topic; long labeled junk → fall back
+    b = (brief or "").strip()
+    if b and not _BRIEF_LABEL_RE.search(b) and len(b) <= 100:
+        return re.sub(r"[?!.]+$", "", b).strip()[:80]
+    return (business_type or (kws[0] if kws else "website design"))[:80]
+
+
 def _looks_like_writing_brief(text: str) -> bool:
     """True when text is an AI instruction / style brief, not a topic or body copy."""
     t = (text or "").strip().lower()
     if not t:
         return False
+    if _BRIEF_LABEL_RE.search(t) or "working title / topic:" in t:
+        return True
     markers = (
         "focus each page",
         "make every page feel unique",
@@ -297,15 +365,29 @@ def _looks_like_writing_brief(text: str) -> bool:
         "these should be treated only as",
         "never appear as visible content",
         "patient-focused, locally relevant",
-        "conversion-driven",
+        "writing brief only",
+        "never paste",
+        "do not invent",
+        "non-negotiable:",
+        "key points to cover:",
+        "customer problem:",
+        "search intent:",
+        "cta direction:",
+        "extra editor notes:",
     )
     if any(m in t for m in markers):
         return True
-    # Long multi-sentence writing directions without a clear how-to topic
-    if len(t) > 160 and t.count(".") >= 2 and not re.search(
-        r"^(how to|what is|why |are you |common |guide)", t
-    ):
-        return True
+    # Only treat as brief when it reads like editor instructions (imperatives),
+    # not ordinary multi-sentence article paragraphs.
+    if len(t) > 180 and t.count(".") >= 3:
+        imperative_hits = sum(
+            1 for m in ("make sure", "ensure that", "avoid ", "do not ", "don't ", "must include", "always write")
+            if m in t
+        )
+        if imperative_hits >= 2 and not re.search(
+            r"^(if you|when you|a business|zeorbit|many |owners |in )", t
+        ):
+            return True
     return False
 
 
@@ -341,17 +423,17 @@ def _strip_instruction_leak(text: str, brief: str = "") -> str:
 def article_topic(brief: str, target_keywords: list, business_type: str) -> str:
     """Blog topic = the how-to / keyword, not a leftover page brief."""
     kws = [str(k).strip() for k in (target_keywords or []) if str(k).strip()]
-    for k in kws:
+    # Prefer clean keyword lists — skip labeled brief fragments mistakenly sent as keywords.
+    clean_kws = [k for k in kws if not _looks_like_writing_brief(k) and "working title" not in k.lower()]
+    for k in clean_kws:
         if re.search(r"how to|301|302|redirect|guide|what is|why ", k, re.I):
             return k
-    b = (brief or "").strip()
-    if _looks_like_writing_brief(b):
-        b = ""
-    if kws and (not b or len(b) > 140):
-        return kws[0]
-    if b and len(b) <= 140 and not _looks_like_writing_brief(b):
-        return re.sub(r"[?!.]+$", "", b).strip() or (kws[0] if kws else business_type)
-    return kws[0] if kws else (business_type or "guide")
+    parsed_topic = extract_brief_topic(brief, clean_kws or kws, business_type)
+    if parsed_topic and not _looks_like_writing_brief(parsed_topic):
+        return parsed_topic
+    if clean_kws:
+        return clean_kws[0]
+    return business_type or "guide"
 
 
 def _page_meta_title(
@@ -360,40 +442,30 @@ def _page_meta_title(
     state: str,
     index: int = 0,
     industry: str = "",
+    search_intent: str = "",
+    brief: str = "",
+    keywords: Optional[list] = None,
 ) -> str:
-    """Location SEO titles in the ZeOrbit pattern the team uses in GSC sheets.
+    """Intent-varied location titles — never the same 'Affordable Website Design in X' for all cities."""
+    from services.zeorbit_local_seo import pick_search_intent, format_title
 
-    Examples:
-    - Healthcare Website Design in Downtown Chula Vista, CA | WordPress Experts
-    - WordPress Website Design for Healthcare in East Chula Vista, CA
-    - Small Business Website Design for Healthcare in Eastlake, CA
-    """
-    loc = f"{city}, {state}" if state and state not in (city or "") else city
+    intent = pick_search_intent(
+        city, index, industry=industry or "", brief=brief or search_intent or "", keywords=keywords or [primary],
+    )
+    if search_intent:
+        from services.zeorbit_local_seo import SEARCH_INTENTS
+        for i in SEARCH_INTENTS:
+            if i.id == search_intent:
+                intent = i
+                break
+    title = format_title(intent, city, industry or "", index)
+    # Keep primary keyword signal when the intent title is short on SEO terms.
     pretty = pretty_keyword(primary)
-    ind = pretty_keyword(industry) if industry else ""
-    if ind:
-        patterns = [
-            f"{ind} Website Design in {loc} | WordPress Experts",
-            f"{ind} Website Designer in {loc} | WordPress Design",
-            f"WordPress Website Design for {ind} in {loc}",
-            f"{ind} Business Website Design in {loc} | WordPress Experts",
-            f"Small Business Website Design for {ind} in {loc}",
-            f"Custom {ind} Website Design in {loc}",
-            f"{ind} Website Designer in {loc} | WordPress",
-            f"WordPress Website Design for {ind} in {loc}",
-            f"{ind} Business Website Design in {loc}",
-            f"{pretty} in {loc} | WordPress Experts",
-        ]
-    else:
-        patterns = [
-            f"{pretty} in {loc} | WordPress Experts",
-            f"{pretty} in {loc} | WordPress Design",
-            f"{pretty} in {loc} | Local Web Design",
-            f"{pretty} in {loc}",
-        ]
-    title = patterns[int(index) % len(patterns)]
-    if len(title) > 78:
-        title = f"{pretty} in {loc}" if pretty else f"{ind} Website Design in {loc}"
+    if pretty and pretty.lower() not in title.lower() and intent.id in ("discovery", "industry_local"):
+        loc = f"{city}, {state}" if state and state not in (city or "") else city
+        alt = f"{pretty} in {loc}"
+        if len(alt) <= 78 and (index % 2 == 1):
+            return alt
     return title[:80]
 
 
@@ -415,13 +487,63 @@ def _as_text(val) -> str:
     return str(val).strip()
 
 
+def normalize_markdown_sections(content: str, h2s: list | None = None) -> str:
+    """Fix glued '## Heading Body…' into real markdown sections with newlines."""
+    text = (content or "").replace("\r\n", "\n").strip()
+    if not text:
+        return ""
+    # Any ## not already at line-start → own block
+    text = re.sub(r"([^\n])\s*(##\s+)", r"\1\n\n\2", text)
+    heads = sorted(
+        [str(h).strip() for h in (h2s or []) if str(h).strip()],
+        key=len,
+        reverse=True,
+    )
+    for h in heads:
+        text = re.sub(
+            rf"(##\s*{re.escape(h)})(?=\s*\S)",
+            r"\1\n\n",
+            text,
+            flags=re.I,
+        )
+    # Soft-break monster paragraphs (2 sentences ≈ one <p>)
+    chunks = []
+    for block in re.split(r"\n{2,}", text):
+        b = block.strip()
+        if not b:
+            continue
+        if b.startswith("#") or len(b) < 320:
+            chunks.append(b)
+            continue
+        sentences = re.findall(r"[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$", b)
+        buf, n = [], 0
+        for s in sentences:
+            s = s.strip()
+            if not s:
+                continue
+            buf.append(s)
+            n += 1
+            if n >= 2 or sum(len(x) for x in buf) >= 220:
+                chunks.append(" ".join(buf))
+                buf, n = [], 0
+        if buf:
+            chunks.append(" ".join(buf))
+    return "\n\n".join(chunks)
+
+
 def _sectioned_body(h2s: list, intro: str, content: str, brief: str = "") -> str:
     """Every H2 gets real paragraphs so the live article is not heading-only."""
     heads = [_as_text(h) for h in (h2s or []) if _as_text(h)]
     intro_t = _strip_instruction_leak(_as_text(intro), brief)
-    body = _strip_instruction_leak(_as_text(content), brief)
+    body = normalize_markdown_sections(_strip_instruction_leak(_as_text(content), brief), heads)
     if heads and re.search(r"(?m)^##\s+", body):
-        missing = [h for h in heads if not re.search(rf"(?m)^##\s+{re.escape(h)}\s*$", body)]
+        missing = [h for h in heads if not re.search(rf"(?m)^##\s+{re.escape(h)}\s*$", body, re.I)]
+        # Also accept heading on its own line without requiring end-anchor only
+        if missing:
+            missing = [
+                h for h in heads
+                if not re.search(rf"(?mi)^##\s+{re.escape(h)}\s*$", body)
+            ]
         if not missing:
             # Still ensure no section is empty
             parts = re.split(r"(?m)^##\s+", body)
@@ -481,7 +603,7 @@ def _sectioned_body(h2s: list, intro: str, content: str, brief: str = "") -> str
     extra = paras[idx:]
     if extra:
         out.append("\n\n".join(extra))
-    return "\n\n".join(out)
+    return normalize_markdown_sections("\n\n".join(out), heads)
 
 
 def _buyer_word(industry: str) -> str:
@@ -878,22 +1000,97 @@ def _seo_score(
     return float(min(score, 100))
 
 def _keyword_density(text: str, keyword: str) -> float:
-    """Returns keyword density as a percentage (0-100 scale for display).
+    """Returns 0–100 keyword-use score for the UI. 90+ = healthy coverage.
 
-    Counts each significant keyword word's occurrences independently rather
-    than requiring the exact contiguous phrase — natural copy mentions
-    keyword components ("web design", "San Diego") throughout far more often
-    than the literal full phrase back-to-back, so phrase-only counting
-    under-reports real keyword coverage.
+    Combines exact-phrase hits + significant-token coverage. Ideal natural
+    pages land in the high 90s; thin / off-keyword copy stays well below 90.
     """
-    words = text.lower().split()
-    kw_words = [w for w in keyword.lower().split() if w]
-    if not kw_words or not words:
+    plain = re.sub(r"<[^>]+>", " ", text or "")
+    plain = re.sub(r"\s+", " ", plain).strip().lower()
+    kw = (keyword or "").strip().lower()
+    if not plain or not kw:
         return 0.0
-    total_hits = sum(words.count(w) for w in kw_words)
-    raw = (total_hits / len(kw_words)) / len(words) * 100  # avg occurrences per keyword word, as %
-    # Ideal keyword density is 1-3%. Map 2% → 100, cap at 100.
-    return round(min((raw / 2.0) * 100, 100), 1)
+    words = plain.split()
+    if not words:
+        return 0.0
+    stop = {"a", "an", "the", "in", "for", "of", "and", "to", "near", "me", "on", "at"}
+    kw_words = [w for w in kw.split() if w and w not in stop] or kw.split()
+    phrase_hits = plain.count(kw)
+    # Also count city+service fragments without requiring exact full phrase
+    if phrase_hits == 0 and len(kw_words) >= 2:
+        # sliding bigrams from keyword
+        for i in range(len(kw_words) - 1):
+            bi = f"{kw_words[i]} {kw_words[i + 1]}"
+            phrase_hits += plain.count(bi) // 2  # soft credit
+    token_hits = sum(words.count(w) for w in kw_words)
+    avg_token = token_hits / max(len(kw_words), 1)
+    raw_pct = (token_hits / len(words)) * 100.0
+
+    score = 0.0
+    if phrase_hits >= 4:
+        score += 55
+    elif phrase_hits >= 3:
+        score += 48
+    elif phrase_hits >= 2:
+        score += 40
+    elif phrase_hits >= 1:
+        score += 28
+    if avg_token >= 8:
+        score += 35
+    elif avg_token >= 5:
+        score += 30
+    elif avg_token >= 3:
+        score += 22
+    elif avg_token >= 1:
+        score += 12
+    if 0.4 <= raw_pct <= 3.5:
+        score += 15
+    elif raw_pct > 0.2:
+        score += 8
+    return round(min(score, 100.0), 1)
+
+
+def ensure_keyword_coverage(
+    intro: str,
+    content: str,
+    keyword: str,
+    city: str = "",
+    min_score: float = 90.0,
+) -> tuple:
+    """Weave the focus keyword naturally until keyword-use score clears the floor."""
+    kw = (keyword or "").strip()
+    density = _keyword_density(f"{intro or ''}\n{content or ''}", kw)
+    if not kw or density >= min_score:
+        return intro or "", content or "", density
+
+    city_bit = f" in {city}" if (city or "").strip() else ""
+    # Prefer the service portion of "service city" focus keywords for readable sentences
+    display_kw = kw
+    if city and kw.lower().endswith(city.lower()):
+        display_kw = kw[: -len(city)].strip(" ,-") or kw
+
+    boosters = [
+        f"Businesses comparing {display_kw}{city_bit} want clear scope, mobile-friendly pages, and a site that turns visits into calls.",
+        f"ZeOrbit builds WordPress and Shopify websites for {display_kw}{city_bit} — projects typically run $500–$3,000 depending on pages and features.",
+        f"If {display_kw}{city_bit} is your next step, start with goals, budget, and a homepage that answers what you do and how to contact you.",
+        f"Local searchers looking for {display_kw}{city_bit} notice fast load times, readable copy, and contact paths above the fold.",
+    ]
+    new_intro = intro or ""
+    if display_kw.lower() not in new_intro.lower():
+        new_intro = (
+            f"{new_intro} Teams evaluating {display_kw}{city_bit} usually start with pricing, timeline, and what launches first."
+        ).strip()
+
+    parts = [content or ""]
+    for b in boosters:
+        candidate = "\n\n".join(p for p in parts + [b] if p).strip()
+        density = _keyword_density(f"{new_intro}\n{candidate}", kw)
+        parts.append(b)
+        if density >= min_score:
+            break
+    new_content = "\n\n".join(p for p in parts if p).strip()
+    density = _keyword_density(f"{new_intro}\n{new_content}", kw)
+    return new_intro, new_content, density
 
 def _build_schema(
     bt: str,
@@ -990,11 +1187,14 @@ VOICE — American English, user-first, conversational (ZeOrbit):
 - Soft next step: "Not sure where to start? We're here to help."
 - Use American spelling: optimize, color, center, organization, favorite.
 - Avoid stiff jargon (synergies, leverage, best-in-class, holistic solutions).
+- Forbidden fluff: cutting-edge, digital transformation, revolutionary, seamless solutions, unlock your potential, next-generation, comprehensive digital ecosystem.
 - Second person ("you") over "businesses seeking world-class partners".
 - NEVER paste Custom Content Requirements, writing briefs, or meta-instructions into the article body.
 - NEVER leave an H2 empty — every heading needs 2–4 full sentences of real content.
-- Vary structure: do not reuse the same five generic H2s on every page. Match the BODY LAYOUT note.
+- Vary structure: do not reuse the same five generic H2s on every page. Match the BODY LAYOUT note and SEARCH INTENT.
 - Quality bar: content should read like a strong ChatGPT / Claude / Gemini draft — specific, natural, topic-aware.
+- Never invent fake reviews, clients, offices, awards, rankings, or "best/cheapest in [city]" claims.
+- Use only verified ZeOrbit facts: website projects typically $500–$3,000; 20+ years experience; 1,000+ client reviews; WordPress, Shopify, redesign, mobile-friendly, SEO-friendly structure, conversion-focused sites, mobile apps.
 """
 
 LAYOUT_VARIANTS = ("qa", "steps", "story", "cards", "split", "timeline")
@@ -1098,26 +1298,68 @@ async def generate_seo_block(
     content_kind: str = "page",
     audience: str = "",
     keyword_index: int = 0,
+    existing_bodies: Optional[list] = None,
 ) -> SEOBlock:
     from services.image_service import resolve_campaign_niche
+    from services.zeorbit_local_seo import (
+        pick_search_intent,
+        pick_industry,
+        image_concept,
+        score_page_quality,
+        is_too_similar,
+        strip_banned_claims,
+        ensure_location_body,
+        MIN_PUBLISH_SCORE,
+        MIN_KEYWORD_USE_SCORE,
+        scores_meet_floor,
+    )
     city, state = _one_place(city, state)
     original_niche = normalize_niche_text(business_type or "")
     # Keep ZeOrbit's service (WordPress / web design). Industry is the buyer vertical.
     business_type = resolve_campaign_niche(original_niche, industry or "")
-    kind = "blog" if (content_kind or "page") == "post" else "service"
+    requested_kind = "blog" if (content_kind or "page") == "post" else "service"
+    # Localized posts (city set) must use the location engine so body changes per place.
+    # National how-to blogs keep the thin blog path only when no city is attached.
+    kind = "blog" if (requested_kind == "blog" and not city) else "service"
+    content_type_out = "blog" if requested_kind == "blog" else "service"
+    industry = pick_industry(industry or "", city, keyword_index) if kind != "blog" else (industry or "")
+    parsed_brief = parse_structured_brief(custom_requirements or "")
+    intent = pick_search_intent(
+        city,
+        keyword_index,
+        industry=industry,
+        brief=custom_requirements or "",
+        keywords=target_keywords or [],
+    ) if kind != "blog" else None
+    if intent and parsed_brief.get("search_intent"):
+        from services.zeorbit_local_seo import SEARCH_INTENTS, detect_intent_from_brief
+        forced = detect_intent_from_brief(parsed_brief["search_intent"], [])
+        if forced:
+            for i in SEARCH_INTENTS:
+                if i.id == forced:
+                    intent = i
+                    break
     primary_kw = (
         article_topic(custom_requirements, target_keywords, business_type)
-        if kind == "blog"
+        if requested_kind == "blog" and not city
         else pick_primary_keyword(
-            target_keywords, business_type, city, keyword_index, industry=industry or "",
+            [
+                k for k in (target_keywords or [])
+                if k and not _looks_like_writing_brief(str(k))
+            ] or [extract_brief_topic(custom_requirements, target_keywords, business_type)],
+            business_type, city, keyword_index, industry=industry or "",
         )
     )
-    layout = pick_layout_variant(city, primary_kw or business_type, kind)
+    layout = pick_layout_variant(city, f"{primary_kw or business_type}|{(intent.id if intent else '')}", kind)
+    concept = image_concept(intent, city, industry, keyword_index) if intent else ""
     gen_kwargs = dict(
         business_type=business_type, city=city, state=state, target_keywords=target_keywords,
         industry=industry, custom_requirements=custom_requirements, content_kind=kind,
         audience=audience, layout_variant=layout, keyword_index=keyword_index,
         primary_keyword=primary_kw,
+        search_intent=intent.id if intent else "",
+        image_concept_text=concept,
+        customer_problem=(parsed_brief.get("customer_problem") or (intent.customer_problem if intent else "")),
     )
     if use_ai:
         try:
@@ -1132,16 +1374,49 @@ async def generate_seo_block(
     else:
         block = await _generate_template_block(**gen_kwargs)
 
+    # Soft uniqueness retry for location pages that are near-duplicates.
+    if kind != "blog" and existing_bodies and is_too_similar(
+        f"{block.intro}\n{block.content}", existing_bodies
+    ):
+        print(f"[SEO] Duplicate risk for {city} — regenerating with shifted intent")
+        from services.zeorbit_local_seo import SEARCH_INTENTS
+        used_ids = {intent.id} if intent else set()
+        alt_index = keyword_index + 11
+        # Force a different intent from the pool
+        pool = [i for i in SEARCH_INTENTS if i.id not in used_ids]
+        if pool:
+            alt_intent = pool[int(hashlib.md5(f"{city}|{alt_index}".encode()).hexdigest(), 16) % len(pool)]
+        else:
+            alt_intent = pick_search_intent(city, alt_index, industry=industry, brief=custom_requirements or "")
+        gen_kwargs["keyword_index"] = alt_index
+        gen_kwargs["search_intent"] = alt_intent.id
+        gen_kwargs["customer_problem"] = alt_intent.customer_problem
+        gen_kwargs["image_concept_text"] = image_concept(alt_intent, city, industry, alt_index)
+        gen_kwargs["layout_variant"] = pick_layout_variant(city, f"{primary_kw}|{alt_intent.id}|alt", kind)
+        try:
+            if use_ai:
+                block = await _generate_ai_block(llm_provider=llm_provider, **gen_kwargs)
+            else:
+                block = await _generate_template_block(**gen_kwargs)
+        except Exception:
+            block = await _generate_template_block(**gen_kwargs)
+        intent = alt_intent
+        concept = gen_kwargs["image_concept_text"]
+
     from services.slug_utils import article_slug
-    slug_kws = [primary_kw] + [k for k in (target_keywords or []) if k and k != primary_kw]
-    slug_seed = primary_kw if kind == "blog" else business_type
+    slug_kws = [primary_kw] + [k for k in (target_keywords or []) if k and k != primary_kw and not _looks_like_writing_brief(str(k))]
+    slug_seed = primary_kw if content_type_out == "blog" else business_type
     block.slug = article_slug(slug_kws, city, slug_seed)
-    block.content_type = kind
+    block.content_type = content_type_out
     block.layout_variant = layout
     block.city = city
     block.state = state or block.state
-    # Pages: primary includes location for GSC-style focus keywords.
-    if kind == "blog":
+    if intent:
+        block.search_intent = intent.id
+        block.customer_problem = gen_kwargs.get("customer_problem") or intent.customer_problem
+        block.image_concept = concept
+    # Pages / localized posts: primary includes location for GSC-style focus keywords.
+    if content_type_out == "blog" and not city:
         focus = primary_kw.lower()
     else:
         focus = f"{primary_kw} {city}".lower().strip() if city else primary_kw.lower()
@@ -1149,26 +1424,214 @@ async def generate_seo_block(
         block.keywords.primary = focus
     block.focus_keyword = focus
 
+    # Strip banned marketing claims from published fields.
+    block.intro = strip_banned_claims(block.intro or "")
+    block.content = strip_banned_claims(block.content or "")
+    block.cta = strip_banned_claims(block.cta or "")
+    block.meta_description = strip_banned_claims(block.meta_description or "")
+
+    # Force location-specific body (no "local visitors" / "this area" stubs).
+    if city:
+        block.intro, block.content = ensure_location_body(
+            intro=block.intro or "",
+            content=block.content or "",
+            city=city,
+            state=state or "",
+            industry=industry or "",
+            intent_id=block.search_intent or "",
+            index=keyword_index,
+        )
+
     try:
         from services.image_service import generate_article_images
-        # Use one clean focus phrase — never mash primary_kw + business_type (causes bad captions).
-        img_focus = primary_kw if kind == "blog" else (original_niche or primary_kw or business_type)
+        # ZeOrbit sells websites — photos must stay website/laptop accurate, not trade scenery.
+        img_focus = "website design wordpress shopify"
         images = await generate_article_images(
             img_focus, f"{city}, {state}".strip(", "), "ZeOrbit", count=3,
             exclude_urls=exclude_image_urls,
-            industry="" if kind == "blog" else (industry or ""),
-            niche=primary_kw if kind == "blog" else original_niche,
+            industry="" if not city else (industry or ""),
+            niche="website design",
+            search_intent=block.search_intent or "discovery",
+            image_concept_text=block.image_concept or concept or (
+                f"website designer laptop mockup for {industry or 'small business'} in {city or 'local area'}"
+            ),
+            keyword_index=keyword_index,
         )
         block.in_content_images = images
         if images:
-            block.featured_image_url = images[0].url
+            from services.image_service import assign_canonical_images
+            feat, foot, cleaned = assign_canonical_images(images)
+            block.in_content_images = cleaned
+            block.featured_image_url = feat
+            block.footer_image_url = foot
         else:
             block.featured_image_url = await _get_business_image(img_focus, city)
-        print(f"[Image] Set {len(images)} image(s) for {img_focus} in {city}")
+            block.footer_image_url = block.featured_image_url
+        print(f"[Image] Set {len(block.in_content_images or [])} image(s) for {img_focus} in {city}")
     except Exception as e:
         print(f"[Image] Failed to set image: {e}")
-        block.featured_image_url = await _get_business_image(primary_kw or business_type, city)
+        block.featured_image_url = await _get_business_image("website design", city)
+        block.footer_image_url = block.featured_image_url
 
+    # Quality gate (master rule weights) — target 90+
+    feat_alt = ""
+    if block.in_content_images:
+        feat_alt = block.in_content_images[0].alt_text or ""
+    quality = score_page_quality(
+        title=block.title or "",
+        intro=block.intro or "",
+        content=block.content or "",
+        faqs=block.faqs or [],
+        city=city,
+        intent_id=block.search_intent or "",
+        image_url=block.featured_image_url or "",
+        image_alt=feat_alt,
+        image_concept_text=block.image_concept or concept or "website designer laptop",
+        meta=block.meta_description or "",
+        existing_bodies=existing_bodies,
+    )
+    # One repair pass if under the floor (inject facts / deeper local angle via template merge).
+    if city and quality.score < MIN_PUBLISH_SCORE and kind != "blog":
+        packed = None
+        try:
+            from services.zeorbit_local_seo import build_template_page_copy, SEARCH_INTENTS
+            intent_obj = intent
+            if not intent_obj:
+                intent_obj = pick_search_intent(city, keyword_index, industry=industry)
+            packed = build_template_page_copy(
+                intent_obj, city, state or "", industry or "", pretty_keyword(primary_kw), keyword_index,
+            )
+            # Prefer AI intro if it already names the city; otherwise use template intro/content.
+            body_l = f"{block.intro}\n{block.content}".lower()
+            if city.lower() not in body_l or len((block.content or "").split()) < 400:
+                block.intro = packed["intro"]
+                block.content = packed["content"]
+                if packed.get("faqs") and len(block.faqs or []) < 4:
+                    from models.schemas import FAQItem
+                    block.faqs = [FAQItem(question=f["question"], answer=f["answer"]) for f in packed["faqs"]]
+                if packed.get("title"):
+                    block.title = packed["title"]
+                    block.h1 = packed.get("h1") or packed["title"]
+                if packed.get("meta_description"):
+                    block.meta_description = packed["meta_description"]
+                if packed.get("cta"):
+                    block.cta = packed["cta"]
+            block.intro, block.content = ensure_location_body(
+                intro=block.intro or "",
+                content=block.content or "",
+                city=city,
+                state=state or "",
+                industry=industry or "",
+                intent_id=block.search_intent or intent_obj.id,
+                index=keyword_index,
+            )
+            quality = score_page_quality(
+                title=block.title or "",
+                intro=block.intro or "",
+                content=block.content or "",
+                faqs=block.faqs or [],
+                city=city,
+                intent_id=block.search_intent or "",
+                image_url=block.featured_image_url or "",
+                image_alt=feat_alt,
+                image_concept_text=block.image_concept or concept or "website designer laptop",
+                meta=block.meta_description or "",
+                existing_bodies=existing_bodies,
+            )
+        except Exception as e:
+            print(f"[Quality] repair pass failed for {city}: {e}")
+
+    # Keyword-use floor (same 90% bar as Quality) — boost naturally if thin.
+    focus_for_density = (block.focus_keyword or primary_kw or "").strip()
+    block.intro, block.content, kw_use = ensure_keyword_coverage(
+        block.intro or "",
+        block.content or "",
+        focus_for_density,
+        city=city or "",
+        min_score=MIN_KEYWORD_USE_SCORE,
+    )
+    block.keyword_density = kw_use
+    # Re-score after keyword weave (body changed).
+    if city:
+        quality = score_page_quality(
+            title=block.title or "",
+            intro=block.intro or "",
+            content=block.content or "",
+            faqs=block.faqs or [],
+            city=city,
+            intent_id=block.search_intent or "",
+            image_url=block.featured_image_url or "",
+            image_alt=feat_alt,
+            image_concept_text=block.image_concept or concept or "website designer laptop",
+            meta=block.meta_description or "",
+            existing_bodies=existing_bodies,
+        )
+
+    block.quality_score = quality.score
+    block.quality_breakdown = quality.breakdown
+    block.publishable = bool(
+        quality.publishable
+        and scores_meet_floor(quality.score, kw_use)
+    ) if city else True
+    # UI Score column uses readability_score — keep it aligned with the master quality gate.
+    block.readability_score = quality.score
+    # Always store readable markdown (## on own lines, short paragraphs).
+    block.content = normalize_markdown_sections(block.content or "", list(block.h2s or []))
+    block.intro = (block.intro or "").strip()
+    if not block.publishable and city:
+        print(
+            f"[Quality] {city} quality={quality.score} keyword_use={kw_use} "
+            f"reasons={quality.reasons}"
+        )
+
+    return block
+
+
+def boost_block_to_floor(block: "SEOBlock") -> "SEOBlock":
+    """Client AI-fix: raise keyword use (and refresh quality) to the 90% floor."""
+    from services.zeorbit_local_seo import (
+        score_page_quality,
+        MIN_KEYWORD_USE_SCORE,
+        scores_meet_floor,
+    )
+    kw = (
+        (getattr(block, "focus_keyword", None) or "")
+        or (block.keywords.primary if getattr(block, "keywords", None) else "")
+        or ""
+    ).strip()
+    intro, content, kw_use = ensure_keyword_coverage(
+        block.intro or "",
+        block.content or "",
+        kw,
+        city=block.city or "",
+        min_score=MIN_KEYWORD_USE_SCORE,
+    )
+    block.intro = intro
+    block.content = normalize_markdown_sections(content, list(getattr(block, "h2s", None) or []))
+    block.keyword_density = kw_use
+    feat_alt = ""
+    if block.in_content_images:
+        for im in block.in_content_images:
+            if getattr(im, "is_featured", False) or (getattr(im, "url", None) == block.featured_image_url):
+                feat_alt = getattr(im, "alt_text", "") or ""
+                break
+    quality = score_page_quality(
+        title=block.title or "",
+        intro=block.intro or "",
+        content=block.content or "",
+        faqs=block.faqs or [],
+        city=block.city or "",
+        intent_id=block.search_intent or "",
+        image_url=block.featured_image_url or "",
+        image_alt=feat_alt,
+        image_concept_text=block.image_concept or "website designer laptop",
+        meta=block.meta_description or "",
+        existing_bodies=None,
+    )
+    block.quality_score = quality.score
+    block.quality_breakdown = quality.breakdown
+    block.readability_score = quality.score
+    block.publishable = bool(quality.publishable and scores_meet_floor(quality.score, kw_use))
     return block
 
 
@@ -1196,6 +1659,9 @@ async def _generate_ai_block(
     layout_variant: str = "",
     keyword_index: int = 0,
     primary_keyword: str = "",
+    search_intent: str = "",
+    image_concept_text: str = "",
+    customer_problem: str = "",
 ) -> SEOBlock:
     """Generate SEO content using an LLM (GPT-4, Gemini, or Groq — whichever
     is configured/selected) for higher quality, unique content."""
@@ -1297,83 +1763,100 @@ Generate a JSON response with EXACTLY this structure:
 
 Return ONLY valid JSON, no markdown fences."""
     else:
+        from services.zeorbit_local_seo import (
+            pick_search_intent,
+            SEARCH_INTENTS,
+            format_title,
+            intent_h2_set,
+            intent_faqs,
+            ai_page_brief_block,
+            master_voice_rules,
+            ZEORBIT_FACTS,
+        )
         pretty = pretty_keyword(primary_kw)
+        intent = pick_search_intent(city, keyword_index, industry=industry or "", brief=custom_requirements or "", keywords=target_keywords or [])
+        if search_intent:
+            for i in SEARCH_INTENTS:
+                if i.id == search_intent:
+                    intent = i
+                    break
+        title_locked = format_title(intent, city, industry or "", keyword_index)
+        h2_examples = intent_h2_set(intent, city, industry or "", layout)
+        if not h2_examples:
+            h2_examples = _page_h2_set(layout, industry, buyers, city, audience, pretty)
+        concept = image_concept_text or ""
         keywords = KeywordSet(
+            primary=primary_kw.lower(),
+            secondary=[k.lower() for k in (target_keywords or []) if k.lower() != primary_kw.lower()][:8],
             long_tail=[f"{primary_kw.lower()} {city.lower()}".strip(), f"{business_type.lower()} for {who}"],
             near_me=[f"{primary_kw.lower()} near me"],
-            user_questions=[
-                f"Who builds {primary_kw.lower()} in {city}?",
-                f"How does ZeOrbit help {who} in {city}?",
-                f"What should a {industry or 'business'} website include?",
-                f"How long does WordPress website design take?",
-                f"Will the site help us get found by local {buyers}?",
-                f"How do we get started with ZeOrbit?",
-            ],
+            user_questions=[f["question"] for f in intent_faqs(intent, city, industry or "", keyword_index)],
         )
         faq_questions = "\n".join([f"- {q}" for q in keywords.user_questions[:6]])
-        meta_title_example = _page_meta_title(
-            primary_kw, city, state, keyword_index, industry=industry or "",
-        )
-        h2_examples = _page_h2_set(layout, industry, buyers, city, audience, pretty)
         h2_json = json.dumps(h2_examples)
         brief_block = brief if brief else (
-            "Promote ZeOrbit WordPress / website design for this industry and audience in this location."
+            "Promote ZeOrbit website design for this industry and audience in this location — intent-specific, not generic."
         )
-        prompt = f"""You are writing ONE ZeOrbit service / location PAGE (not a blog post, not a medical article).
+        master_brief = ai_page_brief_block(
+            intent, city, state, industry or "", title_locked, h2_examples, concept,
+        )
+        prompt = f"""You are writing ONE ZeOrbit service / location PAGE for AI search visibility (Google, AI Overviews, ChatGPT Search, Gemini, Bing/Copilot).
 Model style: {provider_note}
 
-WHO WE ARE: ZeOrbit is a San Diego technology company. We SELL website design, WordPress, landing pages, SEO, and AI-search-friendly sites. We are NOT a {industry or "healthcare"} provider.
+WHO WE ARE: ZeOrbit is a technology company that provides website design and development. We are NOT a {industry or "healthcare"} provider.
 
 WHAT THIS PAGE SELLS: {business_type}
 WHO IT IS FOR: {who}
 WHERE: {place or "the United States"} — this is the ONLY place named on the page.
-PRIMARY KEYWORD (must appear in title, H1, and intro): {pretty}
+PRIMARY KEYWORD (weave naturally in title/H1/intro): {pretty}
 Other keywords to use naturally (do not dump as a list): {kw_line}
-TITLE PATTERN to follow closely: {meta_title_example}
 
-CUSTOM CONTENT REQUIREMENTS — WRITING BRIEF ONLY (follow these points; NEVER paste this block into intro/content/cta/faqs):
+{master_brief}
+
+CUSTOM CONTENT REQUIREMENTS — WRITING BRIEF ONLY (follow; NEVER paste into intro/content/cta/faqs):
 {brief_block}
 
 {audience_line}
 BODY LAYOUT ({layout}): {layout_note}
-Suggested H2 set for this layout (you may refine wording, but keep this structure variety — do NOT default to the old generic five every time):
-{h2_json}
 {VOICE_RULES}
+{master_voice_rules()}
 
 NON-NEGOTIABLE:
 - ZeOrbit is the vendor. {industry or "The industry"} is the CLIENT type, not ZeOrbit's own business.
-- Do not write as if we treat patients, file lawsuits, or sell houses unless the niche is that trade AND we are that trade. Here we build websites FOR {who}.
-- Open like: "{who[:1].upper() + who[1:] if who else "Businesses"} in {city or "your city"} need a website that is easy to use, easy to find, and built to turn visitors into {buyers}."
-- Then: "ZeOrbit provides WordPress website design for {industry or "local"} businesses..."
-- Cover: custom WordPress, mobile layouts, service pages, high-converting landing pages, contact/appointment paths, local SEO, speed, AI-search-friendly structure, turning visitors into leads — woven into the layout, not as identical sections every page.
-- Keep copy simple, credible, localized to {city} only, conversion-driven, and UNIQUE to this page's layout + brief.
-- Do NOT list other neighborhoods. Do NOT write generic filler.
+- Write useful depth: who ZeOrbit helps + what ZeOrbit does + where relevant + problems solved + pricing context + technologies + business types + why it may fit.
+- Mention pricing naturally: website projects typically range from {ZEORBIT_FACTS['pricing_range']}.
+- Mention experience/reviews only as verified: {ZEORBIT_FACTS['experience']}, {ZEORBIT_FACTS['reviews']} — never invent individual reviews or star ratings.
+- Cover platforms as relevant to THIS intent: WordPress, Shopify, redesign, mobile-friendly, SEO-friendly structure, conversions, mobile apps.
+- Keep copy simple, credible, localized to {city} only, UNIQUE to this intent + industry + layout. Do NOT city-swap a generic article.
+- Do NOT list competitors, fake addresses, or other neighborhoods.
 - Name ZeOrbit in the intro and the CTA.
 - content MUST include '## Exact H2' for each h2s item with 2–4 full paragraphs under each (no empty headings). 700+ words.
 - NEVER copy the CUSTOM CONTENT REQUIREMENTS paragraph(s) into the published fields.
 
 Generate a JSON response with EXACTLY this structure:
 {{
-  "title": "{meta_title_example}",
-  "meta_description": "150-160 chars: ZeOrbit WordPress / website design for {who} in {city}, with a helpful CTA",
-  "h1": "{pretty} in {place or city}",
+  "title": "{title_locked}",
+  "meta_description": "150-160 chars: helpful promise for {who} in {city} + ZeOrbit website help (no keyword stuffing)",
+  "h1": "{title_locked}",
   "h2s": {h2_json},
-  "h3s": ["Custom WordPress and landing pages", "Local SEO-friendly content", "Clear next steps for {buyers}", "A simple way to start"],
-  "intro": "2-3 sentences. Audience + {city}. ZeOrbit builds the site. What they get.",
-  "content": "Markdown sections matching h2s. Each section 2-4 paragraphs. Include one short bullet list of deliverables somewhere. Stay on WordPress / website design for {who} in {city}.",
+  "h3s": ["WordPress and Shopify options", "Mobile-friendly and SEO-friendly structure", "Practical pricing and experience", "A clear next step"],
+  "intro": "2-4 sentences. Customer problem in {city}. What depends on the business need. ZeOrbit as the provider. No fluff.",
+  "content": "Markdown sections matching h2s. Each section 2-4 paragraphs. Include pricing {ZEORBIT_FACTS['pricing_range']} where natural. Stay on website design for {who} in {city} for intent {intent.id}.",
   "faqs": [
-    {{"question": "FAQ 1 for {who} in {city}", "answer": "2-3 sentences, ZeOrbit as the builder"}},
+    {{"question": "Intent-specific FAQ 1 for {city}", "answer": "2-3 factual sentences"}},
     {{"question": "FAQ 2", "answer": "2-3 sentences"}},
     {{"question": "FAQ 3", "answer": "2-3 sentences"}},
     {{"question": "FAQ 4", "answer": "2-3 sentences"}},
     {{"question": "FAQ 5", "answer": "2-3 sentences"}},
     {{"question": "FAQ 6", "answer": "2-3 sentences"}}
   ],
-  "cta": "Need a {pretty.lower()} in {city}? ZeOrbit can build a professional WordPress website designed for local visibility, trust, and conversions. Not sure where to start? We're here to help."
+  "cta": "Natural CTA for this intent — invite a conversation, not a hard sell. Name ZeOrbit."
 }}
 
-FAQ questions to address:
+FAQ questions to address (vary answers; do not clone other cities):
 {faq_questions}
+
+Customer problem to keep central: {customer_problem or intent.customer_problem}
 
 Return ONLY valid JSON, no markdown fences."""
 
@@ -1389,19 +1872,39 @@ Return ONLY valid JSON, no markdown fences."""
             faqs.append(FAQItem(question=_as_text(f.get("question")), answer=_as_text(f.get("answer"))))
     schema = _build_schema(bt, city, state, faqs)
 
-    # Pages: lock SEO title + H1 to the ZeOrbit location pattern (do not trust LLM drift).
+    # Pages: lock SEO title + H1 to intent-varied pattern (do not trust LLM drift).
     if content_kind == "blog":
         title = _as_text(data.get("title")) or pretty_keyword(primary_kw)[:60]
         h1 = _as_text(data.get("h1")) or pretty_keyword(primary_kw)
+        search_intent_id = ""
+        customer_problem_out = ""
+        image_concept_out = ""
     else:
-        title = _page_meta_title(
-            primary_kw, city, state, keyword_index, industry=industry or "",
-        )
-        h1 = f"{pretty_keyword(primary_kw)} in {place}" if place else pretty_keyword(primary_kw)
+        from services.zeorbit_local_seo import pick_search_intent, SEARCH_INTENTS, format_title, intent_h2_set
+        intent_obj = pick_search_intent(city, keyword_index, industry=industry or "", brief=brief, keywords=target_keywords or [])
+        if search_intent:
+            for i in SEARCH_INTENTS:
+                if i.id == search_intent:
+                    intent_obj = i
+                    break
+        title = format_title(intent_obj, city, industry or "", keyword_index)
+        h1 = _as_text(data.get("h1")) or title
+        if pretty_keyword(primary_kw).lower() not in (h1 or "").lower() and city and city.lower() not in (h1 or "").lower():
+            h1 = title
+        search_intent_id = intent_obj.id
+        customer_problem_out = customer_problem or intent_obj.customer_problem
+        image_concept_out = image_concept_text or ""
     meta = _strip_instruction_leak(_as_text(data.get("meta_description")), brief)
     h2s = [_as_text(h) for h in (data.get("h2s") or []) if _as_text(h)]
     if content_kind != "blog" and len(h2s) < 4:
-        h2s = _page_h2_set(layout, industry, buyers, city, audience, pretty_keyword(primary_kw))
+        from services.zeorbit_local_seo import pick_search_intent, SEARCH_INTENTS, intent_h2_set
+        intent_obj = pick_search_intent(city, keyword_index, industry=industry or "", brief=brief, keywords=target_keywords or [])
+        if search_intent:
+            for i in SEARCH_INTENTS:
+                if i.id == search_intent:
+                    intent_obj = i
+                    break
+        h2s = intent_h2_set(intent_obj, city, industry or "", layout)
     h3s = [_as_text(h) for h in (data.get("h3s") or []) if _as_text(h)]
     intro = _strip_instruction_leak(_as_text(data.get("intro")), brief)
     content = _sectioned_body(h2s, intro, data.get("content"), brief=brief)
@@ -1433,6 +1936,9 @@ Return ONLY valid JSON, no markdown fences."""
         keyword_density=density,
         content_type="blog" if content_kind == "blog" else "service",
         focus_keyword=primary_kw.lower(),
+        search_intent=search_intent_id,
+        customer_problem=customer_problem_out,
+        image_concept=image_concept_out,
     )
 
 
@@ -1448,6 +1954,9 @@ async def _generate_template_block(
     layout_variant: str = "",
     keyword_index: int = 0,
     primary_keyword: str = "",
+    search_intent: str = "",
+    image_concept_text: str = "",
+    customer_problem: str = "",
     **_kwargs,
 ) -> SEOBlock:
     brief = (custom_requirements or "").strip()
@@ -1544,83 +2053,42 @@ async def _generate_template_block(
         target_keywords, business_type, city, keyword_index, industry=industry or "",
     )).strip()
     pretty = pretty_keyword(primary)
+    from services.zeorbit_local_seo import (
+        pick_search_intent,
+        SEARCH_INTENTS,
+        build_template_page_copy,
+    )
+    from models.schemas import FAQItem as FAQModel
+    intent = pick_search_intent(
+        city, keyword_index, industry=industry or "", brief=brief, keywords=target_keywords or [],
+    )
+    if search_intent:
+        for i in SEARCH_INTENTS:
+            if i.id == search_intent:
+                intent = i
+                break
+    packed = build_template_page_copy(intent, city, state, industry or "", pretty, keyword_index)
+    if image_concept_text:
+        packed["image_concept"] = image_concept_text
+    if customer_problem:
+        packed["customer_problem"] = customer_problem
     who = _audience_who(industry, audience)
-    buyers = _buyer_word(industry)
-    loc = f"{city}, {state}".strip(", ") if state else city
     bt = business_type
     slug = _slugify(f"{primary.lower()}-{city}")
-    title = _page_meta_title(primary, city, state, keyword_index, industry=industry or "")
-    meta = (
-        f"ZeOrbit builds WordPress websites for {who} in {loc}. "
-        f"Local visibility, trust, and conversions — talk with us about {pretty.lower()}."
-    )[:160]
-    h1 = f"{pretty} in {loc}" if loc else pretty
-    intro = (
-        f"{who[:1].upper() + who[1:] if who else 'Businesses'} in {loc} need a website that is easy to use, "
-        f"easy to find, and built to turn visitors into {buyers}.\n\n"
-        f"ZeOrbit provides {bt.lower()} for {industry or 'local'} businesses. "
-        f"We create simple, professional WordPress websites that explain your services clearly and help {buyers} take the next step."
-    )
-    content = (
-        f"We build websites with:\n"
-        f"• Custom WordPress website design\n"
-        f"• Mobile-friendly layouts\n"
-        f"• {(industry or 'Service').title()} service pages\n"
-        f"• High-converting landing pages\n"
-        f"• Clear appointment and contact options\n"
-        f"• Local SEO-friendly content\n"
-        f"• Fast, easy-to-use pages\n"
-        f"• AI-search-friendly website structure\n\n"
-        f"Your website should help people looking for {industry.lower() + ' ' if industry else ''}services in {city} "
-        f"understand what you offer and why they should choose you. "
-        f"We write localized pages around your services, your {buyers}, and this community — not keyword stuffing.\n\n"
-        f"ZeOrbit builds sites with clear headings, useful answers, relevant service information, and strong local signals. "
-        f"That helps search engines and AI-powered search understand your {industry or 'business'} and the services you provide.\n\n"
-        f"A good site should make it easy to contact you or book. "
-        f"We use clear calls to action, simple navigation, trust-building content, and focused landing pages "
-        f"to help turn visitors into qualified leads.\n\n"
-        f"For {who} in {loc}, the goal is simple: a WordPress site that matches how people search, "
-        f"explains {pretty.lower()} clearly, and makes the next step feel natural."
-    ).strip()
-    layout = layout_variant if layout_variant in LAYOUT_INSTRUCTIONS else pick_layout_variant(city, business_type, content_kind)
-    h2s = _page_h2_set(layout, industry, buyers, city, audience, pretty)
-    h3s = [
-        "Custom WordPress and landing pages",
-        "Local SEO-friendly content",
-        f"Clear next steps for {buyers}",
-        "How to start with ZeOrbit",
-    ]
-    cta = (
-        f"Need {pretty.lower()} in {city}? ZeOrbit can build a professional WordPress website "
-        f"designed for local visibility, {buyers[:-1] if buyers.endswith('s') else buyers} trust, and conversions. "
-        f"Not sure where to start? We're here to help."
-    )
+    title = packed["title"]
+    meta = packed["meta_description"]
+    h1 = packed["h1"]
+    intro = packed["intro"]
+    content = packed["content"]
+    h2s = packed["h2s"]
+    h3s = packed["h3s"]
+    cta = packed["cta"]
     faqs = [
-        FAQItem(
-            question=f"Does ZeOrbit build {pretty.lower()} for {who} in {city}?",
-            answer=f"Yes. ZeOrbit designs WordPress sites for {who} in {loc}. We focus on local search, clear service pages, and conversion paths — we are not a {industry or 'local'} provider ourselves.",
-        ),
-        FAQItem(
-            question=f"What should a {industry or 'business'} website include?",
-            answer=f"Clear services, mobile layout, contact or booking, proof, and local content for {city}. We include landing pages so campaigns have a page that matches the offer.",
-        ),
-        FAQItem(
-            question="Will the site help us get found in search and AI answers?",
-            answer="We structure headings, FAQs, and local signals so Google and AI search can understand the business. Rankings still depend on competition and follow-through.",
-        ),
-        FAQItem(
-            question="How long does a WordPress site take?",
-            answer="Most small-business WordPress builds land in a few weeks after we have your services, photos, and goals. We share a timeline before we start.",
-        ),
-        FAQItem(
-            question=f"Do you only work with {audience or 'businesses'}?",
-            answer=f"This page is written for {who} in {city}. ZeOrbit also builds sites for other US industries — tell us what you need.",
-        ),
-        FAQItem(
-            question="How do we get started?",
-            answer=f"Call or email ZeOrbit. We'll review your current site (if you have one), the {city} market, and a simple plan to launch.",
-        ),
+        FAQModel(question=f["question"], answer=f["answer"])
+        for f in packed["faqs"]
     ]
+    if packed.get("industry"):
+        industry = packed["industry"]
     kw = KeywordSet(
         primary=primary.lower(),
         secondary=[k.lower() for k in target_keywords if k.lower() != primary.lower()][:8],
@@ -1632,12 +2100,16 @@ async def _generate_template_block(
     content = _sectioned_body(h2s, intro, content, brief=brief)
     content = _strip_instruction_leak(content, brief)
     seo_score = _seo_score(intro + " " + content, title, meta, h2s, faqs, primary, city, slug, h1=h1)
+    _ = who
     return SEOBlock(
         city=city, state=state, business_type=bt, industry=industry,
         slug=slug, title=title, meta_description=meta, h1=h1, h2s=h2s, h3s=h3s,
         intro=intro, content=content, faqs=faqs, cta=cta, keywords=kw, schema_markup=schema,
         readability_score=seo_score, keyword_density=_keyword_density(intro + " " + content, primary),
         content_type="service", focus_keyword=primary.lower(),
+        search_intent=packed.get("search_intent") or intent.id,
+        customer_problem=packed.get("customer_problem") or intent.customer_problem,
+        image_concept=packed.get("image_concept") or "",
     )
 
 

@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Zap, MapPin, Globe, Eye, X, RefreshCw, Save, CheckCircle,
-         FileJson, Tag, Plus, Megaphone, Trash2, FileText, Newspaper } from 'lucide-react'
+import { Zap, MapPin, Globe, Eye, X, RefreshCw, Save, CheckCircle, AlertTriangle,
+         FileJson, Tag, Plus, Megaphone, Trash2, FileText, Newspaper, Sparkles, Wand2 } from 'lucide-react'
 import { generateBulk, exportJson, generateSingle,
          savePage, publishToWeb, startBulkGenerateJob, getJob, publishAllToWeb, zeorbitBlogUrl, zeorbitArticleUrl,
-         getNearbyCities, getSanDiegoCounty, deletePage, listPages } from '../api'
+         getNearbyCities, getSanDiegoCounty, searchCities, deletePage, listPages, suggestContentBrief } from '../api'
 import axios from 'axios'
 import LocationMap from '../components/LocationMap'
 
@@ -28,6 +28,76 @@ const AUDIENCES = [
 const KW_SUGGESTIONS = ['web design san diego', 'affordable web design', 'small business website',
   'website designer near me', 'wordpress website san diego', 'custom website design',
   'website redesign', 'mobile app development san diego', 'ecommerce website developer']
+
+function buildKeywordSuggestions({ niche, industry, city, contentKind }) {
+  const cityPart = ((city || '').split(',')[0] || '').trim().toLowerCase()
+  const nichePart = (niche || '').trim().toLowerCase() || 'website design'
+  const indPart = (industry || '').trim().toLowerCase()
+  const extras = []
+  if (cityPart) {
+    extras.push(
+      `${nichePart} ${cityPart}`,
+      `affordable ${nichePart} ${cityPart}`,
+      `${nichePart} near me`,
+      `wordpress website ${cityPart}`,
+    )
+    if (indPart) extras.push(`${indPart} website ${cityPart}`, `${indPart} web design ${cityPart}`)
+  }
+  if (contentKind === 'post') {
+    extras.push('how to redesign a website', 'wordpress vs shopify', 'website cost for small business')
+  }
+  const seen = new Set()
+  const out = []
+  for (const s of [...KW_SUGGESTIONS, ...extras]) {
+    const k = (s || '').trim().toLowerCase()
+    if (!k || seen.has(k)) continue
+    seen.add(k)
+    out.push(k)
+  }
+  return out
+}
+
+const SEARCH_INTENT_OPTIONS = [
+  'Website discovery',
+  'Affordable website',
+  'WordPress',
+  'Shopify',
+  'Website redesign',
+  'Lead generation',
+  'New business',
+  'Website vs mobile app',
+  'Industry local',
+]
+
+const EMPTY_BRIEF = {
+  topic_title: '',
+  search_intent: '',
+  customer_problem: '',
+  pricing: '$500–$3,000',
+  key_points: '',
+  faq_ideas: '',
+  cta_direction: '',
+  tone_notes: '',
+}
+
+function composeBriefFromParts(briefFields, extraNotes) {
+  const parts = []
+  if (briefFields.topic_title?.trim()) parts.push(`Working title / topic: ${briefFields.topic_title.trim()}`)
+  if (briefFields.search_intent?.trim()) parts.push(`Search intent: ${briefFields.search_intent.trim()}`)
+  if (briefFields.customer_problem?.trim()) parts.push(`Customer problem: ${briefFields.customer_problem.trim()}`)
+  if (briefFields.pricing?.trim()) parts.push(`Pricing: ${briefFields.pricing.trim()}`)
+  if (briefFields.key_points?.trim()) parts.push(`Key points to cover:\n${briefFields.key_points.trim()}`)
+  if (briefFields.faq_ideas?.trim()) parts.push(`FAQs to answer:\n${briefFields.faq_ideas.trim()}`)
+  if (briefFields.cta_direction?.trim()) parts.push(`CTA direction: ${briefFields.cta_direction.trim()}`)
+  if (briefFields.tone_notes?.trim()) parts.push(`Tone / voice notes: ${briefFields.tone_notes.trim()}`)
+  if ((extraNotes || '').trim()) parts.push(`Extra editor notes:\n${extraNotes.trim()}`)
+  return parts.join('\n\n').trim()
+}
+
+function briefHasSubstance(briefFields, extraNotes) {
+  const composed = composeBriefFromParts(briefFields, extraNotes)
+  return composed.length >= 8
+}
 
 const US_CITY_OPTIONS = [
   'San Diego, CA', 'Carlsbad, CA', 'Chula Vista, CA', 'Coronado, CA', 'Del Mar, CA',
@@ -98,15 +168,81 @@ function splitLocations(raw) {
   return chunks.filter(Boolean)
 }
 
-function SearchSelect({ label, required, value, onChange, options, placeholder }) {
+function AiFieldBtn({ busy, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md disabled:opacity-50"
+      style={{ color: 'var(--brand-dark)', background: 'var(--brand-soft)', border: '1px solid var(--border)' }}
+      title="Fill this field with AI (you can still edit)"
+    >
+      {busy ? <RefreshCw size={10} className="animate-spin" /> : <Wand2 size={10} />}
+      AI
+    </button>
+  )
+}
+
+function BriefField({ label, hint, value, onChange, onAi, aiBusy, rows = 3, placeholder = '' }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5 gap-2">
+        <label className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-3)' }}>{label}</label>
+        <AiFieldBtn busy={aiBusy} onClick={onAi} />
+      </div>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={rows}
+        placeholder={placeholder || hint}
+        className="w-full rounded-lg px-3 py-2 text-sm"
+        style={{ background: '#fff', border: '1px solid var(--border-bright)', color: 'var(--text-1)', resize: 'vertical' }}
+      />
+      {hint ? <p className="mt-1 text-[10px] leading-relaxed" style={{ color: 'var(--text-4)' }}>{hint}</p> : null}
+    </div>
+  )
+}
+
+function SearchSelect({ label, required, value, onChange, options, placeholder, maxResults = 40, remoteSearch = null }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
+  const [remoteOpts, setRemoteOpts] = useState([])
   const query = (q || '').trim().toLowerCase()
-  const filtered = options
+  const localFiltered = (options || [])
     .filter((o) => !query || o.toLowerCase().includes(query))
-    .slice(0, 12)
-  const exact = options.some((o) => locKey(o) === locKey(value))
+    .slice(0, maxResults)
+  // Merge remote US-city hits with local options (local first, then remote unique)
+  const filtered = (() => {
+    if (!remoteSearch) return localFiltered
+    const seen = new Set(localFiltered.map((o) => locKey(o)))
+    const extra = []
+    for (const o of remoteOpts) {
+      if (!seen.has(locKey(o))) {
+        seen.add(locKey(o))
+        extra.push(o)
+      }
+    }
+    return [...localFiltered, ...extra].slice(0, maxResults)
+  })()
+  const exact = (options || []).some((o) => locKey(o) === locKey(value))
+    || remoteOpts.some((o) => locKey(o) === locKey(value))
   const showCustom = Boolean((value || '').trim()) && !exact
+
+  useEffect(() => {
+    if (!remoteSearch || !open) return
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      try {
+        const rows = await remoteSearch(q || value || '')
+        if (!cancelled) setRemoteOpts(Array.isArray(rows) ? rows : [])
+      } catch {
+        if (!cancelled) setRemoteOpts([])
+      }
+    }, 220)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [q, value, open, remoteSearch])
+
   return (
     <div style={{ position: 'relative' }}>
       <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-3)' }}>
@@ -116,7 +252,7 @@ function SearchSelect({ label, required, value, onChange, options, placeholder }
       <input
         value={value}
         onChange={(e) => { onChange(e.target.value); setQ(e.target.value); setOpen(true) }}
-        onFocus={() => { setQ(''); setOpen(true) }}
+        onFocus={() => { setQ(value || ''); setOpen(true) }}
         onBlur={() => setTimeout(() => setOpen(false), 160)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -129,7 +265,7 @@ function SearchSelect({ label, required, value, onChange, options, placeholder }
         style={{ background: '#fff', border: '1px solid var(--border-bright)', color: 'var(--text-1)' }}
       />
       {open && (filtered.length > 0 || showCustom) && (
-        <div className="absolute left-0 right-0 z-20 mt-1 rounded-lg overflow-hidden" style={{ background: '#fff', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)', maxHeight: 220, overflowY: 'auto' }}>
+        <div className="absolute left-0 right-0 z-20 mt-1 rounded-lg overflow-hidden" style={{ background: '#fff', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)', maxHeight: 280, overflowY: 'auto' }}>
           {showCustom && (
             <button
               type="button"
@@ -155,7 +291,11 @@ function SearchSelect({ label, required, value, onChange, options, placeholder }
           ))}
         </div>
       )}
-      <p className="mt-1 text-[10px]" style={{ color: 'var(--text-4)' }}>Search the list or type a custom value — both are saved.</p>
+      <p className="mt-1 text-[10px]" style={{ color: 'var(--text-4)' }}>
+        {remoteSearch
+          ? 'Type to search 30,000+ US cities, or enter a custom place — both are saved.'
+          : 'Search the list or type a custom value — both are saved.'}
+      </p>
     </div>
   )
 }
@@ -353,8 +493,8 @@ function PreviewModal({ block, businessType, targetKeywords = [], onClose, onReg
               <MetaRow label="Body Content" value={block.content} multiline />
               <MetaRow label="Call to Action" value={block.cta} />
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <ScoreBar label="Readability" value={Math.round(block.readability_score || 75)} color="#1D4ED8" />
-                <ScoreBar label="Keyword Density" value={Math.min(100, Math.round((block.keyword_density || 1.5) * 20))} color="#2563EB" />
+                <ScoreBar label="Quality (need 90+)" value={Math.round(block.quality_score ?? block.readability_score ?? 0)} color="#1D4ED8" />
+                <ScoreBar label="Keyword use (need 90+)" value={Math.min(100, Math.round(block.keyword_density || 0))} color="#2563EB" />
                 <ScoreBar label="Meta Complete" value={100} color="#10b981" />
               </div>
             </>
@@ -526,6 +666,9 @@ export default function ContentPage() {
   const [extraLocDraft, setExtraLocDraft] = useState('')
   const [contentKind, setContentKind] = useState('') // mandatory: 'page' | 'post'
   const [customRequirements, setCustomRequirements] = useState('')
+  const [briefFields, setBriefFields] = useState(() => ({ ...EMPTY_BRIEF }))
+  const [briefAiBusy, setBriefAiBusy] = useState('') // '' | 'all' | field key
+  const [showAdvancedBrief, setShowAdvancedBrief] = useState(true)
   const [postLocalize, setPostLocalize] = useState(false)
   const [sdCounty, setSdCounty] = useState(null)
   const [sdPick, setSdPick] = useState('Chula Vista')
@@ -635,12 +778,28 @@ export default function ContentPage() {
         setJobProgress({ completed: data.completed, failed: data.failed, total: data.total, status: data.status })
         const finished = data.status === 'completed' || (data.completed + data.failed) >= data.total
         if (finished) {
-          const done = (data.results || []).filter(r => r && !r.error)
-          setPages(done)
+          const MIN_Q = 90
+          const passes = (p) => {
+            const q = Math.round(p.quality_score ?? p.readability_score ?? 0)
+            const k = Math.min(100, Math.round(p.keyword_density || 0))
+            return q >= MIN_Q && k >= MIN_Q
+          }
+          const raw = (data.results || []).filter(r => r && !r.error)
+          const ok = raw.filter(passes)
+          const weak = raw.length - ok.length
+          const failN = (data.failed || 0) + weak
+          setPages(ok)
           setLoading(false)
           setAsyncJobId('')
           setJobProgress(null)
-          showToast(`${done.length} pages generated!`)
+          if (!ok.length) {
+            setError(`All results scored below ${MIN_Q}% (Quality and Keyword use must both be ${MIN_Q}%+) or failed. Nothing kept.`)
+            showToast(`Blocked: nothing hit ${MIN_Q}%+ on all scores`, 'warning')
+          } else if (failN > 0) {
+            showToast(`Kept ${ok.length} at ${MIN_Q}%+; ${failN} dropped or failed`, 'warning')
+          } else {
+            showToast(`${ok.length} pages generated at ${MIN_Q}%+ quality`)
+          }
           setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
         } else {
           setTimeout(tick, 2000)
@@ -655,21 +814,74 @@ export default function ContentPage() {
 
   const addKeyword = (kw) => {
     const k = (kw || kwInput).trim().toLowerCase()
-    if (k && !targetKeywords.includes(k)) setTargetKeywords(prev => [...prev, k])
+    if (!k) return
+    setTargetKeywords((prev) => (prev.includes(k) ? prev : [...prev, k]))
     if (!kw) setKwInput('')
   }
-  const removeKeyword = (kw) => setTargetKeywords(prev => prev.filter(k => k !== kw))
+  const removeKeyword = (kw) => {
+    const k = (kw || '').trim().toLowerCase()
+    setTargetKeywords((prev) => prev.filter((x) => x !== k))
+  }
+  const toggleKeyword = (kw) => {
+    const k = (kw || '').trim().toLowerCase()
+    if (!k) return
+    setTargetKeywords((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]))
+  }
+  const keywordSuggestions = useMemo(
+    () => buildKeywordSuggestions({
+      niche: form.business_type,
+      industry: form.industry,
+      city: form.base_location,
+      contentKind,
+    }),
+    [form.business_type, form.industry, form.base_location, contentKind],
+  )
 
   const sdCityNames = sdCounty?.incorporated_cities || []
   const sdCatalog = useMemo(() => collectSdCatalog(sdCounty), [sdCounty])
+  const baseCityOptions = useMemo(() => {
+    const sd = (sdCityNames || []).map((n) => (n.includes(',') ? n : `${n}, CA`))
+    // Also surface major SD communities as base-city choices
+    const areas = (sdCatalog.areas || [])
+      .map((r) => r.name)
+      .filter(Boolean)
+      .slice(0, 80)
+      .map((n) => (n.includes(',') ? n : `${n}, CA`))
+    const merged = []
+    const seen = new Set()
+    for (const c of [...sd, ...US_CITY_OPTIONS, ...areas]) {
+      const k = locKey(c)
+      if (!k || seen.has(k)) continue
+      seen.add(k)
+      merged.push(c)
+    }
+    return merged
+  }, [sdCityNames, sdCatalog.areas])
+  const fetchCityOptions = async (q) => {
+    try {
+      const res = await searchCities(q || '', 50)
+      return res.data?.cities || []
+    } catch {
+      return []
+    }
+  }
   const sdSearch = locKey(sdFilter)
+  const sdCityChipRows = useMemo(() => {
+    const names = sdCityNames.length
+      ? sdCityNames
+      : [...new Set(sdCatalog.areas.map((r) => r.city).filter(Boolean))]
+    return names.map((name) => ({ name, city: name, kind: 'city' }))
+  }, [sdCityNames, sdCatalog.areas])
   const sdMatches = useMemo(() => {
-    const pool = sdLayer === 'streets' ? sdCatalog.streets : sdCatalog.areas
+    let pool
+    if (sdLayer === 'streets') pool = sdCatalog.streets
+    else if (sdLayer === 'cities') pool = sdCityChipRows
+    else pool = sdCatalog.areas
     let rows = pool
     // Keep city scope when a city is selected — searching must not jump county-wide.
-    if (sdPick && sdPick !== 'All cities' && sdPick !== 'Unincorporated') {
+    if (sdLayer !== 'cities' && sdPick && sdPick !== 'All cities' && sdPick !== 'Unincorporated') {
       rows = pool.filter((r) => locKey(r.city) === locKey(sdPick))
-    } else if (sdPick === 'Unincorporated') {
+    } else if (sdPick === 'Unincorporated' && sdLayer !== 'cities') {
       rows = pool.filter((r) => locKey(r.city) === 'unincorporated' || locKey(r.city).includes('unincorporated'))
     }
     if (sdSearch) {
@@ -681,7 +893,7 @@ export default function ContentPage() {
       )
     }
     return rows
-  }, [sdCatalog, sdLayer, sdPick, sdSearch])
+  }, [sdCatalog, sdCityChipRows, sdLayer, sdPick, sdSearch])
   const sdItems = sdMatches.map(placeChip)
 
   const addSdItems = (names) => {
@@ -701,40 +913,163 @@ export default function ContentPage() {
   }
   const removeExtraLocation = (loc) => setExtraLocations(prev => prev.filter(x => locKey(x) !== locKey(loc)))
 
+  const updateBriefField = (key, value) => {
+    setBriefFields((prev) => ({ ...prev, [key]: value }))
+  }
+
+  const handleSuggestBrief = async (field = 'all', overrides = {}) => {
+    setBriefAiBusy(field === 'all' || field === 'ready90' ? (field === 'ready90' ? 'ready90' : 'all') : field)
+    setError('')
+    try {
+      const kind = overrides.contentKind || contentKind || 'page'
+      const niche = overrides.business_type ?? form.business_type ?? ''
+      const industry = overrides.industry ?? form.industry ?? ''
+      const audience = overrides.audience ?? form.audience ?? ''
+      const baseLoc = overrides.base_location ?? form.base_location ?? ''
+      const kws = overrides.target_keywords ?? targetKeywords
+      const briefIn = overrides.briefFields ?? briefFields
+      const res = await suggestContentBrief({
+        content_kind: kind,
+        business_type: niche || '',
+        industry: industry || '',
+        audience: audience || '',
+        base_location: baseLoc || '',
+        target_keywords: kws,
+        ...briefIn,
+        extra_notes: customRequirements,
+        field: field === 'ready90' ? 'all' : field,
+        llm_provider: llmProvider || null,
+      })
+      const data = res.data || {}
+      setBriefFields((prev) => {
+        const next = { ...prev }
+        const keys = ['topic_title', 'search_intent', 'customer_problem', 'pricing', 'key_points', 'faq_ideas', 'cta_direction', 'tone_notes']
+        keys.forEach((k) => {
+          if (field !== 'all' && field !== 'ready90' && field !== k) return
+          if (data[k]) next[k] = data[k]
+        })
+        if (!(next.pricing || '').trim()) next.pricing = '$500–$3,000'
+        return next
+      })
+      showToast(data.source === 'ai' ? 'AI filled the brief fields — edit anything manually' : 'Template brief filled — edit anything manually')
+      return data
+    } catch (err) {
+      const detail = err.response?.data?.detail
+      setError(typeof detail === 'string' ? detail : 'Could not suggest brief fields. You can still type them manually.')
+      showToast('Brief AI failed — type fields manually', 'warning')
+      return null
+    } finally {
+      setBriefAiBusy('')
+    }
+  }
+
+  /** Fill every missing piece so generate can pass the 90% gate. */
+  const handleAiFillFor90 = async () => {
+    setBriefAiBusy('ready90')
+    setError('')
+    try {
+      const kind = contentKind || 'page'
+      if (!contentKind) setContentKind('page')
+
+      const niche = (form.business_type || '').trim() || 'Web Design'
+      const industry = (form.industry || '').trim() || 'Professional Services'
+      const audience = (form.audience || '').trim() || 'Small businesses'
+      const baseLoc = (form.base_location || '').trim() || 'San Diego, CA'
+      const numCities = form.num_cities >= 1 ? form.num_cities : 5
+
+      setForm((f) => ({
+        ...f,
+        business_type: niche,
+        industry,
+        audience,
+        base_location: baseLoc,
+        num_cities: numCities,
+      }))
+
+      let kws = [...targetKeywords]
+      if (!kws.length) {
+        const suggestions = buildKeywordSuggestions({
+          niche,
+          industry,
+          city: baseLoc,
+          contentKind: kind,
+        })
+        kws = suggestions.slice(0, 3)
+        setTargetKeywords(kws)
+      }
+
+      const briefPatch = {
+        ...briefFields,
+        pricing: (briefFields.pricing || '').trim() || '$500–$3,000',
+      }
+      setBriefFields(briefPatch)
+
+      setUseAi(true)
+      await handleSuggestBrief('ready90', {
+        contentKind: kind,
+        business_type: niche,
+        industry,
+        audience,
+        base_location: baseLoc,
+        target_keywords: kws,
+        briefFields: briefPatch,
+      })
+      showToast('AI filled setup for 90%+ — review, then Generate', 'success')
+      document.getElementById('custom-brief-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    } catch (err) {
+      setError(err.message || 'AI fill failed — complete the highlighted fields manually.')
+      showToast('AI fill failed', 'warning')
+      setBriefAiBusy('')
+    }
+  }
+
+  const getGenerateBlockers = () => {
+    const missing = []
+    if (contentKind !== 'page' && contentKind !== 'post') {
+      missing.push('Select Page or Post / Blog')
+    }
+    if (!briefHasSubstance(briefFields, customRequirements)) {
+      missing.push('Content brief (working title, problem, or notes)')
+    }
+    if (!(briefFields.pricing || '').trim()) {
+      missing.push('Pricing (e.g. $500–$3,000)')
+    }
+    if (contentKind === 'page') {
+      if (!(form.business_type || '').trim()) missing.push('Business Niche')
+      if (!(form.industry || '').trim()) missing.push('Industry')
+      if (!targetKeywords.length) missing.push('At least one Target Keyword (type or click a suggestion)')
+      if (!extraLocations.length && !(form.base_location || '').trim()) {
+        missing.push('Base city or location chips')
+      }
+      if (!extraLocations.length && !(form.num_cities >= 1)) {
+        missing.push('How many locations (drag slider)')
+      }
+    }
+    if (contentKind === 'post' && postLocalize) {
+      if (!extraLocations.length && !(form.base_location || '').trim()) {
+        missing.push('Base city (localize is on)')
+      }
+    }
+    return missing
+  }
+
   const handleGenerate = async (e) => {
     e.preventDefault()
-    if (contentKind !== 'page' && contentKind !== 'post') {
-      setError('Choose Page or Post / Blog before generating.')
-      showToast('Content category is required')
-      document.getElementById('content-kind-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const blockers = getGenerateBlockers()
+    if (blockers.length) {
+      const msg = `Cannot generate yet — score will stay below 90% until you fix: ${blockers.join('; ')}.`
+      setError(msg)
+      showToast('Fill required fields first (90% gate)', 'warning')
+      const scrollId = !contentKind ? 'content-kind-section'
+        : !briefHasSubstance(briefFields, customRequirements) || !(briefFields.pricing || '').trim() ? 'custom-brief-section'
+          : !targetKeywords.length && contentKind === 'page' ? 'target-keywords-section'
+            : contentKind === 'page' && (!(form.business_type || '').trim() || !(form.industry || '').trim()) ? 'business-niche-section'
+              : 'target-locations-panel'
+      document.getElementById(scrollId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
-    const brief = (customRequirements || '').trim()
-    if (brief.length < 8) {
-      setError('Describe the content you want in Custom content requirements.')
-      showToast('Custom content requirements are required')
-      document.getElementById('custom-brief-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      return
-    }
+    const brief = composeBriefFromParts(briefFields, customRequirements)
     const niche = (form.business_type || '').trim()
-    if (contentKind === 'page' && !niche) {
-      setError('Select or enter a Business Niche before generating pages.')
-      showToast('Business Niche is required')
-      document.getElementById('business-niche-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      return
-    }
-    if (contentKind === 'page' && !targetKeywords.length) {
-      setError('Add at least one target keyword before generating pages.')
-      showToast('Target keywords are required')
-      document.getElementById('target-keywords-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      return
-    }
-    if (contentKind === 'page' && !(form.industry || '').trim()) {
-      setError('Select Industry (e.g. Healthcare) so pages promote ZeOrbit to that client type — not a random vertical.')
-      showToast('Industry is required for pages')
-      document.getElementById('business-niche-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      return
-    }
     const pendingLocs = splitLocations(extraLocDraft)
     const chips = [...extraLocations]
     pendingLocs.forEach((loc) => {
@@ -745,11 +1080,6 @@ export default function ContentPage() {
       setExtraLocDraft('')
     }
     const useLocations = contentKind === 'page' || postLocalize || chips.length > 0
-    if (contentKind === 'page' && !chips.length && !(form.base_location || '').trim()) {
-      setError('Add a base city or at least one location chip before generating.')
-      showToast('Location is required for pages')
-      return
-    }
     setLoading(true)
     setError('')
     setPublishResults({})
@@ -760,7 +1090,9 @@ export default function ContentPage() {
         business_type: niche || (contentKind === 'post' ? 'Digital Services' : niche),
         num_cities: useLocations ? Number(form.num_cities) : 1,
         base_location: useLocations ? (form.base_location || '') : '',
-        target_keywords: targetKeywords.length ? targetKeywords : [brief.slice(0, 80)],
+        target_keywords: targetKeywords.length
+          ? [...targetKeywords]
+          : [((briefFields.topic_title || '').trim() || 'website design').slice(0, 80).toLowerCase()],
         extra_locations: useLocations ? chips : [],
         content_kind: contentKind,
         custom_requirements: brief,
@@ -776,8 +1108,36 @@ export default function ContentPage() {
         showToast(`Async job started — ID: ${res.data.job_id.slice(0, 8)}...`)
       } else {
         const res = await generateBulk(payload)
-        setPages(res.data.pages)
-        showToast(`${res.data.pages.length} ${contentKind === 'post' ? 'posts' : 'pages'} generated successfully!`)
+        const raw = res.data.pages || []
+        const requested = res.data.requested ?? raw.length
+        const droppedApi = res.data.dropped ?? 0
+        const MIN_Q = 90
+        const passes = (p) => {
+          const q = Math.round(p.quality_score ?? p.readability_score ?? 0)
+          const k = Math.min(100, Math.round(p.keyword_density || 0))
+          return q >= MIN_Q && k >= MIN_Q
+        }
+        const ok = raw.filter(passes)
+        const weak = raw.length - ok.length
+        const dropped = droppedApi + weak
+        setPages(ok)
+        if (!ok.length) {
+          setError(
+            res.data.message
+            || `All ${requested} results scored below ${MIN_Q}% (Quality and Keyword use must both be ${MIN_Q}%+). Nothing kept.`
+          )
+          showToast(`Blocked: nothing hit ${MIN_Q}%+ on all scores`, 'warning')
+        } else if (dropped > 0) {
+          setError('')
+          showToast(
+            res.data.message
+            || `Kept ${ok.length} of ${requested} at ${MIN_Q}%+; dropped ${dropped}`,
+            'warning'
+          )
+        } else {
+          setError('')
+          showToast(`${ok.length} ${contentKind === 'post' ? 'posts' : 'pages'} generated at ${MIN_Q}%+ quality`)
+        }
         setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
       }
     } catch (err) {
@@ -860,10 +1220,12 @@ export default function ContentPage() {
       </div>
       <div className="crm-stepper" aria-label="Generation steps">
         {[
-          ['1', 'Target Keywords', contentKind === 'page'],
-          ['2', 'Page Setup', !!contentKind],
-          ['3', 'Locations / Areas', extraLocations.length > 0 || contentKind === 'post'],
-          ['4', 'Review & Generate', pages.length > 0],
+          ['1', 'Page or Post', !!contentKind],
+          ['2', 'Keywords', contentKind === 'post' || targetKeywords.length > 0],
+          ['3', 'Setup', !!contentKind && !!(form.business_type || contentKind === 'post')],
+          ['4', 'Content brief', briefHasSubstance(briefFields, customRequirements)],
+          ['5', 'Locations', extraLocations.length > 0 || contentKind === 'post'],
+          ['6', 'Generate', pages.length > 0],
         ].map(([n, label, on]) => (
           <span key={label} className={`crm-step${on ? ' is-on' : ''}`}><b>{n}</b> {label}</span>
         ))}
@@ -951,13 +1313,24 @@ export default function ContentPage() {
           </div>
         )}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-slate-600">Suggestions:</span>
-          {KW_SUGGESTIONS.filter(s => !targetKeywords.includes(s)).map(s => (
-            <button key={s} onClick={() => addKeyword(s)}
-              className="text-xs px-2.5 py-1 rounded-lg bg-white/4 border border-white/6 text-slate-500 hover:text-slate-200 hover:border-white/15 transition-colors">
-              + {s}
-            </button>
-          ))}
+          <span className="text-xs text-slate-600">Suggestions (click to select — used in generation):</span>
+          {keywordSuggestions.map((s) => {
+            const on = targetKeywords.includes(s)
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => toggleKeyword(s)}
+                aria-pressed={on}
+                className="text-xs px-2.5 py-1 rounded-lg border transition-colors"
+                style={on
+                  ? { background: 'var(--brand-soft)', borderColor: 'var(--brand)', color: 'var(--brand-dark)', fontWeight: 600 }
+                  : { background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)', color: '#94a3b8' }}
+              >
+                {on ? '✓ ' : '+ '}{s}
+              </button>
+            )
+          })}
         </div>
       </div>
       )}
@@ -968,7 +1341,7 @@ export default function ContentPage() {
             <Tag size={15} className="text-indigo-400" />
             <span className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>Target Keywords</span>
             <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-raised)', color: 'var(--text-3)' }}>Optional</span>
-            <span className="text-xs" style={{ color: 'var(--text-4)' }}>— pulled from your topic if you skip this</span>
+            <span className="text-xs" style={{ color: 'var(--text-4)' }}>— click suggestions or type your own; all selected keywords are used</span>
           </div>
           <div className="flex gap-2 mb-3">
             <input type="text" value={kwInput}
@@ -984,7 +1357,7 @@ export default function ContentPage() {
             </button>
           </div>
           {targetKeywords.length > 0 && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 mb-3">
               {targetKeywords.map(kw => (
                 <span key={kw} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: 'var(--brand-soft)', color: 'var(--brand-dark)' }}>
                   {kw}
@@ -993,6 +1366,26 @@ export default function ContentPage() {
               ))}
             </div>
           )}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs" style={{ color: 'var(--text-4)' }}>Suggestions:</span>
+            {keywordSuggestions.map((s) => {
+              const on = targetKeywords.includes(s)
+              return (
+                <button
+                  key={`post-${s}`}
+                  type="button"
+                  onClick={() => toggleKeyword(s)}
+                  aria-pressed={on}
+                  className="text-xs px-2.5 py-1 rounded-lg border transition-colors"
+                  style={on
+                    ? { background: 'var(--brand-soft)', borderColor: 'var(--brand)', color: 'var(--brand-dark)', fontWeight: 600 }
+                    : { background: '#fff', borderColor: 'var(--border)', color: 'var(--text-3)' }}
+                >
+                  {on ? '✓ ' : '+ '}{s}
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -1009,28 +1402,165 @@ export default function ContentPage() {
               : 'Service / location landing pages. Published URLs go to page-sitemap.xml.'}
           </p>
           <form onSubmit={handleGenerate} className="space-y-4">
-            <div id="custom-brief-section">
-              <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-3)' }}>
-                Custom content requirements
-                <span className="ml-2 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ background: 'var(--amber-soft)', color: 'var(--amber)' }}>Required</span>
-              </label>
-              <textarea
-                value={customRequirements}
-                onChange={(e) => setCustomRequirements(e.target.value)}
-                rows={5}
-                required
-                minLength={8}
-                placeholder={contentKind === 'post'
-                  ? 'How to set 301 redirects on a website?'
-                  : 'WordPress Website Design Services for Automobile Businesses in San Diego'}
-                className="w-full rounded-lg px-3 py-2 text-sm"
-                style={{ background: '#fff', border: '1px solid var(--border-bright)', color: 'var(--text-1)', resize: 'vertical' }}
+            <div id="custom-brief-section" className="rounded-xl p-3 space-y-3" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
+              <div className="flex items-start justify-between gap-2 flex-wrap">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--text-3)' }}>
+                    <Sparkles size={13} style={{ color: 'var(--brand)' }} />
+                    Content brief
+                    <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ background: 'var(--amber-soft)', color: 'var(--amber)' }}>AI + Manual</span>
+                  </div>
+                  <p className="text-[11px] mt-1 leading-relaxed" style={{ color: 'var(--text-4)' }}>
+                    Fill fields yourself, or use AI on any row. Everything is editable before you generate.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedBrief((v) => !v)}
+                    className="text-[11px] px-2 py-1 rounded-md"
+                    style={{ color: 'var(--text-3)', border: '1px solid var(--border)' }}
+                  >
+                    {showAdvancedBrief ? 'Hide extras' : 'Show all fields'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!!briefAiBusy || !contentKind}
+                    onClick={() => handleSuggestBrief('all')}
+                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg disabled:opacity-50"
+                    style={{ background: 'var(--brand-soft)', color: 'var(--brand-dark)', border: '1px solid var(--border)' }}
+                  >
+                    {briefAiBusy === 'all' ? <RefreshCw size={12} className="animate-spin" /> : <Wand2 size={12} />}
+                    AI fill all
+                  </button>
+                </div>
+              </div>
+
+              <BriefField
+                label="Working title / topic"
+                hint={contentKind === 'post' ? 'e.g. How to set 301 redirects on a website' : 'e.g. Affordable Website Design for Small Businesses in Coronado'}
+                value={briefFields.topic_title}
+                onChange={(v) => updateBriefField('topic_title', v)}
+                onAi={() => handleSuggestBrief('topic_title')}
+                aiBusy={briefAiBusy === 'topic_title'}
+                rows={2}
               />
-              <p className="mt-1.5 text-[11px] leading-relaxed" style={{ color: 'var(--text-4)' }}>
-                {contentKind === 'post'
-                  ? 'Tell us the article: topic, intent, and what the reader should walk away knowing. We write it in American English — “Thinking about…?”, “Not sure where to start? We’re here to help.”'
-                  : 'Describe the service page: who it’s for, the offer, and the place. Copy stays user-focused: “Looking for a website or a custom digital solution?”'}
-              </p>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-3)' }}>Search intent</label>
+                  <AiFieldBtn busy={briefAiBusy === 'search_intent'} onClick={() => handleSuggestBrief('search_intent')} />
+                </div>
+                <select
+                  value={SEARCH_INTENT_OPTIONS.includes(briefFields.search_intent) ? briefFields.search_intent : (briefFields.search_intent ? '__custom__' : '')}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    if (v === '__custom__') updateBriefField('search_intent', briefFields.search_intent || '')
+                    else updateBriefField('search_intent', v)
+                  }}
+                  className="w-full rounded-lg px-3 py-2 text-sm mb-1.5"
+                  style={{ background: '#fff', border: '1px solid var(--border-bright)', color: 'var(--text-1)' }}
+                >
+                  <option value="">Pick an intent (or type below)</option>
+                  {SEARCH_INTENT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                  <option value="__custom__">Custom…</option>
+                </select>
+                <input
+                  type="text"
+                  value={briefFields.search_intent}
+                  onChange={(e) => updateBriefField('search_intent', e.target.value)}
+                  placeholder="Or type a custom intent"
+                  className="w-full rounded-lg px-3 py-2 text-sm"
+                  style={{ background: '#fff', border: '1px solid var(--border-bright)', color: 'var(--text-1)' }}
+                />
+              </div>
+
+              <BriefField
+                label="Customer problem"
+                hint="What is the business owner trying to fix? (outdated site, need leads, Shopify store, first website…)"
+                value={briefFields.customer_problem}
+                onChange={(v) => updateBriefField('customer_problem', v)}
+                onAi={() => handleSuggestBrief('customer_problem')}
+                aiBusy={briefAiBusy === 'customer_problem'}
+                rows={3}
+              />
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5 gap-2">
+                  <label className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-3)' }}>
+                    Pricing
+                  </label>
+                  <AiFieldBtn busy={briefAiBusy === 'pricing'} onClick={() => handleSuggestBrief('pricing')} />
+                </div>
+                <input
+                  type="text"
+                  value={briefFields.pricing}
+                  onChange={(e) => updateBriefField('pricing', e.target.value)}
+                  placeholder="$500–$3,000"
+                  className="w-full rounded-lg px-3 py-2 text-sm"
+                  style={{ background: '#fff', border: '1px solid var(--border-bright)', color: 'var(--text-1)' }}
+                />
+                <p className="mt-1 text-[10px] leading-relaxed" style={{ color: 'var(--text-4)' }}>
+                  ZeOrbit typical website project range. Edit if this campaign needs a different range — woven into the copy.
+                </p>
+              </div>
+
+              {showAdvancedBrief && (
+                <>
+                  <BriefField
+                    label="Key points to cover"
+                    hint="One bullet per line — AI and manual both welcome"
+                    value={briefFields.key_points}
+                    onChange={(v) => updateBriefField('key_points', v)}
+                    onAi={() => handleSuggestBrief('key_points')}
+                    aiBusy={briefAiBusy === 'key_points'}
+                    rows={5}
+                    placeholder={"- Who this helps\n- WordPress / Shopify / redesign\n- What to do next"}
+                  />
+                  <BriefField
+                    label="FAQ ideas"
+                    hint="Questions a real customer would ask"
+                    value={briefFields.faq_ideas}
+                    onChange={(v) => updateBriefField('faq_ideas', v)}
+                    onAi={() => handleSuggestBrief('faq_ideas')}
+                    aiBusy={briefAiBusy === 'faq_ideas'}
+                    rows={4}
+                    placeholder={"- How much does a small-business website cost?\n- Is WordPress a good choice?"}
+                  />
+                  <BriefField
+                    label="CTA direction"
+                    hint="Soft next step — not a hard sell"
+                    value={briefFields.cta_direction}
+                    onChange={(v) => updateBriefField('cta_direction', v)}
+                    onAi={() => handleSuggestBrief('cta_direction')}
+                    aiBusy={briefAiBusy === 'cta_direction'}
+                    rows={2}
+                  />
+                  <BriefField
+                    label="Tone / voice notes"
+                    hint="e.g. plain English for a contractor owner; no marketing fluff"
+                    value={briefFields.tone_notes}
+                    onChange={(v) => updateBriefField('tone_notes', v)}
+                    onAi={() => handleSuggestBrief('tone_notes')}
+                    aiBusy={briefAiBusy === 'tone_notes'}
+                    rows={2}
+                  />
+                </>
+              )}
+
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-3)' }}>
+                  Extra notes <span className="font-normal normal-case" style={{ color: 'var(--text-4)' }}>(optional)</span>
+                </label>
+                <textarea
+                  value={customRequirements}
+                  onChange={(e) => setCustomRequirements(e.target.value)}
+                  rows={3}
+                  placeholder="Anything else the writer should know — competitors to avoid naming, must-include services, etc."
+                  className="w-full rounded-lg px-3 py-2 text-sm"
+                  style={{ background: '#fff', border: '1px solid var(--border-bright)', color: 'var(--text-1)', resize: 'vertical' }}
+                />
+              </div>
             </div>
             <div id="business-niche-section">
               <SearchSelect
@@ -1058,37 +1588,140 @@ export default function ContentPage() {
             />
             {contentKind === 'post' && (
               <label className="flex items-start gap-2 text-xs" style={{ color: 'var(--text-2)' }}>
-                <input type="checkbox" checked={postLocalize} onChange={(e) => setPostLocalize(e.target.checked)} className="mt-0.5" />
+                <input type="checkbox" checked={postLocalize} onChange={(e) => {
+                  const on = e.target.checked
+                  setPostLocalize(on)
+                  if (!on) {
+                    updateForm((f) => ({ ...f, num_cities: 1 }))
+                    setExtraLocations([])
+                  }
+                }} className="mt-0.5" />
                 <span>Mention a city in this article (optional). Leave off for a national how-to post.</span>
               </label>
             )}
             {(contentKind === 'page' || postLocalize) && (
             <div>
               <SearchSelect
-                label={contentKind === 'page' ? 'Base city' : 'City to mention'}
-                required={contentKind === 'page'}
+                label="Base city"
+                required={contentKind === 'page' || postLocalize}
                 value={form.base_location}
                 onChange={(v) => updateForm((f) => ({ ...f, base_location: v }))}
-                options={US_CITY_OPTIONS}
-                placeholder="San Diego, CA"
+                options={baseCityOptions}
+                remoteSearch={fetchCityOptions}
+                maxResults={50}
+                placeholder="Type any US city…"
               />
               {nearbyError && (
                 <div className="mt-1.5 text-[10px]" style={{ color: 'var(--red)' }}>{nearbyError}</div>
               )}
+              <div className="mt-3">
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-3)' }}>
+                    How many locations
+                  </label>
+                  <span className="text-sm font-bold" style={{ color: 'var(--brand)' }}>
+                    {form.num_cities}
+                    {extraLocations.length > 0 ? ` · ${extraLocations.length} chips pinned` : ''}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="50"
+                  value={form.num_cities}
+                  onChange={(e) => updateForm((f) => ({ ...f, num_cities: Number(e.target.value) }))}
+                  className="w-full accent-indigo-500"
+                />
+                <p className="text-[10px] mt-1" style={{ color: 'var(--text-4)' }}>
+                  {extraLocations.length > 0
+                    ? `Chips pin ${extraLocations.length} places first; drag count (${form.num_cities}) fills the rest with nearby cities up to that total.`
+                    : 'Drag to set how many nearby cities to generate from the base city (1–50).'}
+                </p>
+                {extraLocations.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setExtraLocations([])}
+                    className="mt-1.5 text-[11px] font-semibold"
+                    style={{ color: 'var(--brand)' }}
+                  >
+                    Clear chips & use drag count only
+                  </button>
+                )}
+              </div>
             </div>
             )}
-            {contentKind === 'page' && !extraLocations.length && (
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-3)' }}>Nearby cities to generate</label>
-                  <span className="text-sm font-bold" style={{ color: 'var(--brand)' }}>{form.num_cities}</span>
+            {error && (
+              <div
+                className="rounded-xl p-3.5 flex gap-3"
+                style={{
+                  background: '#FEF2F2',
+                  border: '2px solid #DC2626',
+                  boxShadow: '0 0 0 3px rgba(220,38,38,0.12)',
+                }}
+              >
+                <AlertTriangle size={20} className="flex-shrink-0 mt-0.5" style={{ color: '#B91C1C' }} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold" style={{ color: '#7F1D1D' }}>Cannot generate yet</div>
+                  <p className="text-[13px] mt-1 leading-snug font-medium" style={{ color: '#0f172a' }}>{error}</p>
                 </div>
-                <input type="range" min="1" max="50" value={form.num_cities}
-                  onChange={e => updateForm(f => ({ ...f, num_cities: Number(e.target.value) }))}
-                  className="w-full accent-indigo-500" />
               </div>
             )}
-            {error && <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 text-xs">{error}</div>}
+            {(() => {
+              const blockers = getGenerateBlockers()
+              if (!blockers.length) {
+                return (
+                  <div
+                    className="rounded-xl p-3.5 flex gap-3"
+                    style={{
+                      background: '#ECFDF5',
+                      border: '2px solid #059669',
+                      boxShadow: '0 0 0 3px rgba(5,150,105,0.12)',
+                    }}
+                  >
+                    <CheckCircle size={20} className="flex-shrink-0 mt-0.5" style={{ color: '#047857' }} />
+                    <div>
+                      <div className="text-sm font-bold" style={{ color: '#064E3B' }}>Ready for 90%+ quality</div>
+                      <p className="text-[13px] mt-1 leading-snug font-medium" style={{ color: '#0f172a' }}>
+                        Generate will keep only pages that score 90% or higher. Weak results are blocked and not saved.
+                      </p>
+                    </div>
+                  </div>
+                )
+              }
+              return (
+                <div
+                  className="rounded-xl p-3.5 flex gap-3"
+                  style={{
+                    background: '#FFFBEB',
+                    border: '2px solid #D97706',
+                    boxShadow: '0 0 0 3px rgba(217,119,6,0.14)',
+                  }}
+                >
+                  <AlertTriangle size={20} className="flex-shrink-0 mt-0.5" style={{ color: '#B45309' }} />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="text-sm font-bold" style={{ color: '#78350F' }}>Setup incomplete — generate blocked</div>
+                    <p className="text-[13px] font-medium leading-snug" style={{ color: '#0f172a' }}>
+                      Fill these so quality can hit 90%+:
+                    </p>
+                    <ul className="list-disc pl-4 space-y-1 text-[13px] font-semibold" style={{ color: '#0f172a' }}>
+                      {blockers.map((b) => <li key={b}>{b}</li>)}
+                    </ul>
+                    <button
+                      type="button"
+                      disabled={!!briefAiBusy}
+                      onClick={handleAiFillFor90}
+                      className="inline-flex items-center gap-1.5 mt-1 px-3 py-2 rounded-lg text-[13px] font-bold disabled:opacity-50"
+                      style={{ background: '#0f172a', color: '#fff', border: 'none' }}
+                    >
+                      {briefAiBusy === 'ready90' || briefAiBusy === 'all'
+                        ? <RefreshCw size={14} className="animate-spin" />
+                        : <Wand2 size={14} />}
+                      AI fill for 90%
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* AI + Async toggles */}
             <div className="space-y-1.5">
@@ -1157,24 +1790,24 @@ export default function ContentPage() {
 
             <button type="submit" disabled={
               loading || !!asyncJobId
-              || (customRequirements || '').trim().length < 8
+              || !briefHasSubstance(briefFields, customRequirements)
               || (contentKind === 'page' && (!(form.business_type || '').trim() || !targetKeywords.length))
             }
               className="btn-primary w-full py-2.5 rounded-lg text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
               title={
-                (customRequirements || '').trim().length < 8 ? 'Add custom content requirements first'
+                !briefHasSubstance(briefFields, customRequirements) ? 'Add a title, problem, or notes in the content brief'
                   : contentKind === 'page' && !(form.business_type || '').trim() ? 'Select a Business Niche first'
                   : contentKind === 'page' && !targetKeywords.length ? 'Add at least one target keyword first'
                     : undefined
               }>
               {loading || asyncJobId
                 ? <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.2)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/></svg>{asyncJobId ? 'Generating…' : `Generating ${contentKind === 'post' ? 'post' : 'pages'}…`}</>
-                : <><Zap size={14} />{useAsync ? 'Start Async Job' : (contentKind === 'post' ? 'Generate blog post' : 'Generate pages')}{useAi ? ' (AI)' : ''}</>}
+                : <><Zap size={14} />{useAsync ? 'Start Async Job' : (contentKind === 'post' && !postLocalize ? 'Generate blog post' : `Generate ${form.num_cities || (extraLocations.length || 1)} ${(contentKind === 'post' ? 'posts' : 'pages')}`)}{useAi ? ' (AI)' : ''}</>}
             </button>
             <p className="text-[10px] text-center" style={{ color: 'var(--text-3)' }}>
-              {contentKind === 'post'
+              {contentKind === 'post' && !postLocalize
                 ? 'Writes one how-to / educational article from your brief. Lives on post-sitemap.xml after publish.'
-                : 'Each location page gets 3 related photos. Lives on page-sitemap.xml after publish.'}
+                : `Creates up to ${form.num_cities || 1} location-specific ${contentKind === 'post' ? 'posts' : 'pages'} (chips first, then nearby fill). Only ${90}%+ quality is kept. Lives on ${contentKind === 'post' ? 'post' : 'page'}-sitemap.xml after publish.`}
             </p>
           </form>
         </div>
@@ -1214,9 +1847,10 @@ export default function ContentPage() {
                 {sdCityNames.map((n) => <option key={n} value={n}>{n}</option>)}
                 <option value="Unincorporated">Unincorporated county</option>
               </select>
-              <div className="crm-seg" role="tablist" aria-label="Local areas or streets">
-                <button type="button" aria-pressed={sdLayer === 'areas'} onClick={() => setSdLayer('areas')}>Local areas</button>
-                <button type="button" aria-pressed={sdLayer === 'streets'} onClick={() => setSdLayer('streets')}>Streets</button>
+              <div className="crm-seg" role="tablist" aria-label="Cities, local areas, or streets">
+                <button type="button" aria-pressed={sdLayer === 'cities'} onClick={() => { setSdLayer('cities'); setSdFilter('') }}>Cities</button>
+                <button type="button" aria-pressed={sdLayer === 'areas'} onClick={() => { setSdLayer('areas'); setSdFilter('') }}>Local areas</button>
+                <button type="button" aria-pressed={sdLayer === 'streets'} onClick={() => { setSdLayer('streets'); setSdFilter('') }}>Streets</button>
               </div>
             </div>
             <div className="flex gap-1.5">
@@ -1224,7 +1858,13 @@ export default function ContentPage() {
                 type="search"
                 value={sdFilter}
                 onChange={(e) => setSdFilter(e.target.value)}
-                placeholder={sdLayer === 'streets' ? 'Search any street (e.g. Carlsbad Blvd)…' : 'Search any community (e.g. Eastlake, Downtown Chula Vista)…'}
+                placeholder={
+                  sdLayer === 'streets'
+                    ? 'Search any street (e.g. Carlsbad Blvd)…'
+                    : sdLayer === 'cities'
+                      ? 'Search any city (e.g. Coronado)…'
+                      : 'Search any community (e.g. Eastlake, Downtown Chula Vista)…'
+                }
                 className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
                 style={{ borderColor: sdFilter && !sdItems.length ? '#ef4444' : 'var(--border)', color: 'var(--text-1)' }}
               />
@@ -1241,7 +1881,7 @@ export default function ContentPage() {
             <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto">
               {sdItems.slice(0, 80).map((name, i) => (
                 <button
-                  key={`${name}-${i}`}
+                  key={`${sdLayer}-${name}-${i}`}
                   type="button"
                   onClick={() => addExtraLocation(name)}
                   className="text-[11px] px-2 py-0.5 rounded font-medium"
@@ -1321,7 +1961,7 @@ export default function ContentPage() {
             )}
           </div>
           <p className="text-[10px] mt-2" style={{ color: 'var(--text-3)' }}>
-            Each chip is one {contentKind === 'post' ? 'blog post' : 'page'}. Type 2+ letters to search the whole county (streets and communities). Pick Chula Vista, then Local areas, then Add all for the 33 communities. Max one place per chip.
+            Each chip is one {contentKind === 'post' ? 'blog post' : 'page'}. Type 2+ letters to search. Pick a city, then Cities / Local areas / Streets, then Add all. Max one place per chip.
           </p>
           <LocationMap places={extraLocations} city={form.base_location} />
         </div>
@@ -1329,7 +1969,7 @@ export default function ContentPage() {
         <div className="card p-5 lg:col-span-2">
           <h4 className="text-sm font-semibold mb-2" style={{ color: 'var(--text-1)' }}>Topic article — not a location page</h4>
           <p className="text-sm leading-relaxed" style={{ color: 'var(--text-3)' }}>
-            We’ll write one post from your custom requirement (for example, how to set 301 redirects).
+            We’ll write one post from your content brief (for example, how to set 301 redirects).
             American, user-focused tone. After you publish to ZeOrbit it is listed on <strong>post-sitemap.xml</strong>.
             Check “Mention a city” only if you want local examples.
           </p>
@@ -1348,6 +1988,9 @@ export default function ContentPage() {
             <div>
               <p className="font-semibold text-sm" style={{ color: '#0f172a' }}>
                 {pages.length} {pages[0]?.content_type === 'blog' || contentKind === 'post' ? 'blog posts' : 'pages'} generated
+                {form.num_cities > pages.length && contentKind === 'page' ? (
+                  <span style={{ color: '#B45309' }}> (asked {form.num_cities} — some dropped below 90%)</span>
+                ) : null}
               </p>
               <p className="text-xs mt-0.5" style={{ color: '#334155' }}>
                 {(pages[0]?.content_type === 'blog' || contentKind === 'post')
@@ -1447,7 +2090,7 @@ export default function ContentPage() {
             </thead>
             <tbody>
               {filtered.map((block, i) => {
-                const score = Math.round(block.readability_score || 75)
+                const score = Math.round(block.quality_score ?? block.readability_score ?? 0)
                 const pr = publishResults[i]
                 return (
                   <tr key={`${block.city}-${i}`}>
@@ -1464,9 +2107,9 @@ export default function ContentPage() {
                       <div className="flex items-center gap-2">
                         <div className="w-14 h-1.5 rounded-full overflow-hidden" style={{ background: '#e2e8f0' }}>
                           <div className="h-full rounded-full"
-                            style={{ width: `${score}%`, background: score >= 75 ? '#059669' : score >= 50 ? '#d97706' : '#dc2626' }} />
+                            style={{ width: `${Math.min(score, 100)}%`, background: score >= 90 ? '#059669' : score >= 75 ? '#d97706' : '#dc2626' }} />
                         </div>
-                        <span className="text-xs font-bold" style={{ color: score >= 75 ? '#047857' : score >= 50 ? '#b45309' : '#b91c1c' }}>{score}</span>
+                        <span className="text-xs font-bold" style={{ color: score >= 90 ? '#047857' : score >= 75 ? '#b45309' : '#b91c1c' }}>{score}</span>
                       </div>
                     </td>
                     <td className="text-xs font-medium max-w-[140px]" style={{ color: 'var(--text-2)' }}>{block.keywords?.primary}</td>

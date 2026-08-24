@@ -7,6 +7,7 @@ from sqlalchemy import select
 from models.schemas import (
     GenerateRequest, SEOBlock, BulkGenerateResponse,
     ArticleRequest, WebsiteAnalysisRequest, WebsiteProfile, CityInfo,
+    BriefSuggestRequest, BriefSuggestResponse,
 )
 from services.location_service import get_nearby_cities, LocationNotResolvedError, merge_extra_locations, resolve_generation_cities
 from services.content_service import generate_seo_block, generate_articles
@@ -29,6 +30,143 @@ async def llm_providers():
     return available_providers()
 
 
+def _compose_brief_text(data: dict) -> str:
+    parts = []
+    if data.get("topic_title"):
+        parts.append(f"Working title / topic: {data['topic_title'].strip()}")
+    if data.get("search_intent"):
+        parts.append(f"Search intent: {data['search_intent'].strip()}")
+    if data.get("customer_problem"):
+        parts.append(f"Customer problem: {data['customer_problem'].strip()}")
+    if data.get("pricing"):
+        parts.append(f"Pricing: {data['pricing'].strip()}")
+    if data.get("key_points"):
+        parts.append(f"Key points to cover:\n{data['key_points'].strip()}")
+    if data.get("faq_ideas"):
+        parts.append(f"FAQs to answer:\n{data['faq_ideas'].strip()}")
+    if data.get("cta_direction"):
+        parts.append(f"CTA direction: {data['cta_direction'].strip()}")
+    if data.get("tone_notes"):
+        parts.append(f"Tone / voice notes: {data['tone_notes'].strip()}")
+    if data.get("extra_notes"):
+        parts.append(f"Extra editor notes:\n{data['extra_notes'].strip()}")
+    return "\n\n".join(parts).strip()
+
+
+def _template_brief_fields(req: BriefSuggestRequest) -> dict:
+    from services.zeorbit_local_seo import (
+        pick_search_intent,
+        format_title,
+        intent_faqs,
+        ZEORBIT_FACTS,
+        pick_industry,
+    )
+    city = (req.base_location or "").split(",")[0].strip() or "your area"
+    industry = pick_industry(req.industry or "", city, 0)
+    intent = pick_search_intent(
+        city, 0, industry=industry, brief=req.extra_notes or req.topic_title or "", keywords=req.target_keywords or [],
+    )
+    if req.search_intent:
+        # Keep user-chosen intent label if provided
+        intent_label = req.search_intent
+    else:
+        intent_label = intent.label
+    title = req.topic_title or format_title(intent, city, industry, 0)
+    problem = req.customer_problem or (
+        f"Businesses in {city} ({industry or 'small business'}) that {intent.customer_problem}."
+    )
+    key_points = req.key_points or "\n".join([
+        f"- Who ZeOrbit helps in {city} and what problem this page solves",
+        f"- Relevant services: WordPress, Shopify, redesign, mobile-friendly sites, SEO-friendly structure",
+        f"- Pricing context: website projects typically {ZEORBIT_FACTS['pricing_range']}",
+        f"- Experience: {ZEORBIT_FACTS['experience']}, {ZEORBIT_FACTS['reviews']}",
+        f"- Practical advice for choosing a website provider",
+        f"- Clear next step / CTA",
+    ])
+    faqs = intent_faqs(intent, city, industry, 0)
+    faq_ideas = req.faq_ideas or "\n".join(f"- {f['question']}" for f in faqs[:5])
+    cta = req.cta_direction or (
+        f"Invite a conversation about a reasonably priced website for a {industry or 'small business'} in {city}. Soft CTA — not a hard sell."
+    )
+    tone = req.tone_notes or (
+        "Plain American English for a small-business owner. No fluff (cutting-edge, seamless, unlock your potential). "
+        "Do not invent fake reviews, offices, or 'best in city' claims."
+    )
+    pricing = (req.pricing or "").strip() or ZEORBIT_FACTS["pricing_range"]
+    return {
+        "topic_title": title,
+        "search_intent": intent_label,
+        "customer_problem": problem,
+        "pricing": pricing,
+        "key_points": key_points,
+        "faq_ideas": faq_ideas,
+        "cta_direction": cta,
+        "tone_notes": tone,
+        "extra_notes": req.extra_notes or "",
+    }
+
+
+@router.post("/suggest-brief", response_model=BriefSuggestResponse)
+async def suggest_brief(req: BriefSuggestRequest):
+    """Fill structured Page/Post brief fields with AI (or templates if no LLM)."""
+    from services.llm_service import chat_json, llm_available
+
+    base = _template_brief_fields(req)
+    field = (req.field or "all").strip().lower()
+    source = "template"
+
+    if llm_available():
+        place = req.base_location or "United States"
+        kind = "blog post" if req.content_kind == "post" else "location / service page"
+        prompt = f"""You help an editor fill a structured content brief for ZeOrbit ({kind}).
+Business niche: {req.business_type or "Web Design"}
+Industry (client type): {req.industry or "small business"}
+Audience: {req.audience or "small business owners"}
+Location: {place}
+Keywords: {', '.join(req.target_keywords) or 'website design'}
+Existing notes: {req.extra_notes or 'none'}
+
+Return ONLY JSON with these keys (short, editable draft text — not the full article):
+{{
+  "topic_title": "working title",
+  "search_intent": "one of: Website discovery | Affordable website | WordPress | Shopify | Website redesign | Lead generation | New business | Website vs mobile app | Industry local — or a short custom intent",
+  "customer_problem": "1-2 sentences: what the customer is trying to solve",
+  "pricing": "typical project range, e.g. $500–$3,000",
+  "key_points": "5-7 bullet lines starting with -",
+  "faq_ideas": "4-6 bullet questions starting with -",
+  "cta_direction": "1 sentence soft CTA guidance",
+  "tone_notes": "1-2 sentences on voice"
+}}
+
+Rules: factual ZeOrbit services only (WordPress, Shopify, redesign, mobile-friendly, SEO structure, conversions, mobile apps). Default pricing $500–$3,000 unless a different range is already set. No fake reviews/offices/#1 claims. Field focus: {field}."""
+        try:
+            data = await chat_json(prompt, temperature=0.7, max_tokens=1200, provider=req.llm_provider)
+            if data:
+                source = "ai"
+                for key in ("topic_title", "search_intent", "customer_problem", "pricing", "key_points", "faq_ideas", "cta_direction", "tone_notes"):
+                    if field != "all" and field != key:
+                        continue
+                    val = data.get(key)
+                    if isinstance(val, str) and val.strip():
+                        base[key] = val.strip()
+                    elif field == "all" and isinstance(val, list):
+                        base[key] = "\n".join(f"- {x}" for x in val if x)
+        except Exception as e:
+            print(f"[Brief] AI suggest failed, using template: {e}")
+
+    if field != "all" and field in base:
+        # Only return the requested field change; keep others from request if provided
+        for key in ("topic_title", "search_intent", "customer_problem", "pricing", "key_points", "faq_ideas", "cta_direction", "tone_notes"):
+            if key == field:
+                continue
+            incoming = getattr(req, key, "") or ""
+            if incoming.strip():
+                base[key] = incoming.strip()
+
+    composed = _compose_brief_text(base)
+    return BriefSuggestResponse(**base, composed_brief=composed, source=source)
+
+
 async def _places_for_generate(req: GenerateRequest) -> List:
     """Pages require locations. Posts may be a single topic article with no city."""
     try:
@@ -45,10 +183,15 @@ async def _places_for_generate(req: GenerateRequest) -> List:
 
 @router.post("/generate", response_model=BulkGenerateResponse)
 async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(get_session)):
+    """Generate location pages. Refuses incomplete setups and drops results under 90% quality."""
+    from services.zeorbit_local_seo import MIN_PUBLISH_SCORE, MIN_KEYWORD_USE_SCORE, scores_meet_floor
+
     cities = await _places_for_generate(req)
+    requested_n = len(cities)
 
     pages: List[SEOBlock] = []
     used_featured: List[str] = []
+    existing_bodies: List[str] = []
     # Avoid colliding with images already saved for other locations (featured + body)
     from services.image_service import normalize_image_key, generate_article_images, topic_image_family
     existing_rows = (await session.execute(select(PageRecord))).scalars().all()
@@ -70,6 +213,9 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
                 used_featured.append(im["url"])
             elif hasattr(im, "url") and im.url:
                 used_featured.append(im.url)
+        body0 = f"{(block0 or {}).get('intro') or ''}\n{(block0 or {}).get('content') or ''}".strip()
+        if body0:
+            existing_bodies.append(body0)
 
     batch_slugs: set[str] = set()
 
@@ -129,6 +275,7 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             content_kind=req.content_kind,
             audience=req.audience,
             keyword_index=keyword_index,
+            existing_bodies=existing_bodies,
         )
         # Final uniqueness guard (same as async jobs path)
         if block.featured_image_url:
@@ -143,15 +290,24 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
                     exclude_urls=used_featured,
                     industry="" if req.content_kind == "post" else (req.industry or ""),
                     niche=focus if req.content_kind == "post" else (req.business_type or ""),
+                    search_intent=getattr(block, "search_intent", "") or "",
+                    image_concept_text=getattr(block, "image_concept", "") or "",
+                    keyword_index=keyword_index,
                 )
                 if images:
-                    block.in_content_images = images
-                    block.featured_image_url = images[0].url
+                    from services.image_service import assign_canonical_images
+                    feat, foot, cleaned = assign_canonical_images(images)
+                    block.in_content_images = cleaned
+                    block.featured_image_url = feat
+                    block.footer_image_url = foot
             if block.featured_image_url:
                 used_featured.append(block.featured_image_url)
             for im in block.in_content_images or []:
                 if im.url:
                     used_featured.append(im.url)
+
+        # Track bodies for in-batch duplicate detection
+        existing_bodies.append(f"{block.intro or ''}\n{block.content or ''}")
 
         slug = (block.slug or preview_slug).strip()
         # Avoid in-batch duplicate inserts (same resolved place listed twice)
@@ -163,6 +319,27 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
         batch_slugs.add(slug)
         block.slug = slug
         pages.append(block)
+
+        score = float(
+            getattr(block, "quality_score", None)
+            or getattr(block, "readability_score", None)
+            or 0
+        )
+        kw_use = float(getattr(block, "keyword_density", None) or 0)
+        if not scores_meet_floor(score, kw_use):
+            # One more boost pass before dropping — batch uniqueness used to wipe most of 50.
+            try:
+                from services.content_service import boost_block_to_floor
+                block = boost_block_to_floor(block)
+                score = float(block.quality_score or block.readability_score or 0)
+                kw_use = float(block.keyword_density or 0)
+            except Exception as e:
+                print(f"[Quality] boost before drop failed for {city_info.name}: {e}")
+        if not scores_meet_floor(score, kw_use):
+            print(
+                f"[Quality] drop {city_info.name}: quality={score} keyword={kw_use}"
+            )
+            continue
 
         # Upsert by FINAL slug — preview_slug often differs once industry is applied,
         # which previously caused UNIQUE constraint failures on INSERT.
@@ -219,6 +396,27 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             by_slug[slug] = row
             existing_rows.append(row)
 
+    # Never hand weak pages back — quality + keyword use must both clear 90+.
+    strong = [
+        p for p in pages
+        if scores_meet_floor(
+            float(getattr(p, "quality_score", None) or getattr(p, "readability_score", None) or 0),
+            float(getattr(p, "keyword_density", None) or 0),
+        )
+    ]
+    if not strong:
+        await session.rollback()
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"All {len(pages)} results scored below {int(MIN_PUBLISH_SCORE)}% "
+                f"(Quality and Keyword use must both be {int(MIN_KEYWORD_USE_SCORE)}%+). "
+                "Nothing was saved. Fix brief/keywords or use AI fill — then generate again."
+            ),
+        )
+    pages = strong
+    dropped_n = requested_n - len(pages)
+
     try:
         await session.commit()
     except Exception as e:
@@ -231,10 +429,20 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             )
         raise HTTPException(status_code=500, detail=f"Could not save generated pages: {detail[:240]}")
 
+    msg = None
+    if dropped_n > 0:
+        msg = (
+            f"Requested {requested_n} locations · kept {len(pages)} at "
+            f"{int(MIN_PUBLISH_SCORE)}%+ · dropped {dropped_n} below the floor."
+        )
+
     return BulkGenerateResponse(
         total=len(pages),
         pages=pages,
-        job_id=str(uuid.uuid4())
+        job_id=str(uuid.uuid4()),
+        requested=requested_n,
+        dropped=dropped_n,
+        message=msg,
     )
 
 @router.post("/analyze-website", response_model=WebsiteProfile)
@@ -315,6 +523,13 @@ async def generate_single(
     llm_provider: str = None,
 ):
     return await generate_seo_block(business_type, city, state, use_ai=use_ai, llm_provider=llm_provider)
+
+
+@router.post("/boost-scores", response_model=SEOBlock)
+async def boost_scores(block: SEOBlock):
+    """Raise Keyword use (and refresh Quality) toward the 90% floor — preview AI fix."""
+    from services.content_service import boost_block_to_floor
+    return boost_block_to_floor(block)
 
 
 @router.post("/refresh-images")

@@ -25,11 +25,76 @@ function looksLikeInstruction(text) {
   return INSTRUCTION_MARKERS.some((m) => t.includes(m))
 }
 
-function paragraphs(text) {
-  return String(text || '')
+/** Force glued `## Heading Next sentence` into real markdown sections. */
+function normalizeMarkdownBody(raw, h2s = []) {
+  let text = String(raw || '').replace(/\r\n/g, '\n').trim()
+  if (!text) return ''
+
+  // Any ## not already at line start → own block
+  text = text.replace(/([^\n])\s*(##\s+)/g, '$1\n\n$2')
+
+  const heads = (h2s || []).map((h) => String(h || '').trim()).filter(Boolean)
+    .sort((a, b) => b.length - a.length)
+
+  for (const h of heads) {
+    const esc = h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    // ## Exact H2 immediately followed by body text on the same line
+    text = text.replace(new RegExp(`(##\\s*${esc})(?=\\s*\\S)`, 'ig'), '$1\n\n')
+  }
+
+  // Generic: ## TitleCase words… then a new sentence starting with A-Z after the heading phrase
+  text = text.replace(/(##\s+[^\n]+?)(\s+)(?=[A-Z][a-z])/g, (full, head, sp) => {
+    // If heading line already ends cleanly, leave it; otherwise break before new sentence
+    if (/\n\n$/.test(head)) return full
+    // Don't break inside the heading itself when h2 list already handled it
+    const line = head.replace(/^##\s*/, '')
+    if (heads.some((h) => h.toLowerCase() === line.trim().toLowerCase())) {
+      return `${head}\n\n`
+    }
+    return full
+  })
+
+  text = text.replace(/\n{3,}/g, '\n\n')
+  return text.trim()
+}
+
+/** Split walls of text into short, readable paragraphs (2–3 sentences). */
+function readableParagraphs(text) {
+  const chunks = String(text || '')
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter((p) => p && !looksLikeInstruction(p) && !/^#{1,6}\s/.test(p))
+
+  const out = []
+  for (const chunk of chunks) {
+    // Strip leftover inline ## Title fragments that slipped through
+    const cleaned = chunk.replace(/\s*##\s+[A-Z][^.!?\n]{0,80}/g, '').trim()
+    if (!cleaned) continue
+    if (cleaned.length < 280) {
+      out.push(cleaned)
+      continue
+    }
+    const sentences = cleaned.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g) || [cleaned]
+    let buf = ''
+    let count = 0
+    for (const s of sentences) {
+      const piece = s.trim()
+      if (!piece) continue
+      buf = buf ? `${buf} ${piece}` : piece
+      count += 1
+      if (count >= 2 || buf.length >= 220) {
+        out.push(buf.trim())
+        buf = ''
+        count = 0
+      }
+    }
+    if (buf.trim()) out.push(buf.trim())
+  }
+  return out
+}
+
+function paragraphs(text) {
+  return readableParagraphs(text)
 }
 
 function layoutFor(slug, explicit) {
@@ -55,14 +120,14 @@ function bulletsFrom(text) {
 
 function fallbackSection(heading) {
   return (
-    `${heading || 'This section'} matters when someone lands on your site and needs a clear answer. ` +
-    'ZeOrbit builds WordPress pages that explain the offer in plain language, show proof, ' +
-    'and make the next step obvious — contact, call, or book.'
+    `${heading || 'This section'} matters when someone lands on your site and needs a clear answer. `
+    + 'ZeOrbit builds WordPress pages that explain the offer in plain language, show proof, '
+    + 'and make the next step obvious — contact, call, or book.'
   )
 }
 
-function parseMarkdownSections(raw, h3s) {
-  const text = String(raw || '').trim()
+function parseMarkdownSections(raw, h2s, h3s) {
+  const text = normalizeMarkdownBody(raw, h2s)
   if (!/^##\s/m.test(text)) return null
   const startsWithH2 = /^##\s/.test(text)
   const parts = text.split(/^##\s+/m).filter(Boolean)
@@ -70,9 +135,19 @@ function parseMarkdownSections(raw, h3s) {
   if (!chunks.length) return null
   return chunks.map((chunk, i) => {
     const nl = chunk.indexOf('\n')
-    const heading = (nl === -1 ? chunk : chunk.slice(0, nl)).trim()
+    let heading = (nl === -1 ? chunk : chunk.slice(0, nl)).trim()
     let rest = (nl === -1 ? '' : chunk.slice(nl)).trim()
-    rest = paragraphs(rest).join('\n\n')
+    // If heading still has body glued on (no newline case), peel using known h2s
+    if (!rest && h2s?.length) {
+      for (const h of [...h2s].sort((a, b) => b.length - a.length)) {
+        if (heading.toLowerCase().startsWith(h.toLowerCase()) && heading.length > h.length) {
+          rest = heading.slice(h.length).trim()
+          heading = h
+          break
+        }
+      }
+    }
+    rest = readableParagraphs(rest).join('\n\n')
     if (!rest || rest.split(/\s+/).length < 20) {
       rest = fallbackSection(heading)
     }
@@ -82,9 +157,9 @@ function parseMarkdownSections(raw, h3s) {
 
 function SectionCopy({ sec }) {
   if (sec.bullets) {
-    return <ul>{sec.bullets.map((b) => <li key={b.slice(0, 40)}>{b}</li>)}</ul>
+    return <ul className="zo-article-list">{sec.bullets.map((b) => <li key={b.slice(0, 40)}>{b}</li>)}</ul>
   }
-  return paragraphs(sec.text).map((p) => <p key={p.slice(0, 48)}>{p}</p>)
+  return readableParagraphs(sec.text).map((p) => <p key={p.slice(0, 48)}>{p}</p>)
 }
 
 function allocateSections(h2s, h3s, paras) {
@@ -113,7 +188,7 @@ function allocateSections(h2s, h3s, paras) {
 }
 
 function ArticleSections({ layout, h2s, h3s, body, rawContent, images }) {
-  const parsed = parseMarkdownSections(rawContent, h3s)
+  const parsed = parseMarkdownSections(rawContent, h2s, h3s)
   const allocated = parsed
     ? { sections: parsed, leftover: [] }
     : allocateSections(h2s, h3s, body)
@@ -144,6 +219,10 @@ function ArticleSections({ layout, h2s, h3s, body, rawContent, images }) {
     )
   }
 
+  // Always render a clean vertical article — cards/split become stacked sections
+  // so long SEO copy stays readable (no wall-of-text columns).
+  const useStack = layout === 'cards' || layout === 'split' || layout === 'story' || !layout
+
   if (layout === 'steps' || layout === 'timeline') {
     return (
       <ol className={`zo-article-flow is-${layout}`}>
@@ -158,51 +237,17 @@ function ArticleSections({ layout, h2s, h3s, body, rawContent, images }) {
     )
   }
 
-  if (layout === 'cards') {
+  if (useStack) {
     return (
-      <div className="zo-article-cards">
+      <div className="zo-article-stack">
         {sections.map((sec, i) => (
-          <section key={`${sec.heading}-${i}`} className="zo-article-card">
+          <section key={`${sec.heading}-${i}`} className="zo-article-block">
             <h2>{sec.heading}</h2>
             {sec.sub ? <h3>{sec.sub}</h3> : null}
             {withImage(sec, i)}
           </section>
         ))}
-      </div>
-    )
-  }
-
-  if (layout === 'split') {
-    return (
-      <div className="zo-article-split">
-        {sections.map((sec, i) => (
-          <section key={`${sec.heading}-${i}`} className={i % 2 === 0 ? 'is-problem' : 'is-solution'}>
-            <h2>{sec.heading}</h2>
-            {sec.sub ? <h3>{sec.sub}</h3> : null}
-            {withImage(sec, i)}
-          </section>
-        ))}
-      </div>
-    )
-  }
-
-  if (layout === 'story') {
-    const [first, ...rest] = sections
-    return (
-      <div className="zo-article-story">
-        {first ? (
-          <>
-            <h2>{first.heading}</h2>
-            {first.text ? <blockquote>{first.text}</blockquote> : null}
-          </>
-        ) : null}
-        {rest.map((sec, i) => (
-          <section key={`${sec.heading}-${i}`}>
-            <h2>{sec.heading}</h2>
-            {sec.sub ? <h3>{sec.sub}</h3> : null}
-            {withImage(sec, i + 1)}
-          </section>
-        ))}
+        {leftover.map((p) => <p key={p.slice(0, 48)}>{p}</p>)}
       </div>
     )
   }
@@ -253,9 +298,26 @@ export default function SeoArticlePage() {
   const faqs = Array.isArray(block.faqs) ? block.faqs : []
   const h2s = Array.isArray(block.h2s) ? block.h2s : []
   const h3s = Array.isArray(block.h3s) ? block.h3s : []
-  const body = paragraphs(String(block.content || '').replace(/^##\s+.+$/gm, '').replace(/\n{3,}/g, '\n\n'))
+  const normalized = normalizeMarkdownBody(block.content || '', h2s)
+  const body = paragraphs(normalized.replace(/^##\s+.+$/gm, '').replace(/\n{3,}/g, '\n\n'))
   const layout = layoutFor(slug, block.layout_variant)
-  const hero = block.featured_image_url
+  const images = Array.isArray(block.in_content_images) ? block.in_content_images : []
+  const hero = block.featured_image_url || images.find((im) => im?.is_featured)?.url || images[0]?.url || ''
+  const heroKey = (hero || '').split('?')[0]
+  const distinctBody = images.find((im) => im?.url && im.url.split('?')[0] !== heroKey)
+  const footerImg = (
+    (block.footer_image_url && block.footer_image_url.split('?')[0] !== heroKey)
+      ? block.footer_image_url
+      : (distinctBody?.url || '')
+  )
+  const featuredMeta = images.find(
+    (im) => im?.is_featured || (im?.url && hero && im.url.split('?')[0] === hero.split('?')[0]),
+  )
+  const footerMeta = images.find(
+    (im) => im?.url && footerImg && im.url.split('?')[0] === footerImg.split('?')[0],
+  )
+  const heroAlt = featuredMeta?.alt_text || h1
+  const footerAlt = footerMeta?.alt_text || 'Related website design example'
 
   return (
     <div className={`rv-page zo-blog-page zo-seo-article is-layout-${layout}`}>
@@ -285,7 +347,7 @@ export default function SeoArticlePage() {
               <h1>{h1}</h1>
               {hero ? (
                 <figure className="zo-article-hero">
-                  <img src={hero} alt={h1} />
+                  <img src={hero} alt={heroAlt} />
                 </figure>
               ) : null}
               {block.intro ? paragraphs(block.intro).map((p) => <p key={p.slice(0, 40)}>{p}</p>) : null}
@@ -294,9 +356,14 @@ export default function SeoArticlePage() {
                 h2s={h2s}
                 h3s={h3s}
                 body={body}
-                rawContent={block.content}
+                rawContent={normalized}
                 images={block.in_content_images || []}
               />
+              {footerImg && footerImg.split('?')[0] !== (hero || '').split('?')[0] ? (
+                <figure className="zo-article-footer-image">
+                  <img src={footerImg} alt={footerAlt} />
+                </figure>
+              ) : null}
               {block.cta ? <p className="zo-article-cta">{block.cta}</p> : null}
               <p>
                 <a className="zo-article-call" href={`tel:${SITE_CONTACT.phoneTel}`}>

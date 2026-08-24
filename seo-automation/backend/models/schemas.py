@@ -38,15 +38,47 @@ class GenerateRequest(BaseModel):
         kws = [k.strip() for k in (self.target_keywords or []) if k and str(k).strip()]
         self.target_keywords = kws
         self.business_type = niche
+        brief = (self.custom_requirements or "").strip()
         if kind == "page":
+            missing = []
             if not niche:
-                raise ValueError("Business niche is required for Page generation.")
+                missing.append("Business Niche")
+            if not (self.industry or "").strip():
+                missing.append("Industry")
             if not kws:
-                raise ValueError("Add at least one target keyword for Page generation.")
+                missing.append("at least one Target Keyword")
+            if not (self.base_location or "").strip() and not (self.extra_locations or []):
+                missing.append("Base city or location chips")
+            if not re.search(r"(?im)^\s*pricing\s*:", brief) and not re.search(r"\$\s*\d", brief):
+                missing.append("Pricing in the brief (e.g. Pricing: $500–$3,000)")
+            if missing:
+                raise ValueError(
+                    "Cannot generate — quality would stay below 90%% until you fix: %s."
+                    % "; ".join(missing)
+                )
         if kind == "post" and not kws:
-            # Derive a keyword from the brief so slugs and SEO still work.
-            brief = re.sub(r"[?!.]+$", "", self.custom_requirements).strip()
-            self.target_keywords = [brief[:80]] if brief else ["guide"]
+            # Derive a clean keyword from the brief — never the labeled "Working title / topic: …" blob.
+            brief = (self.custom_requirements or "").strip()
+            m = re.search(
+                r"(?im)^\s*working title\s*/\s*topic\s*:\s*(.+)$",
+                brief,
+            )
+            if m:
+                topic = re.sub(r"[?!.]+$", "", m.group(1).strip().split("\n")[0]).strip()[:80]
+            else:
+                # Drop labeled lines; take first useful line
+                lines = [
+                    ln.strip() for ln in brief.splitlines()
+                    if ln.strip() and not re.match(
+                        r"(?i)^(working title|search intent|customer problem|key points|faqs? to|cta direction|tone|extra editor)",
+                        ln.strip(),
+                    )
+                ]
+                topic = (lines[0] if lines else brief)[:80]
+                topic = re.sub(r"[?!.]+$", "", topic).strip()
+            if topic.lower().startswith("working title"):
+                topic = "website design"
+            self.target_keywords = [topic] if topic else ["website design"]
         if kind == "post" and not niche:
             self.business_type = "Digital Services"
         return self
@@ -95,6 +127,8 @@ class SEOBlock(BaseModel):
     wp_post_id: Optional[int] = None
     wp_post_url: Optional[str] = None
     featured_image_url: Optional[str] = None
+    # Canonical mid/footer article image from the same in_content_images set (not a second generation).
+    footer_image_url: Optional[str] = None
     # ── Keyword-driven article extensions ────────────────────────
     focus_keyword: str = ""
     secondary_keywords: List[str] = Field(default=[])
@@ -102,6 +136,51 @@ class SEOBlock(BaseModel):
     source_url: str = ""               # the analyzed website this article was grounded on
     content_type: Literal["service", "blog"] = "service"  # pillar/service page vs. supporting blog post — drives WordPress category
     layout_variant: str = Field(default="", description="Body layout: qa, steps, story, cards, split, timeline")
+    # ── Local SEO master-rule fields (one source of truth for tool + website) ──
+    search_intent: str = ""
+    customer_problem: str = ""
+    image_concept: str = ""
+    quality_score: Optional[float] = None
+    quality_breakdown: Dict[str, Any] = Field(default_factory=dict)
+    publishable: bool = True
+
+
+class BriefSuggestRequest(BaseModel):
+    """Structured brief fields for Page / Post creation (AI or manual)."""
+    content_kind: Literal["page", "post"] = "page"
+    business_type: str = ""
+    industry: str = ""
+    audience: str = ""
+    base_location: str = ""
+    target_keywords: List[str] = Field(default_factory=list)
+    topic_title: str = ""
+    search_intent: str = ""
+    customer_problem: str = ""
+    pricing: str = ""
+    key_points: str = ""
+    faq_ideas: str = ""
+    cta_direction: str = ""
+    tone_notes: str = ""
+    extra_notes: str = ""
+    field: str = Field(
+        default="all",
+        description="all | topic_title | search_intent | customer_problem | pricing | key_points | faq_ideas | cta_direction | tone_notes",
+    )
+    llm_provider: Optional[str] = None
+
+
+class BriefSuggestResponse(BaseModel):
+    topic_title: str = ""
+    search_intent: str = ""
+    customer_problem: str = ""
+    pricing: str = ""
+    key_points: str = ""
+    faq_ideas: str = ""
+    cta_direction: str = ""
+    tone_notes: str = ""
+    composed_brief: str = ""
+    source: str = "template"  # template | ai
+
 
 # ── Website Analysis Models ──────────────────────────────────────
 class SitePage(BaseModel):
@@ -157,6 +236,9 @@ class BulkGenerateResponse(BaseModel):
     total: int
     pages: List[SEOBlock]
     job_id: str
+    requested: Optional[int] = None
+    dropped: Optional[int] = None
+    message: Optional[str] = None
 
 class CityInfo(BaseModel):
     name: str

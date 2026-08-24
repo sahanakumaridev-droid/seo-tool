@@ -30,6 +30,35 @@ def normalize_image_key(url: str) -> str:
     return base.lower()
 
 
+def assign_canonical_images(images: List["ImageAsset"]) -> tuple:
+    """One article → one image set. Featured = first; footer = first distinct non-featured.
+
+    Drops duplicate URLs within the set. Returns (featured_url, footer_url, cleaned_images).
+    """
+    if not images:
+        return "", "", []
+    cleaned: List[ImageAsset] = []
+    seen: Set[str] = set()
+    for im in images:
+        key = normalize_image_key(getattr(im, "url", "") or "")
+        if key and key in seen:
+            continue
+        if key:
+            seen.add(key)
+        im.is_featured = len(cleaned) == 0
+        cleaned.append(im)
+    if not cleaned:
+        return "", "", []
+    featured = cleaned[0].url or ""
+    feat_key = normalize_image_key(featured)
+    footer = featured
+    for im in cleaned[1:]:
+        if im.url and normalize_image_key(im.url) != feat_key:
+            footer = im.url
+            break
+    return featured, footer, cleaned
+
+
 
 
 def topic_image_family(text: str) -> str:
@@ -75,7 +104,8 @@ def topic_image_family(text: str) -> str:
         return "landscaping"
     if any(k in t for k in ("fitness", "gym", "trainer")):
         return "fitness"
-    if any(k in t for k in ("photo",)):
+    # Require photographer/photography — bare "photo" matches too many false positives.
+    if any(k in t for k in ("photographer", "photography", "photo studio")):
         return "photography"
     return "general"
 
@@ -294,32 +324,57 @@ def build_image_metadata(
     business_name: str,
     idx: int,
     is_featured: bool,
+    image_concept_text: str = "",
+    industry: str = "",
 ) -> dict:
-    """Generate SEO-friendly filename + alt/title/caption/description for an image."""
-    kw = focus_keyword.strip() or "business"
+    """Generate SEO-friendly filename + alt/title/caption/description for an image.
+
+    Alt text must describe the actual subject (website work / business owner),
+    not keyword-stuffed SEO phrases, writing briefs, or tourism landmarks.
+    """
+    raw_kw = (focus_keyword or "").strip()
+    # Never paste editor brief labels into image SEO fields.
+    if re.search(r"(?i)working title|search intent:|customer problem:", raw_kw):
+        raw_kw = "website design"
+    kw = raw_kw or "website design"
+    # Prefer a short clean phrase for filenames
+    kw_short = re.sub(r"\s+", " ", kw)
+    if len(kw_short) > 40:
+        kw_short = "website design"
     loc = location.strip()
+    city = (loc.split(",")[0] if loc else "").strip()
     biz = business_name.strip()
-    filename = f"{_slug(kw)}-{_slug(loc) or 'local'}-{idx + 1}.webp"
-    phrase = natural_place_caption(kw, loc)
-    by = f" by {biz}" if biz else ""
+    filename = f"{_slug(kw_short)}-{_slug(loc) or 'local'}-{idx + 1}.webp"
+    concept = (image_concept_text or "").strip()
+    if concept and not re.search(r"(?i)working title|search intent:", concept):
+        # Shorten concept into natural alt text
+        alt = re.sub(r"\s+", " ", concept)
+        alt = re.sub(r",?\s*related to.*$", "", alt, flags=re.I).strip()
+        if len(alt) > 125:
+            alt = alt[:122].rstrip() + "…"
+        phrase = alt
+    else:
+        phrase = (
+            f"Website design on a laptop{f' for a business in {city}' if city else ''}"
+        ).strip()
+    by = f" by {biz}" if biz and is_featured else ""
 
     if is_featured:
         alt = f"{phrase}{by}"
         title = phrase
         caption = f"{phrase}."
     else:
-        alt = f"{phrase} — detail {idx + 1}"
+        alt = f"{phrase}"
         title = phrase
         caption = f"{phrase}."
-    # Avoid "Topic?." or "Topic.."
     caption = re.sub(r"[\.?]+$", ".", caption)
-    description = f"Image illustrating {phrase.rstrip('.?!').lower()}{by}. Optimized for SEO and web performance (WebP)."
+    description = f"On-topic website design image for {phrase.rstrip('.?!').lower()}{by}. Laptop / web UI — not tourism or unrelated stock."
     return {
         "filename": filename,
-        "alt_text": alt,
-        "title": title,
-        "caption": caption,
-        "description": description,
+        "alt_text": alt[:140],
+        "title": title[:120],
+        "caption": caption[:160],
+        "description": description[:220],
     }
 
 
@@ -360,6 +415,20 @@ _CATEGORY_FALLBACK_QUERIES = [
 
 # Topic-STRICT curated Unsplash photos only (no generic offices/meetings/abstract art).
 # Relevance > uniqueness — every URL must clearly match the niche.
+# Skip IDs Unsplash has removed (404) — they break Header/Footer previews.
+_DEAD_UNSPLASH_IDS = frozenset({
+    "photo-1561070791-0369aee323b7",
+    "photo-1586717791821-3f8f48fcfba0",
+    "photo-1481487196290-c152efe700ba",
+    "photo-1593720216276-0caa6452c8d0",
+    "photo-1484417894907-623942c8ee41",
+    "photo-1611162616305-c69b3037c7bb",
+    "photo-1618477388954-7852f72348ae",
+    "photo-1600132806608-235180695415",
+    "photo-1587440871875-191322eeaf42",
+    "photo-1504384764586-bb4cdc3d78c0",
+})
+
 _WEB_DESIGN_IMAGES = [
     "https://images.unsplash.com/photo-1467232004584-a241de8bcf5d",
     "https://images.unsplash.com/photo-1559028012-481c04fa702d",
@@ -368,11 +437,8 @@ _WEB_DESIGN_IMAGES = [
     "https://images.unsplash.com/photo-1547658719-da2b51169166",
     "https://images.unsplash.com/photo-1522542550221-31fd19575a2d",
     "https://images.unsplash.com/photo-1561070791-2526d30994b5",
-    "https://images.unsplash.com/photo-1561070791-0369aee323b7",
-    "https://images.unsplash.com/photo-1586717791821-3f8f48fcfba0",
     "https://images.unsplash.com/photo-1559027615-cd4628902d4a",
     "https://images.unsplash.com/photo-1558655146-9f40138edfeb",
-    "https://images.unsplash.com/photo-1481487196290-c152efe700ba",
     "https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c",
     "https://images.unsplash.com/photo-1551650975-87deedd944c3",
     "https://images.unsplash.com/photo-1498050108023-c5249f4df085",
@@ -391,30 +457,23 @@ _WEB_DESIGN_IMAGES = [
     "https://images.unsplash.com/photo-1605379399642-870262d3d051",
     "https://images.unsplash.com/photo-1571171637578-41bc2dd41cd2",
     "https://images.unsplash.com/photo-1593720213428-28a5b9e94613",
-    "https://images.unsplash.com/photo-1593720216276-0caa6452c8d0",
     "https://images.unsplash.com/photo-1627398242454-45a1465c2479",
     "https://images.unsplash.com/photo-1633356122544-f134324a6cee",
     "https://images.unsplash.com/photo-1504639725590-34d0984388bd",
-    "https://images.unsplash.com/photo-1484417894907-623942c8ee41",
     "https://images.unsplash.com/photo-1483058712412-4245e9b90334",
     "https://images.unsplash.com/photo-1496171367470-9ed9a91ea931",
     "https://images.unsplash.com/photo-1611162617474-5b21e879e113",
-    "https://images.unsplash.com/photo-1611162616305-c69b3037c7bb",
     "https://images.unsplash.com/photo-1611162618071-b39a2ec055fb",
-    "https://images.unsplash.com/photo-1618477388954-7852f72348ae",
     "https://images.unsplash.com/photo-1618761714954-0b8cd0026356",
     "https://images.unsplash.com/photo-1555421689-491a97ff2040",
     "https://images.unsplash.com/photo-1516321318423-f06f85e504b3",
     "https://images.unsplash.com/photo-1499951360447-b19be8fe80f5",
     "https://images.unsplash.com/photo-1531403009284-440f080d1e12",
-    "https://images.unsplash.com/photo-1600132806608-235180695415",
-    "https://images.unsplash.com/photo-1587440871875-191322eeaf42",
     "https://images.unsplash.com/photo-1553877522-43269d4ea984",
     "https://images.unsplash.com/photo-1519389950473-47ba0277781c",
     "https://images.unsplash.com/photo-1516321497487-e288fb19713f",
     "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158",
     "https://images.unsplash.com/photo-1504384308090-c894fdcc538d",
-    "https://images.unsplash.com/photo-1504384764586-bb4cdc3d78c0",
     "https://images.unsplash.com/photo-1559136555-9303baea8ebd",
     "https://images.unsplash.com/photo-1432888498266-38ffec3eaf0a",
     "https://images.unsplash.com/photo-1460925895917-afdab827c52f",
@@ -422,6 +481,9 @@ _WEB_DESIGN_IMAGES = [
     "https://images.unsplash.com/photo-1557804506-669a67965ba0",
     "https://images.unsplash.com/photo-1556761175-b413da4baf72",
 ]
+
+# Dedupe while preserving order (replacements may repeat known-good IDs)
+_WEB_DESIGN_IMAGES = list(dict.fromkeys(_WEB_DESIGN_IMAGES))
 
 _SOFTWARE_IMAGES = [
     "https://images.unsplash.com/photo-1498050108023-c5249f4df085",
@@ -955,26 +1017,36 @@ def _curated_image_url(
     def _pick(pool: List[str], honor_exclude: bool = True) -> str:
         if not pool:
             return ""
-        candidates = [
-            u for u in pool
-            if (not honor_exclude) or normalize_image_key(u) not in exclude_keys
-        ]
+        candidates = []
+        for u in pool:
+            key = normalize_image_key(u)
+            if key in _DEAD_UNSPLASH_IDS:
+                continue
+            if honor_exclude and key in exclude_keys:
+                continue
+            candidates.append(u)
         if not candidates:
-            candidates = list(pool)
+            candidates = [u for u in pool if normalize_image_key(u) not in _DEAD_UNSPLASH_IDS] or list(pool)
         candidates.sort(
             key=lambda u: hashlib.md5(f"{seed}|{normalize_image_key(u)}".encode("utf-8")).hexdigest()
         )
         return _with_unsplash_params(candidates[0])
 
     topic_pool = _curated_pool_for_topic(topic)
+    # For website-design topics, never fall through to photography/education pools.
+    fam = topic_image_family(topic)
+    if fam in ("web", "software", "general") or any(
+        w in (topic or "").lower() for w in ("website", "web design", "wordpress", "shopify", "laptop")
+    ):
+        topic_pool = list(_WEB_DESIGN_IMAGES)
     url = _pick(topic_pool, honor_exclude=True)
     if url:
         return url
-    url = _pick(_all_curated_urls(), honor_exclude=True)
-    if url:
-        return url
-    # Pool exhausted for this batch — reuse topic pool (still on-topic) instead of scenery placeholders
-    url = _pick(topic_pool or _all_curated_urls() or _WEB_DESIGN_IMAGES, honor_exclude=False)
+    # Stay on-topic: website pool only for web queries; otherwise topic then web as last resort
+    if topic_pool is _WEB_DESIGN_IMAGES or topic_pool == list(_WEB_DESIGN_IMAGES):
+        url = _pick(_WEB_DESIGN_IMAGES, honor_exclude=False)
+        return url or _with_unsplash_params(_WEB_DESIGN_IMAGES[0])
+    url = _pick(topic_pool or _WEB_DESIGN_IMAGES, honor_exclude=False)
     return url or _with_unsplash_params(_WEB_DESIGN_IMAGES[0])
 
 
@@ -982,6 +1054,12 @@ _OFFTOPIC_STOCK_MARKERS = (
     "mountain", "mountains", "forest", "beach", "sunset", "sunrise", "ocean wave",
     "nature landscape", "scenic", "waterfall", "desert dune", "flower field",
     "wildlife", "snowy peak", "national park", "hiking trail", "autumn leaves",
+    "hotel", "resort", "skyline", "tourist", "tourism", "boardwalk", "cruise",
+    "landmark", "monument", "cathedral exterior", "museum exterior", "airport terminal",
+    # ZeOrbit sells websites — reject common Unsplash false positives
+    "camera", "dslr", "canon eos", "photo studio", "softbox", "tripod", "photographer",
+    "classroom", "students at desk", "lecture hall", "chalkboard", "blackboard",
+    "pipe wrench", "plumbing pipe", "restaurant kitchen food", "chef plating",
 )
 
 
@@ -998,18 +1076,32 @@ def _stock_result_score(result: dict, query: str) -> int:
         tag_txt,
         query,
     ]).lower()
+    q = (query or "").lower()
+    wants_photo = any(x in q for x in ("photograph", "photographer", "camera"))
+    wants_edu = any(x in q for x in ("school", "classroom", "tutor", "university"))
+    # Hard reject camera / classroom stock unless the query explicitly asks for it.
+    if not wants_photo and any(m in blob for m in (
+        "camera", "dslr", "photo studio", "softbox", "photographer with camera", "canon ",
+    )):
+        return 0
+    if not wants_edu and any(m in blob for m in (
+        "classroom", "students sitting", "lecture hall", "school children",
+    )):
+        return 0
     if any(m in blob for m in _OFFTOPIC_STOCK_MARKERS):
-        # Allow only if clearly tech/business related too
+        # Allow only if clearly tech/business / website related too
         if not any(k in blob for k in (
-            "website", "laptop", "computer", "doctor", "clinic", "hospital",
-            "code", "design", "ui", "ux", "office desk", "developer", "medical",
-            "construction", "contractor", "plumber", "marketing",
+            "website", "laptop", "computer", "code", "design", "ui", "ux",
+            "office desk", "developer", "wordpress", "shopify", "mockup", "web design",
+            "responsive", "browser",
         )):
             return 0
+    # Prefer website-related hits
+    web_bonus = 2 if any(k in blob for k in ("website", "web design", "laptop", "ui", "mockup", "wordpress")) else 0
     words = [w for w in re.findall(r"[a-zA-Z]+", (query or "").lower()) if len(w) > 3]
     if not words:
-        return 1
-    return sum(1 for w in words if w in blob)
+        return 1 + web_bonus
+    return sum(1 for w in words if w in blob) + web_bonus
 
 
 def _openverse_relevance(result: dict, topic_words: List[str]) -> int:
@@ -1155,62 +1247,121 @@ async def generate_article_images(
     exclude_urls: Optional[Iterable[str]] = None,
     industry: str = "",
     niche: str = "",
+    search_intent: str = "",
+    image_concept_text: str = "",
+    keyword_index: int = 0,
 ) -> List[ImageAsset]:
     """Generate 1 featured + (count-1) in-content images with full SEO metadata.
 
-    Photos are auto-picked from Unsplash/Pexels using keyword + business niche +
-    industry (curated Unsplash URLs if no API keys). Each page in a batch stays unique.
+    Photos must match LOCATION + INDUSTRY + SERVICE + PROBLEM + INTENT — never
+    tourism/hotel/beach scenery just because a city name appears.
 
-    `exclude_urls` prevents reusing featured photos already assigned to other pages
-    in the same generate/refresh batch (and within this article).
+    `exclude_urls` prevents reusing photos already assigned in the same batch.
     """
     count = max(1, min(count, 3))
     assets: List[ImageAsset] = []
     location_words = {
         w for w in re.findall(r"[a-zA-Z]+", (location or "").lower()) if len(w) > 2
     }
-    topic, modifiers, fallback_topic = _related_stock_plan(
-        focus_keyword, industry, location_words, niche=niche,
-    )
+
+    # Prefer intent-driven stock plan when available (master rule image formula).
+    # Always bias toward website/laptop visuals — ZeOrbit sells sites, not trade services.
+    topic = ""
+    modifiers: List[str] = []
+    fallback_topic = "website design"
+    if search_intent or industry or image_concept_text:
+        try:
+            from services.zeorbit_local_seo import pick_search_intent, stock_query_from_concept, SEARCH_INTENTS
+            intent = None
+            if search_intent:
+                for i in SEARCH_INTENTS:
+                    if i.id == search_intent:
+                        intent = i
+                        break
+            if intent is None:
+                intent = pick_search_intent(location.split(",")[0] if location else "", keyword_index, industry=industry)
+            topic, modifiers = stock_query_from_concept(intent, industry, keyword_index)
+            fallback_topic = "website design"
+        except Exception as e:
+            print(f"[Image] intent plan fallback: {e}")
+    if not topic:
+        topic, modifiers, fallback_topic = _related_stock_plan(
+            "website design", industry, location_words, niche="website design",
+        )
+        fallback_topic = "website design"
+    # Always force website-visual queries for ZeOrbit SEO pages (ignore trade niches).
+    topic = topic if any(w in topic.lower() for w in ("website", "web design", "wordpress", "shopify", "laptop", "mockup")) else "website design laptop mockup"
+    if not modifiers:
+        modifiers = ["web designer office laptop", "wordpress dashboard screen", "shopify store laptop", "mobile website phone"]
+    fallback_topic = "website design"
 
     used: Set[str] = {normalize_image_key(u) for u in (exclude_urls or []) if u}
+    # Only website-design curated URLs when we need uniqueness — never photography/classroom pools.
+    web_only_pool = list(_WEB_DESIGN_IMAGES)
 
     for i in range(count):
         is_featured = i == 0
         modifier = modifiers[i % len(modifiers)]
+        # Vary query strongly per location index so 50 pages do not share one photo.
         query = f"{topic} {modifier}".strip()
-        seed = f"{topic}|{location}|{focus_keyword}|{i}|{angle_title}|{industry}|{niche}"
-        # Curated niche pools first (reliable on-topic). Stock APIs second with relevance filter.
-        # Never fall through to random picsum scenery placeholders.
-        url = _curated_image_url(fallback_topic or topic, seed=seed, exclude=used)
+        seed = (
+            f"{topic}|{location}|website-design|{i}|{angle_title}|"
+            f"{search_intent}|{keyword_index}|{image_concept_text[:80]}"
+        )
+        # Prefer curated website pool first (reliable on-topic). Hosted APIs are secondary.
+        url = _curated_image_url("website design", seed=seed, exclude=used)
         key = normalize_image_key(url)
-        if not url or (key and key in used):
-            url = await _hosted_image_url(query, seed=seed, exclude=used, location="")
-            key = normalize_image_key(url)
+        if (not url or key in used) and (settings.UNSPLASH_ACCESS_KEY or settings.PEXELS_API_KEY):
+            hosted = await _hosted_image_url(query, seed=seed, exclude=used, location="")
+            hkey = normalize_image_key(hosted)
+            if hosted and hkey and hkey not in used:
+                url, key = hosted, hkey
         if key and key in used:
-            for attempt in range(12):
-                alt = _curated_image_url(
-                    fallback_topic or topic,
-                    seed=f"{seed}|retry|{attempt}",
-                    exclude=used,
-                )
+            for attempt in range(16):
+                alt_seed = f"{seed}|retry|{attempt}|{keyword_index}"
+                alt = _curated_image_url("website design", seed=alt_seed, exclude=used)
                 alt_key = normalize_image_key(alt)
                 if alt_key and alt_key not in used:
                     url, key = alt, alt_key
                     break
-            if key in used:
-                url = await _hosted_image_url(
-                    query, seed=f"{seed}|retry-host", exclude=used, location="",
-                )
-                key = normalize_image_key(url)
+                if settings.UNSPLASH_ACCESS_KEY or settings.PEXELS_API_KEY:
+                    hosted = await _hosted_image_url(
+                        f"{topic} {modifiers[(i + attempt) % len(modifiers)]}",
+                        seed=alt_seed,
+                        exclude=used,
+                        location="",
+                    )
+                    hkey = normalize_image_key(hosted)
+                    if hosted and hkey and hkey not in used:
+                        url, key = hosted, hkey
+                        break
+        # Still colliding — only rotate within website-design curated pool (never cameras/classrooms).
+        if key and key in used:
+            for u in web_only_pool:
+                uk = normalize_image_key(u)
+                if uk and uk not in used:
+                    url, key = _with_unsplash_params(u), uk
+                    break
+            else:
+                print(f"[Image] skip slot {i}: no unique website URL left for {query}")
+                continue
         if key:
             used.add(key)
         if i == 0:
             print(f"[Image] related stock: {query} → {(url or '')[:80]}")
-        # Hard ban: never ship picsum placeholders
         if url and "picsum.photos" in url:
-            url = _curated_image_url(fallback_topic or topic or "website", seed=f"{seed}|nopicsum", exclude=set())
-        meta = build_image_metadata(focus_keyword, location, business_name, i, is_featured)
+            url = _curated_image_url("website design", seed=f"{seed}|nopicsum", exclude=used)
+            key = normalize_image_key(url)
+            if key in used:
+                continue
+            used.add(key)
+        # Clean focus for captions — never pass brief blobs.
+        clean_focus = "website design"
+        meta = build_image_metadata(
+            clean_focus, location, business_name, len(assets), is_featured=(len(assets) == 0),
+            image_concept_text=image_concept_text if image_concept_text and "working title" not in image_concept_text.lower() else "",
+            industry="",
+        )
         assets.append(ImageAsset(
             url=url,
             filename=meta["filename"],
@@ -1219,7 +1370,16 @@ async def generate_article_images(
             title=meta["title"],
             caption=meta["caption"],
             description=meta["description"],
-            is_featured=is_featured,
+            is_featured=(len(assets) == 0),
+        ))
+    # Guarantee at least one image
+    if not assets:
+        url = _curated_image_url("website design", seed=f"{topic}|{location}|solo", exclude=set())
+        meta = build_image_metadata("website design", location, business_name, 0, True, image_concept_text="", industry="")
+        assets.append(ImageAsset(
+            url=url, filename=meta["filename"], mime_type="image/webp",
+            alt_text=meta["alt_text"], title=meta["title"], caption=meta["caption"],
+            description=meta["description"], is_featured=True,
         ))
     return assets
 

@@ -1,7 +1,18 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
-import { ArrowLeft, RefreshCw, Save, CheckCircle, Upload, Globe, ExternalLink, Megaphone } from 'lucide-react'
-import { generateSingle, savePage, publishToWordPress, publishToWeb, zeorbitBlogUrl, zeorbitArticleUrl } from '../api'
+import { ArrowLeft, RefreshCw, Save, CheckCircle, Upload, Globe, ExternalLink, Megaphone, AlertTriangle, Wand2 } from 'lucide-react'
+import { generateSingle, savePage, publishToWordPress, publishToWeb, zeorbitBlogUrl, zeorbitArticleUrl, boostPageScores } from '../api'
+
+const MIN_SCORE = 90
+
+function scoreFails(block) {
+  const quality = Math.round(block?.quality_score ?? block?.readability_score ?? 0)
+  const keywordUse = Math.min(100, Math.round(block?.keyword_density || 0))
+  const fails = []
+  if (quality < MIN_SCORE) fails.push({ key: 'quality', label: 'Quality', value: quality })
+  if (keywordUse < MIN_SCORE) fails.push({ key: 'keyword', label: 'Keyword use', value: keywordUse })
+  return { quality, keywordUse, fails, ok: fails.length === 0 }
+}
 
 function ScoreRing({ value, color }) {
   const r = 20, c = 2 * Math.PI * r
@@ -90,12 +101,23 @@ export default function PagePreviewPage() {
   const [webPublishing, setWebPublishing] = useState(false)
   const [webUrl, setWebUrl] = useState(null)
   const [webError, setWebError] = useState('')
+  const [boosting, setBoosting] = useState(false)
+  const [boostError, setBoostError] = useState('')
 
   const businessType = state?.businessType || block?.business_type || ''
   const isPost = (state?.contentKind === 'post') || (block?.content_type === 'blog')
   const wpConfig = state?.wpConfig
 
   const handlePublishWeb = async () => {
+    const gate = scoreFails(block)
+    if (!gate.ok) {
+      setWebError(
+        `Cannot publish — fix scores below ${MIN_SCORE}%: `
+        + gate.fails.map((f) => `${f.label} ${f.value}%`).join(', ')
+        + '. Edit the copy or use AI fix.'
+      )
+      return
+    }
     setWebPublishing(true); setWebError('')
     try {
       const res = await publishToWeb(block)
@@ -104,7 +126,9 @@ export default function PagePreviewPage() {
       window.open(liveUrl, '_blank', 'noopener')
       window.open(zeorbitBlogUrl(), '_blank', 'noopener')
     } catch (e) {
-      setWebError(e.response?.data?.detail || 'Publish failed. Is the backend running?')
+      const d = e.response?.data?.detail
+      const msg = typeof d === 'object' && d?.message ? d.message : (typeof d === 'string' ? d : 'Publish failed. Is the backend running?')
+      setWebError(msg)
     } finally { setWebPublishing(false) }
   }
 
@@ -119,13 +143,37 @@ export default function PagePreviewPage() {
     )
   }
 
-  const score = Math.round(block.readability_score || 75)
-  const scoreColor = score >= 75 ? '#10b981' : score >= 50 ? '#f59e0b' : '#ef4444'
+  const { quality: score, keywordUse, fails: scoreFailList, ok: scoresOk } = scoreFails(block)
+  const scoreColor = score >= MIN_SCORE ? '#047857' : '#B91C1C'
+  const kwColor = keywordUse >= MIN_SCORE ? '#047857' : '#B91C1C'
+
+  const handleAiFixScores = async () => {
+    setBoosting(true)
+    setBoostError('')
+    setWebError('')
+    try {
+      const res = await boostPageScores(block)
+      setBlock(res.data)
+      const gate = scoreFails(res.data)
+      if (!gate.ok) {
+        setBoostError(
+          `Still below ${MIN_SCORE}%: `
+          + gate.fails.map((f) => `${f.label} ${f.value}%`).join(', ')
+          + '. Edit the body / keywords, or Regenerate.'
+        )
+      }
+    } catch (e) {
+      const d = e.response?.data?.detail
+      setBoostError(typeof d === 'string' ? d : 'AI fix failed. Edit Keyword / body text, then try again.')
+    } finally {
+      setBoosting(false)
+    }
+  }
 
   const handleRegen = async () => {
     setLoading(true)
     try {
-      const res = await generateSingle(businessType, block.city, block.state)
+      const res = await generateSingle(businessType, block.city, block.state, true)
       setBlock(res.data)
     } finally { setLoading(false) }
   }
@@ -137,6 +185,14 @@ export default function PagePreviewPage() {
   }
 
   const handlePublish = async () => {
+    const gate = scoreFails(block)
+    if (!gate.ok) {
+      setPublishResult({
+        success: false,
+        error: `Cannot publish — ${gate.fails.map((f) => `${f.label} ${f.value}%`).join(', ')} below ${MIN_SCORE}%.`,
+      })
+      return
+    }
     if (!wpConfig?.wp_url) return
     setPublishing(true)
     setPublishResult(null)
@@ -155,7 +211,15 @@ export default function PagePreviewPage() {
     if (block.featured_image_url && !hasFeatured) {
       list.unshift({ url: block.featured_image_url, is_featured: true, alt_text: block.h1 || block.title, caption: 'Featured image' })
     }
-    return list.filter(im => im && im.url)
+    const featKey = (block.featured_image_url || '').split('?')[0]
+    const footKey = (block.footer_image_url || '').split('?')[0]
+    return list.filter(im => im && im.url).map((im) => {
+      const key = (im.url || '').split('?')[0]
+      let role = 'Body'
+      if (im.is_featured || (featKey && key === featKey)) role = 'Header'
+      else if (footKey && key === footKey) role = 'Footer'
+      return { ...im, role }
+    })
   })()
 
   const TABS = [
@@ -201,8 +265,9 @@ export default function PagePreviewPage() {
             {saved ? <><CheckCircle size={13} /> Saved</> : <><Save size={13} /> Save</>}
           </button>
           {wpConfig?.wp_url && (
-            <button onClick={handlePublish} disabled={publishing}
+            <button onClick={handlePublish} disabled={publishing || !scoresOk}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+              title={!scoresOk ? `All scores must be ${MIN_SCORE}%+ before publish` : undefined}
               style={{ background: 'var(--bg-raised)', border: '1px solid var(--border-bright)', color: 'var(--text-1)' }}>
               <Upload size={13} className={publishing ? 'animate-pulse' : ''} />
               {publishing ? 'Publishing...' : publishResult?.success ? 'Published!' : 'Publish to WordPress'}
@@ -210,9 +275,9 @@ export default function PagePreviewPage() {
           )}
           <button
             onClick={handlePublishWeb}
-            disabled={webPublishing}
+            disabled={webPublishing || !scoresOk}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold btn-primary disabled:opacity-50"
-            title="Publish this page to the ZeOrbit website blog"
+            title={!scoresOk ? `All scores must be ${MIN_SCORE}%+ before publish` : 'Publish this page to the ZeOrbit website'}
           >
             {webPublishing
               ? <svg className="animate-spin" width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" strokeWidth="3" strokeLinecap="round"/></svg>
@@ -287,18 +352,67 @@ export default function PagePreviewPage() {
         </div>
       )}
 
+      {/* Score gate — high contrast; block publish until every gauge is 90+ */}
+      {!scoresOk && (
+        <div
+          className="rounded-xl p-4 flex gap-3"
+          style={{
+            background: '#FEF2F2',
+            border: '2px solid #DC2626',
+            boxShadow: '0 0 0 3px rgba(220,38,38,0.12)',
+          }}
+        >
+          <AlertTriangle size={22} className="flex-shrink-0 mt-0.5" style={{ color: '#B91C1C' }} />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="text-base font-bold" style={{ color: '#7F1D1D' }}>
+              Scores below {MIN_SCORE}% — correct before publish
+            </div>
+            <p className="text-[14px] font-medium leading-snug" style={{ color: '#0f172a' }}>
+              Every gauge must be {MIN_SCORE}%+. Fix the body / keywords yourself, or use AI fix.
+            </p>
+            <ul className="list-disc pl-5 space-y-1 text-[14px] font-semibold" style={{ color: '#0f172a' }}>
+              {scoreFailList.map((f) => (
+                <li key={f.key}>{f.label}: {f.value}% (need {MIN_SCORE}%+)</li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              disabled={boosting}
+              onClick={handleAiFixScores}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-[13px] font-bold disabled:opacity-50"
+              style={{ background: '#0f172a', color: '#fff' }}
+            >
+              {boosting ? <RefreshCw size={14} className="animate-spin" /> : <Wand2 size={14} />}
+              AI fix to {MIN_SCORE}%+
+            </button>
+            {boostError && (
+              <p className="text-[13px] font-medium" style={{ color: '#B91C1C' }}>{boostError}</p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Score cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: 'SEO Score', value: score, color: scoreColor },
-          { label: 'Keyword Density', value: Math.round(block.keyword_density || 0), color: 'var(--brand)' },
-          { label: 'Meta Complete', value: 100, color: '#10b981' },
+          { label: `Quality (need ${MIN_SCORE}+)`, value: score, color: scoreColor },
+          { label: `Keyword use (need ${MIN_SCORE}+)`, value: keywordUse, color: kwColor },
+          { label: 'Meta Complete', value: 100, color: '#047857' },
         ].map(s => (
-          <div key={s.label} className="card p-4 flex items-center gap-4">
+          <div
+            key={s.label}
+            className="card p-4 flex items-center gap-4"
+            style={s.value < MIN_SCORE && s.label !== 'Meta Complete'
+              ? { border: '2px solid #DC2626', background: '#FEF2F2' }
+              : undefined}
+          >
             <ScoreRing value={s.value} color={s.color} />
             <div>
-              <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{s.label}</div>
+              <div className="text-xs font-semibold" style={{ color: '#334155' }}>{s.label}</div>
               <div className="text-lg font-bold mt-0.5" style={{ color: s.color }}>{s.value}%</div>
+              {s.value < MIN_SCORE && s.label !== 'Meta Complete' && (
+                <div className="text-[11px] font-bold mt-0.5" style={{ color: '#B91C1C' }}>Below {MIN_SCORE}% — fix required</div>
+              )}
             </div>
           </div>
         ))}
@@ -346,9 +460,24 @@ export default function PagePreviewPage() {
                     <div key={i} className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
                       <div style={{ position: 'relative', aspectRatio: '16 / 10', background: 'var(--bg-overlay)' }}>
                         <img src={img.url} alt={img.alt_text || ''} loading="lazy"
-                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                          onError={(e) => {
+                            const el = e.currentTarget
+                            el.style.display = 'none'
+                            const wrap = el.parentElement
+                            if (wrap && !wrap.querySelector('[data-broken-img]')) {
+                              const note = document.createElement('div')
+                              note.setAttribute('data-broken-img', '1')
+                              note.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:12px;text-align:center;font-size:12px;font-weight:600;color:#7f1d1d;background:#fef2f2'
+                              note.textContent = 'Image URL broken (404) — Regenerate or refresh images'
+                              wrap.appendChild(note)
+                            }
+                          }} />
                         {img.is_featured && (
                           <span style={{ position: 'absolute', top: 8, left: 8, fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 999, background: 'var(--brand)', color: '#fff' }}>FEATURED</span>
+                        )}
+                        {img.role && (
+                          <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 999, background: img.role === 'Header' ? '#0f172a' : img.role === 'Footer' ? '#334155' : 'rgba(15,23,42,0.65)', color: '#fff' }}>{img.role}</span>
                         )}
                       </div>
                       <div className="p-3">

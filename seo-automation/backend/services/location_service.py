@@ -303,10 +303,12 @@ async def resolve_generation_cities(
     num_cities: int,
     extra_labels: Optional[List[str]] = None,
 ) -> List[CityInfo]:
-    """One CityInfo per generated page. Bulk extras never merge into a single title.
+    """Build the page list: chips first, then nearby fill up to num_cities.
 
-    If the user added community/city chips, those chips ARE the page list.
-    Nearby expansion is used only when no extras were added.
+    - Chips alone under the drag count → fill with nearby cities so Generate 50
+      still yields ~50 pages when the user only pinned a few communities.
+    - Chips alone at/above the drag count → chips are the full list.
+    - No chips → nearby expansion from the base city.
     """
     default_state = ""
     if base_location and "," in base_location:
@@ -314,14 +316,26 @@ async def resolve_generation_cities(
         if _STATE_ABBR.fullmatch(maybe):
             default_state = maybe.upper()
     extras = flatten_extra_locations(extra_labels, default_state=default_state)
-    if extras:
-        return extras
+    num = max(1, min(int(num_cities or 1), 100))
     loc = (base_location or "").strip()
-    if not loc:
-        return []
-    cities = await get_nearby_cities(loc, num_cities)
-    cities = [c for c in cities if getattr(c, "kind", "city") != "state"]
-    return cities
+
+    if extras and len(extras) >= num:
+        return extras[:num]
+
+    nearby: List[CityInfo] = []
+    if loc:
+        nearby = await get_nearby_cities(loc, num)
+        nearby = [c for c in nearby if getattr(c, "kind", "city") != "state"]
+    elif extras:
+        # No base city — expand from the first chip
+        seed = f"{extras[0].name}, {extras[0].state}".strip(", ")
+        if seed.strip(", "):
+            nearby = await get_nearby_cities(seed, num)
+            nearby = [c for c in nearby if getattr(c, "kind", "city") != "state"]
+
+    if extras:
+        return merge_extra_locations(nearby, extra_labels)[:num]
+    return nearby[:num]
 
 
 def merge_extra_locations(cities: List[CityInfo], extra_labels: Optional[List[str]]) -> List[CityInfo]:

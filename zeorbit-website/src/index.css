@@ -6126,7 +6126,48 @@ html.zo-a11y-dark body {
 .zo-article p {
   color: #3d4754;
   font-size: 17px;
-  line-height: 1.65;
+  line-height: 1.7;
+  font-weight: 400;
+  max-width: 40rem;
+  margin: 0 0 1.05em;
+}
+
+.zo-article-stack {
+  margin: 28px 0 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.zo-article-block {
+  padding: 8px 0 20px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.zo-article-block:last-child {
+  border-bottom: none;
+}
+
+.zo-article-block h2 {
+  margin-top: 8px;
+  margin-bottom: 14px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #0b1220;
+  max-width: 36rem;
+}
+
+.zo-article-list {
+  margin: 0 0 1em;
+  padding-left: 1.2em;
+  color: #3d4754;
+  font-size: 17px;
+  line-height: 1.7;
+  max-width: 40rem;
+}
+
+.zo-article-list li {
+  margin-bottom: 0.45em;
 }
 
 .zo-article h2 {
@@ -6152,6 +6193,20 @@ html.zo-a11y-dark body {
   display: block;
   width: 100%;
   height: auto;
+}
+
+.zo-article-footer-image {
+  margin: 28px 0 20px;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.zo-article-footer-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 360px;
+  object-fit: cover;
 }
 
 .zo-article-inline {

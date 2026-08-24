@@ -46,6 +46,9 @@ export const registerUser = async ({ name, email, password, role = 'client' }) =
 export const generateBulk = (data) =>
   api.post('/content/generate', data)
 
+export const suggestContentBrief = (data) =>
+  api.post('/content/suggest-brief', data)
+
 // Keyword + website-driven articles
 export const analyzeWebsite = (websiteUrl) =>
   api.post('/content/analyze-website', { website_url: websiteUrl })
@@ -55,6 +58,9 @@ export const generateArticles = (data) =>
 
 export const generateSingle = (businessType, city, state = 'CA', useAi = false) =>
   api.post('/content/generate/single', null, { params: { business_type: businessType, city, state, use_ai: useAi } })
+
+export const boostPageScores = (block) =>
+  api.post('/content/boost-scores', block)
 
 export const exportJson = (data) =>
   api.post('/content/export/json', data)
@@ -68,6 +74,9 @@ export const getNearbyCities = (baseLocation, numCities) =>
 
 export const getSanDiegoCounty = () =>
   api.get('/locations/san-diego-county')
+
+export const searchCities = (q = '', limit = 40) =>
+  api.get('/locations/cities', { params: { q, limit } })
 
 // ── Keywords ─────────────────────────────────────────────────────
 export const getKeywords = (businessType, city, state = 'CA') =>

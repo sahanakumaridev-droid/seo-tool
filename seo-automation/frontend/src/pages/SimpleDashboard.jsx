@@ -624,17 +624,21 @@ Image: ${block.featured_image_url}
                     {/* Featured Image - Large */}
                     <div style={{ position: 'relative', width: '100%', height: '400px', overflow: 'hidden', background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' }}>
                       <img 
-                        src={block.featured_image_url || `https://picsum.photos/seed/${block.business_type}-${block.city}/1200/600`}
-                        alt={block.title}
+                        src={block.featured_image_url || ''}
+                        alt={
+                          block.in_content_images?.find((im) => im.is_featured)?.alt_text
+                          || block.h1
+                          || block.title
+                          || 'Website design'
+                        }
                         style={{
                           width: '100%',
                           height: '100%',
                           objectFit: 'cover',
+                          display: block.featured_image_url ? 'block' : 'none',
                         }}
                         onError={(e) => {
-                          // Fallback to Picsum if image fails to load
-                          console.log('Image failed to load, using fallback:', e.target.src)
-                          e.target.src = `https://picsum.photos/seed/${block.business_type}-${block.city}/1200/600`
+                          e.target.style.display = 'none'
                         }}
                         loading="lazy"
                       />
