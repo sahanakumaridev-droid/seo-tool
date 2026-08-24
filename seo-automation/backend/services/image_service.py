@@ -567,6 +567,18 @@ _GENERIC_CURATED = [
     "https://images.unsplash.com/photo-1553877522-43269d4ea984",
 ]
 
+# 301 / redirects / URL migration — topic articles must not fall back to generic offices
+_REDIRECT_IMAGES = [
+    "https://images.unsplash.com/photo-1461749280684-dccba630e2f6",  # code on screen
+    "https://images.unsplash.com/photo-1498050108023-c5249f4df085",  # laptop code
+    "https://images.unsplash.com/photo-1555066931-4365d14bab8c",  # IDE dark
+    "https://images.unsplash.com/photo-1515879218367-8466d910aaa4",  # python/code
+    "https://images.unsplash.com/photo-1555949963-aa79dcee981c",  # coding hands
+    "https://images.unsplash.com/photo-1544197150-b99a580bb7a2",  # network / server
+    "https://images.unsplash.com/photo-1558494949-ef010cbdcc31",  # server rack
+    "https://images.unsplash.com/photo-1451187580459-43490279c0fa",  # digital / network globe
+]
+
 # Topic-specific search modifiers (generic "storefront" pulls wrong photos for web design).
 _TOPIC_MODIFIERS = {
     "web design": ["ui mockup", "designer laptop", "website wireframe", "creative desk"],
@@ -723,6 +735,8 @@ def _category_fallback_query(text: str) -> str:
 
 def _curated_pool_for_topic(text: str) -> List[str]:
     t = (text or "").lower().strip()
+    if re.search(r"\b(301|302|redirect|htaccess|url redirect|canonical)\b", t):
+        return list(_REDIRECT_IMAGES)
     # Exact / prefix family first so "finance software engineer" never steals
     # the software pool when the chosen topic is finance (and vice versa).
     fam = topic_image_family(t)

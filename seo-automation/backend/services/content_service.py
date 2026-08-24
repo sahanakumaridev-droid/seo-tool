@@ -222,12 +222,42 @@ def normalize_niche_text(text: str) -> str:
     return pattern.sub(_fix, text)
 
 
-def pick_primary_keyword(target_keywords: list, business_type: str, city: str, index: int = 0) -> str:
+def pick_primary_keyword(
+    target_keywords: list,
+    business_type: str,
+    city: str,
+    index: int = 0,
+    industry: str = "",
+) -> str:
+    """Pick the SEO primary keyword for this page.
+
+    Prefer keywords that already name the Industry (e.g. Healthcare). Otherwise
+    rotate the list, and for website-design niches prefix the industry so titles
+    become "Healthcare Website Design in Downtown Chula Vista…" not a bare
+    "WordPress Website Design" that ignores Healthcare / Startups.
+    """
     kws = [str(k).strip() for k in (target_keywords or []) if str(k).strip()]
+    ind = (industry or "").strip()
+    ind_l = ind.lower()
+
+    def _with_industry(kw: str) -> str:
+        if not ind or ind_l in (kw or "").lower():
+            return kw
+        if re.search(r"website|wordpress|web design|landing page", kw, re.I):
+            # "WordPress Website Design" → "Healthcare WordPress Website Design"
+            # unless kw already leads with a vertical word.
+            return f"{ind} {kw}".strip()
+        return kw
+
     if kws:
-        return kws[int(index) % len(kws)]
+        aligned = [k for k in kws if ind_l and ind_l in k.lower()]
+        pool = aligned or kws
+        return _with_industry(pool[int(index) % len(pool)])
     loc = (city or "").strip()
-    return f"{(business_type or 'website design').strip()} {loc}".strip()
+    base = (business_type or "website design").strip()
+    if ind and ind_l not in base.lower():
+        base = f"{ind} {base}".strip()
+    return f"{base} {loc}".strip()
 
 
 def pretty_keyword(text: str) -> str:
@@ -265,18 +295,46 @@ def article_topic(brief: str, target_keywords: list, business_type: str) -> str:
     return kws[0] if kws else (b[:120] or business_type or "guide")
 
 
-def _page_meta_title(primary: str, city: str, state: str, index: int = 0) -> str:
-    loc = f"{city}, {state}" if state else city
-    suffixes = (
-        "WordPress Experts",
-        "WordPress Design",
-        "Local Web Design",
-        "Conversion-Focused Sites",
-    )
+def _page_meta_title(
+    primary: str,
+    city: str,
+    state: str,
+    index: int = 0,
+    industry: str = "",
+) -> str:
+    """Location SEO titles in the ZeOrbit pattern the team uses in GSC sheets.
+
+    Examples:
+    - Healthcare Website Design in Downtown Chula Vista, CA | WordPress Experts
+    - WordPress Website Design for Healthcare in East Chula Vista, CA
+    - Small Business Website Design for Healthcare in Eastlake, CA
+    """
+    loc = f"{city}, {state}" if state and state not in (city or "") else city
     pretty = pretty_keyword(primary)
-    title = f"{pretty} in {loc} | {suffixes[int(index) % len(suffixes)]}"
+    ind = pretty_keyword(industry) if industry else ""
+    if ind:
+        patterns = [
+            f"{ind} Website Design in {loc} | WordPress Experts",
+            f"{ind} Website Designer in {loc} | WordPress Design",
+            f"WordPress Website Design for {ind} in {loc}",
+            f"{ind} Business Website Design in {loc} | WordPress Experts",
+            f"Small Business Website Design for {ind} in {loc}",
+            f"Custom {ind} Website Design in {loc}",
+            f"{ind} Website Designer in {loc} | WordPress",
+            f"WordPress Website Design for {ind} in {loc}",
+            f"{ind} Business Website Design in {loc}",
+            f"{pretty} in {loc} | WordPress Experts",
+        ]
+    else:
+        patterns = [
+            f"{pretty} in {loc} | WordPress Experts",
+            f"{pretty} in {loc} | WordPress Design",
+            f"{pretty} in {loc} | Local Web Design",
+            f"{pretty} in {loc}",
+        ]
+    title = patterns[int(index) % len(patterns)]
     if len(title) > 78:
-        title = f"{pretty} in {loc}"
+        title = f"{pretty} in {loc}" if pretty else f"{ind} Website Design in {loc}"
     return title[:80]
 
 
@@ -845,7 +903,9 @@ async def generate_seo_block(
     primary_kw = (
         article_topic(custom_requirements, target_keywords, business_type)
         if kind == "blog"
-        else pick_primary_keyword(target_keywords, business_type, city, keyword_index)
+        else pick_primary_keyword(
+            target_keywords, business_type, city, keyword_index, industry=industry or "",
+        )
     )
     layout = pick_layout_variant(city, primary_kw or business_type, kind)
     gen_kwargs = dict(
@@ -875,12 +935,18 @@ async def generate_seo_block(
     block.layout_variant = layout
     block.city = city
     block.state = state or block.state
+    # Pages: primary includes location for GSC-style focus keywords.
+    if kind == "blog":
+        focus = primary_kw.lower()
+    else:
+        focus = f"{primary_kw} {city}".lower().strip() if city else primary_kw.lower()
     if block.keywords:
-        block.keywords.primary = primary_kw.lower()
-    block.focus_keyword = primary_kw.lower()
+        block.keywords.primary = focus
+    block.focus_keyword = focus
 
     try:
         from services.image_service import generate_article_images
+        # Blogs: topic-only visuals (301 → redirect photos). Pages: niche + industry.
         img_focus = primary_kw if kind == "blog" else f"{primary_kw} {business_type}"
         images = await generate_article_images(
             img_focus, f"{city}, {state}".strip(", "), "ZeOrbit", count=3,
@@ -941,7 +1007,9 @@ async def _generate_ai_block(
         "Speak to a US business owner or operator."
     )
     kw_line = ", ".join(target_keywords) if target_keywords else "None"
-    primary_kw = (primary_keyword or pick_primary_keyword(target_keywords, business_type, city, keyword_index)).strip()
+    primary_kw = (primary_keyword or pick_primary_keyword(
+        target_keywords, business_type, city, keyword_index, industry=industry or "",
+    )).strip()
     layout = layout_variant if layout_variant in LAYOUT_INSTRUCTIONS else pick_layout_variant(city, business_type, content_kind)
     layout_note = LAYOUT_INSTRUCTIONS[layout]
 
@@ -1025,7 +1093,9 @@ Return ONLY valid JSON, no markdown."""
             ],
         )
         faq_questions = "\n".join([f"- {q}" for q in keywords.user_questions[:6]])
-        meta_title_example = _page_meta_title(primary_kw, city, state, keyword_index)
+        meta_title_example = _page_meta_title(
+            primary_kw, city, state, keyword_index, industry=industry or "",
+        )
         prompt = f"""You are writing ONE ZeOrbit service / location PAGE (not a blog post, not a medical article).
 
 WHO WE ARE: ZeOrbit is a San Diego technology company. We SELL website design, WordPress, landing pages, SEO, and AI-search-friendly sites. We are NOT a {industry or "healthcare"} provider.
@@ -1091,13 +1161,20 @@ Return ONLY valid JSON, no markdown."""
             faqs.append(FAQItem(question=_as_text(f.get("question")), answer=_as_text(f.get("answer"))))
     schema = _build_schema(bt, city, state, faqs)
 
-    title = _as_text(data.get("title")) or _page_meta_title(primary_kw, city, state, keyword_index)
+    # Pages: lock SEO title + H1 to the ZeOrbit location pattern (do not trust LLM drift).
+    if content_kind == "blog":
+        title = _as_text(data.get("title")) or pretty_keyword(primary_kw)[:60]
+        h1 = _as_text(data.get("h1")) or pretty_keyword(primary_kw)
+    else:
+        title = _page_meta_title(
+            primary_kw, city, state, keyword_index, industry=industry or "",
+        )
+        h1 = f"{pretty_keyword(primary_kw)} in {place}" if place else pretty_keyword(primary_kw)
     meta = _as_text(data.get("meta_description"))
     h2s = [_as_text(h) for h in (data.get("h2s") or []) if _as_text(h)]
     h3s = [_as_text(h) for h in (data.get("h3s") or []) if _as_text(h)]
     intro = _as_text(data.get("intro"))
     content = _sectioned_body(h2s, intro, data.get("content"))
-    h1 = _as_text(data.get("h1")) or f"{pretty_keyword(primary_kw)} in {place or city}".strip()
     content_text = intro + " " + content
 
     seo_score = _seo_score(content_text, title, meta, h2s, faqs, primary_kw, city, slug)
@@ -1230,14 +1307,16 @@ async def _generate_template_block(
             focus_keyword=primary.lower(),
         )
 
-    primary = (primary_keyword or pick_primary_keyword(target_keywords, business_type, city, keyword_index)).strip()
+    primary = (primary_keyword or pick_primary_keyword(
+        target_keywords, business_type, city, keyword_index, industry=industry or "",
+    )).strip()
     pretty = pretty_keyword(primary)
     who = _audience_who(industry, audience)
     buyers = _buyer_word(industry)
     loc = f"{city}, {state}".strip(", ") if state else city
     bt = business_type
     slug = _slugify(f"{primary.lower()}-{city}")
-    title = _page_meta_title(primary, city, state, keyword_index)
+    title = _page_meta_title(primary, city, state, keyword_index, industry=industry or "")
     meta = (
         f"ZeOrbit builds WordPress websites for {who} in {loc}. "
         f"Local visibility, trust, and conversions — talk with us about {pretty.lower()}."

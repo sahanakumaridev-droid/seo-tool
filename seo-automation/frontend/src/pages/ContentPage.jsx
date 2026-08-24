@@ -479,7 +479,7 @@ function ScoreBar({ label, value, color }) {
 
 // ── Main Page ──────────────────────────────────────────────────
 export default function ContentPage() {
-  const DEFAULTS = { business_type: '', base_location: 'Chula Vista, CA', num_cities: 10, industry: 'Contractors', audience: '' }
+  const DEFAULTS = { business_type: '', base_location: 'Chula Vista, CA', num_cities: 10, industry: '', audience: '' }
   const navigate = useNavigate()
   const [form, setForm] = useState(() => {
     try {
@@ -663,20 +663,25 @@ export default function ContentPage() {
   const sdCityNames = sdCounty?.incorporated_cities || []
   const sdCatalog = useMemo(() => collectSdCatalog(sdCounty), [sdCounty])
   const sdSearch = locKey(sdFilter)
-  const countyWide = sdSearch.length >= 2 || sdPick === 'All cities'
   const sdMatches = useMemo(() => {
     const pool = sdLayer === 'streets' ? sdCatalog.streets : sdCatalog.areas
     let rows = pool
-    if (sdPick && sdPick !== 'All cities' && sdPick !== 'Unincorporated' && !countyWide) {
+    // Keep city scope when a city is selected — searching must not jump county-wide.
+    if (sdPick && sdPick !== 'All cities' && sdPick !== 'Unincorporated') {
       rows = pool.filter((r) => locKey(r.city) === locKey(sdPick))
-    } else if (sdPick === 'Unincorporated' && !countyWide) {
+    } else if (sdPick === 'Unincorporated') {
       rows = pool.filter((r) => locKey(r.city) === 'unincorporated' || locKey(r.city).includes('unincorporated'))
     }
     if (sdSearch) {
-      rows = pool.filter((r) => locKey(r.name).includes(sdSearch) || locKey(r.city).includes(sdSearch) || locKey(placeChip(r)).includes(sdSearch))
+      rows = rows.filter(
+        (r) =>
+          locKey(r.name).includes(sdSearch) ||
+          locKey(r.city).includes(sdSearch) ||
+          locKey(placeChip(r)).includes(sdSearch),
+      )
     }
     return rows
-  }, [sdCatalog, sdLayer, sdPick, sdSearch, countyWide])
+  }, [sdCatalog, sdLayer, sdPick, sdSearch])
   const sdItems = sdMatches.map(placeChip)
 
   const addSdItems = (names) => {
@@ -722,6 +727,12 @@ export default function ContentPage() {
       setError('Add at least one target keyword before generating pages.')
       showToast('Target keywords are required')
       document.getElementById('target-keywords-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    if (contentKind === 'page' && !(form.industry || '').trim()) {
+      setError('Select Industry (e.g. Healthcare) so pages promote ZeOrbit to that client type — not a random vertical.')
+      showToast('Industry is required for pages')
+      document.getElementById('business-niche-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
     const pendingLocs = splitLocations(extraLocDraft)

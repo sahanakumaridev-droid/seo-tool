@@ -307,7 +307,14 @@ async def _sitemap_urlset(request, session, kind: str | None):
         + "".join(parts)
         + "</urlset>"
     )
-    return Response(content=xml, media_type="application/xml")
+    return Response(
+        content=xml,
+        media_type="application/xml",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
 
 
 @app.api_route("/sitemap.xml", methods=["GET", "HEAD"], tags=["Public Pages"])
@@ -322,7 +329,14 @@ async def sitemap_xml(request: Request, session=Depends(get_session)):
         f"<sitemap><loc>{base}/post-sitemap.xml</loc></sitemap>"
         "</sitemapindex>"
     )
-    return Response(content=xml, media_type="application/xml")
+    return Response(
+        content=xml,
+        media_type="application/xml",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
 
 
 @app.api_route("/page-sitemap.xml", methods=["GET", "HEAD"], tags=["Public Pages"])

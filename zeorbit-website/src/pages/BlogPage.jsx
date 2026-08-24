@@ -3,7 +3,7 @@ import { ArrowRight, Search } from 'lucide-react'
 import RevampHeader from '../components/revamp/RevampHeader'
 import SiteFooter from '../components/SiteFooter'
 import { listBlogPosts } from '../api'
-import { ZEORBIT_BLOG, ZEORBIT_BLOG_POSTS } from '../data/zeorbitBlog'
+import { ZEORBIT_BLOG } from '../data/zeorbitBlog'
 import { isOffsiteBlogHref, toSiteBlogHref } from '../lib/blogUrls'
 
 function formatDate(iso) {
@@ -39,7 +39,7 @@ function postLinkProps(item) {
 export default function BlogPage() {
   const [topic, setTopic] = useState('All')
   const [query, setQuery] = useState('')
-  const [posts, setPosts] = useState(ZEORBIT_BLOG_POSTS)
+  const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -48,9 +48,10 @@ export default function BlogPage() {
       try {
         const { data } = await listBlogPosts(0, 60)
         const apiPosts = Array.isArray(data?.posts) ? data.posts : []
-        if (!cancelled && apiPosts.length) setPosts(apiPosts)
+        // Always trust the API (including empty) so purged test blogs do not linger.
+        if (!cancelled) setPosts(apiPosts)
       } catch {
-        if (!cancelled) setPosts(ZEORBIT_BLOG_POSTS)
+        if (!cancelled) setPosts([])
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -144,7 +145,11 @@ export default function BlogPage() {
               </div>
             </a>
           ) : (
-            <p className="zo-blog-empty">No articles match that search.</p>
+            <p className="zo-blog-empty">
+              {posts.length === 0
+                ? 'No articles published yet. New posts from the SEO tool will appear here.'
+                : 'No articles match that search.'}
+            </p>
           )}
 
           {secondary.length > 0 ? (
