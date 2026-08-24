@@ -255,23 +255,51 @@ def _content_kind_of(block) -> str:
     return "post" if ct in ("blog", "post") else "page"
 
 
+# Real ZeOrbit marketing routes that must always appear in page-sitemap.xml
+# (Google must discover these even when no SEO tool pages are published yet).
+_SITE_MENU_PATHS = (
+    "/",
+    "/website-designing",
+    "/mobile-apps",
+    "/seo-ppc",
+    "/custom-software",
+    "/portfolio",
+    "/contact",
+    "/blog",
+)
+
+
 async def _sitemap_urlset(request, session, kind: str | None):
     from sqlalchemy import select
     from db import PageRecord
     from routes.pages import _public_base
+    from datetime import date
 
-    base = _public_base(request)
-    rows = (await session.execute(select(PageRecord))).scalars().all()
+    base = _public_base(request).rstrip("/")
     parts = []
+    today = date.today().isoformat()
+
+    # Page sitemap always lists the live site menu first — never only tool test URLs.
+    if kind in (None, "page"):
+        for path in _SITE_MENU_PATHS:
+            loc = base if path == "/" else f"{base}{path}"
+            parts.append(f"<url><loc>{loc}</loc><lastmod>{today}</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>")
+
+    rows = (await session.execute(select(PageRecord))).scalars().all()
     for row in rows:
         block = row.seo_block if isinstance(row.seo_block, dict) else {}
         row_kind = _content_kind_of(block)
         if kind and row_kind != kind:
             continue
-        slug = row.slug
+        slug = (row.slug or "").strip().strip("/")
+        if not slug:
+            continue
+        # Never re-list marketing menu routes as tool pages.
+        if f"/{slug}" in _SITE_MENU_PATHS:
+            continue
         updated = row.updated_at
         loc = f"{base}/{slug}"
-        last = updated.date().isoformat() if updated else ""
+        last = updated.date().isoformat() if updated else today
         parts.append(f"<url><loc>{loc}</loc><lastmod>{last}</lastmod></url>")
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
