@@ -9,11 +9,27 @@ import { SITE_CONTACT } from '../data/revampContent'
 
 const LAYOUTS = ['qa', 'steps', 'story', 'cards', 'split', 'timeline']
 
+const INSTRUCTION_MARKERS = [
+  'focus each page on the specific',
+  'make every page feel unique',
+  'custom content requirements',
+  'honor every point',
+  'avoid generic or repetitive',
+  'keep the content simple, credible',
+  'show how zeorbit can help with seo-',
+  'these should be treated only as ai',
+]
+
+function looksLikeInstruction(text) {
+  const t = String(text || '').toLowerCase()
+  return INSTRUCTION_MARKERS.some((m) => t.includes(m))
+}
+
 function paragraphs(text) {
   return String(text || '')
     .split(/\n{2,}/)
     .map((p) => p.trim())
-    .filter(Boolean)
+    .filter((p) => p && !looksLikeInstruction(p) && !/^#{1,6}\s/.test(p))
 }
 
 function layoutFor(slug, explicit) {
@@ -37,6 +53,14 @@ function bulletsFrom(text) {
   return parts.length >= 2 ? parts : null
 }
 
+function fallbackSection(heading) {
+  return (
+    `${heading || 'This section'} matters when someone lands on your site and needs a clear answer. ` +
+    'ZeOrbit builds WordPress pages that explain the offer in plain language, show proof, ' +
+    'and make the next step obvious — contact, call, or book.'
+  )
+}
+
 function parseMarkdownSections(raw, h3s) {
   const text = String(raw || '').trim()
   if (!/^##\s/m.test(text)) return null
@@ -47,7 +71,11 @@ function parseMarkdownSections(raw, h3s) {
   return chunks.map((chunk, i) => {
     const nl = chunk.indexOf('\n')
     const heading = (nl === -1 ? chunk : chunk.slice(0, nl)).trim()
-    const rest = (nl === -1 ? '' : chunk.slice(nl)).trim()
+    let rest = (nl === -1 ? '' : chunk.slice(nl)).trim()
+    rest = paragraphs(rest).join('\n\n')
+    if (!rest || rest.split(/\s+/).length < 20) {
+      rest = fallbackSection(heading)
+    }
     return { heading, sub: h3s[i] || '', text: rest, bullets: bulletsFrom(rest) }
   })
 }
@@ -75,18 +103,46 @@ function allocateSections(h2s, h3s, paras) {
           : 0
     const take = paras.slice(idx, idx + takeCount)
     idx += take.length
-    const text = take.join('\n\n')
+    let text = take.join('\n\n')
+    if (!text || text.split(/\s+/).length < 20) {
+      text = fallbackSection(heading)
+    }
     return { heading, sub: h3s[i] || '', text, bullets: bulletsFrom(text) }
   })
   return { sections, leftover: paras.slice(idx) }
 }
 
-function ArticleSections({ layout, h2s, h3s, body, rawContent }) {
+function ArticleSections({ layout, h2s, h3s, body, rawContent, images }) {
   const parsed = parseMarkdownSections(rawContent, h3s)
   const allocated = parsed
     ? { sections: parsed, leftover: [] }
     : allocateSections(h2s, h3s, body)
   const { sections, leftover } = allocated
+  const bodyImages = (images || []).filter((img) => img?.url && !img.is_featured)
+
+  const withImage = (sec, i) => {
+    const img = bodyImages[i]
+    return (
+      <>
+        {img ? (
+          <figure className="zo-article-inline">
+            <img
+              src={img.url}
+              alt={img.alt_text || sec.heading}
+              title={img.title || sec.heading}
+              loading="lazy"
+              onError={(e) => {
+                const fig = e.currentTarget.closest('figure')
+                if (fig) fig.style.display = 'none'
+              }}
+            />
+            {img.caption ? <figcaption>{img.caption}</figcaption> : null}
+          </figure>
+        ) : null}
+        <SectionCopy sec={sec} />
+      </>
+    )
+  }
 
   if (layout === 'steps' || layout === 'timeline') {
     return (
@@ -95,7 +151,7 @@ function ArticleSections({ layout, h2s, h3s, body, rawContent }) {
           <li key={`${sec.heading}-${i}`}>
             <h2>{sec.heading}</h2>
             {sec.sub ? <h3>{sec.sub}</h3> : null}
-            <SectionCopy sec={sec} />
+            {withImage(sec, i)}
           </li>
         ))}
       </ol>
@@ -109,7 +165,7 @@ function ArticleSections({ layout, h2s, h3s, body, rawContent }) {
           <section key={`${sec.heading}-${i}`} className="zo-article-card">
             <h2>{sec.heading}</h2>
             {sec.sub ? <h3>{sec.sub}</h3> : null}
-            <SectionCopy sec={sec} />
+            {withImage(sec, i)}
           </section>
         ))}
       </div>
@@ -123,7 +179,7 @@ function ArticleSections({ layout, h2s, h3s, body, rawContent }) {
           <section key={`${sec.heading}-${i}`} className={i % 2 === 0 ? 'is-problem' : 'is-solution'}>
             <h2>{sec.heading}</h2>
             {sec.sub ? <h3>{sec.sub}</h3> : null}
-            <SectionCopy sec={sec} />
+            {withImage(sec, i)}
           </section>
         ))}
       </div>
@@ -144,7 +200,7 @@ function ArticleSections({ layout, h2s, h3s, body, rawContent }) {
           <section key={`${sec.heading}-${i}`}>
             <h2>{sec.heading}</h2>
             {sec.sub ? <h3>{sec.sub}</h3> : null}
-            <SectionCopy sec={sec} />
+            {withImage(sec, i + 1)}
           </section>
         ))}
       </div>
@@ -157,7 +213,7 @@ function ArticleSections({ layout, h2s, h3s, body, rawContent }) {
         <details key={`${sec.heading}-${i}`} className="zo-article-qa-item" open={i < 2}>
           <summary>{sec.heading}</summary>
           {sec.sub ? <h3>{sec.sub}</h3> : null}
-          <SectionCopy sec={sec} />
+          {withImage(sec, i)}
         </details>
       ))}
       {leftover.map((p) => <p key={p.slice(0, 48)}>{p}</p>)}
@@ -233,7 +289,14 @@ export default function SeoArticlePage() {
                 </figure>
               ) : null}
               {block.intro ? paragraphs(block.intro).map((p) => <p key={p.slice(0, 40)}>{p}</p>) : null}
-              <ArticleSections layout={layout} h2s={h2s} h3s={h3s} body={body} rawContent={block.content} />
+              <ArticleSections
+                layout={layout}
+                h2s={h2s}
+                h3s={h3s}
+                body={body}
+                rawContent={block.content}
+                images={block.in_content_images || []}
+              />
               {block.cta ? <p className="zo-article-cta">{block.cta}</p> : null}
               <p>
                 <a className="zo-article-call" href={`tel:${SITE_CONTACT.phoneTel}`}>

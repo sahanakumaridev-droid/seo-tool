@@ -87,19 +87,29 @@ _MAP_ICONS = [
 
 
 def _social_bar() -> str:
-    # Brand-colored circles + white glyphs (X stays black circle so it reads on the bar)
+    # Match live zeorbit.com React topbar: email + brand socials (no phone here).
     icons = "".join(
         f'<a class="tb-social" href="{url}" target="_blank" rel="noreferrer" aria-label="social" '
         f'style="background:{c}">'
         f'<svg width="13" height="13" viewBox="0 0 24 24" fill="#fff"><path d="{d}"/></svg></a>'
         for url, d, c in _SOCIALS
     )
+    # Extra map / review icons (same set as RevampHeader)
+    extra = "".join([
+        f'<a class="tb-social" href="{_URL_APPLE_MAPS}" target="_blank" rel="noreferrer" aria-label="Apple Maps" '
+        f'style="background:#3A3A3C"><svg width="13" height="13" viewBox="0 0 24 24" fill="#fff"><path d="{_APPLE_PATH}"/></svg></a>',
+        f'<a class="tb-social" href="{_URL_GOOGLE_MAPS}" target="_blank" rel="noreferrer" aria-label="Google Maps" '
+        f'style="background:#fff;border:1px solid #ddd">'
+        f'<svg width="13" height="13" viewBox="0 0 24 24"><path fill="#4285F4" d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5c-1.4 0-2.5-1.1-2.5-2.5S10.6 6.5 12 6.5s2.5 1.1 2.5 2.5S13.4 11.5 12 11.5z"/></svg></a>',
+        f'<a class="tb-social" href="{_URL_YELP}" target="_blank" rel="noreferrer" aria-label="Yelp" '
+        f'style="background:#D32323"><svg width="13" height="13" viewBox="0 0 24 24" fill="#fff">'
+        f'<path d="M12.2 2.1c-.5-.2-1 .2-1.1.7L9.8 9.3c-.1.4.2.8.6.9l6.2 1.5c.5.1.9-.3.8-.8l-1.3-7.5c-.1-.5-.5-.9-1-.9l-2.9-.4z"/></svg></a>',
+    ])
     return (f'<div class="topbar">'
             f'<div class="topbar-l">'
-            f'<a class="mail" href="mailto:{EMAIL}">✉ {EMAIL}</a>'
-            f'<a class="mail tel" href="tel:{PHONE}">✆ {PHONE_DISPLAY}</a>'
+            f'<a class="mail" href="mailto:{EMAIL}">{EMAIL}</a>'
             f'</div>'
-            f'<div class="socials">{icons}</div></div>')
+            f'<div class="socials">{icons}{extra}</div></div>')
 
 
 def _share_bar(public_url: str, title: str, image_url: str = "") -> str:
@@ -398,7 +408,7 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
         ("Websites", f"{WEBSITE}/website-designing"),
         ("Mobile Apps", f"{WEBSITE}/mobile-apps"),
         ("SEO & Ads", f"{WEBSITE}/seo-ppc"),
-        ("Software", f"{WEBSITE}/custom-software"),
+        ("Custom Software", f"{WEBSITE}/custom-software"),
         ("Work", f"{WEBSITE}/portfolio"),
         ("Contact", f"{WEBSITE}/contact"),
     ]
@@ -490,12 +500,19 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
   }}
   .nav-mid a:hover {{ color:var(--brand); border-bottom-color:var(--brand); }}
   .nav .cta {{
-    font-family:var(--apple); font-size:11px; font-weight:600; color:#fff; background:#F33A3A;
-    padding:8px 14px; border-radius:20px; text-decoration:none; letter-spacing:.06em;
-    flex-shrink:0; transition:background .15s, transform .15s; justify-self:end;
-    border:1px solid #fff; text-align:center; text-transform:uppercase; white-space:nowrap;
+    font-family:var(--apple); font-size:14px; font-weight:700; color:var(--ink); background:transparent;
+    padding:0; border-radius:0; text-decoration:none; letter-spacing:.01em;
+    flex-shrink:0; transition:opacity .15s; justify-self:end;
+    border:none; text-align:center; text-transform:none; white-space:nowrap;
+    display:inline-flex; align-items:center; gap:10px;
   }}
-  .nav .cta:hover {{ background:#E02828; }}
+  .nav .cta-phone {{
+    width:40px; height:40px; border-radius:50%; background:#FF5A4E; color:#fff;
+    display:inline-flex; align-items:center; justify-content:center;
+  }}
+  .nav .cta:hover {{ background:transparent; opacity:.92; }}
+  .nav .cta:hover .cta-phone {{ background:#E02828; }}
+  .nav .cta-num {{ color:var(--ink); font-weight:700; }}
   .progress {{ position:fixed; top:0; left:0; height:2px; width:0; background:#F33A3A; z-index:20; }}
 
   @media (max-width:800px) {{
@@ -506,7 +523,8 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
     .topbar {{ padding:8px 16px; }}
     .nav {{ padding:7px 14px; gap:10px; }}
     .brand img {{ height:30px; }}
-    .nav .cta {{ padding:7px 12px; font-size:10px; }}
+    .nav .cta-num {{ display:none; }}
+    .nav .cta {{ padding:0; font-size:10px; }}
   }}
 
   /* Content — wider column so less empty left/right space on desktop */
@@ -848,7 +866,12 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
     <nav class="nav-mid" aria-label="Site">
       {nav_mid_html}
     </nav>
-    <a class="cta" href="tel:6197249517">CALL NOW : 619-724-9517</a>
+    <a class="cta" href="tel:6197249517" aria-label="Call 619-724-9517">
+      <span class="cta-phone" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.7 2.34a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.74.34 1.53.57 2.34.7A2 2 0 0 1 22 16.92z"/></svg>
+      </span>
+      <span class="cta-num">619-724-9517</span>
+    </a>
   </div>
 
   {hero}

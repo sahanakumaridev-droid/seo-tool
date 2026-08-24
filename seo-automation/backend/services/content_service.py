@@ -281,6 +281,63 @@ def pretty_keyword(text: str) -> str:
     return " ".join(parts)
 
 
+def _looks_like_writing_brief(text: str) -> bool:
+    """True when text is an AI instruction / style brief, not a topic or body copy."""
+    t = (text or "").strip().lower()
+    if not t:
+        return False
+    markers = (
+        "focus each page",
+        "make every page feel unique",
+        "custom content requirements",
+        "avoid generic",
+        "keep the content simple",
+        "show how zeorbit can help",
+        "honor every point",
+        "these should be treated only as",
+        "never appear as visible content",
+        "patient-focused, locally relevant",
+        "conversion-driven",
+    )
+    if any(m in t for m in markers):
+        return True
+    # Long multi-sentence writing directions without a clear how-to topic
+    if len(t) > 160 and t.count(".") >= 2 and not re.search(
+        r"^(how to|what is|why |are you |common |guide)", t
+    ):
+        return True
+    return False
+
+
+def _strip_instruction_leak(text: str, brief: str = "") -> str:
+    """Remove Custom Content Requirements / instruction paragraphs from body output.
+
+    Preserves markdown ## section structure produced by `_sectioned_body`.
+    """
+    raw = _as_text(text)
+    if not raw:
+        return ""
+    brief_l = (brief or "").strip().lower()
+    keep = []
+    for para in re.split(r"\n{2,}", raw):
+        p = para.strip()
+        if not p:
+            continue
+        # Keep section markers from _sectioned_body intact
+        if re.match(r"^##\s+\S", p):
+            keep.append(p)
+            continue
+        pl = p.lower()
+        if _looks_like_writing_brief(p):
+            continue
+        if brief_l and len(brief_l) > 40 and (
+            pl == brief_l or (brief_l in pl and len(pl) < len(brief_l) + 40)
+        ):
+            continue
+        keep.append(p)
+    return "\n\n".join(keep)
+
+
 def article_topic(brief: str, target_keywords: list, business_type: str) -> str:
     """Blog topic = the how-to / keyword, not a leftover page brief."""
     kws = [str(k).strip() for k in (target_keywords or []) if str(k).strip()]
@@ -288,11 +345,13 @@ def article_topic(brief: str, target_keywords: list, business_type: str) -> str:
         if re.search(r"how to|301|302|redirect|guide|what is|why ", k, re.I):
             return k
     b = (brief or "").strip()
+    if _looks_like_writing_brief(b):
+        b = ""
     if kws and (not b or len(b) > 140):
         return kws[0]
-    if b and len(b) <= 140:
+    if b and len(b) <= 140 and not _looks_like_writing_brief(b):
         return re.sub(r"[?!.]+$", "", b).strip() or (kws[0] if kws else business_type)
-    return kws[0] if kws else (b[:120] or business_type or "guide")
+    return kws[0] if kws else (business_type or "guide")
 
 
 def _page_meta_title(
@@ -356,15 +415,31 @@ def _as_text(val) -> str:
     return str(val).strip()
 
 
-def _sectioned_body(h2s: list, intro: str, content: str) -> str:
+def _sectioned_body(h2s: list, intro: str, content: str, brief: str = "") -> str:
     """Every H2 gets real paragraphs so the live article is not heading-only."""
     heads = [_as_text(h) for h in (h2s or []) if _as_text(h)]
-    intro_t = _as_text(intro)
-    body = _as_text(content)
+    intro_t = _strip_instruction_leak(_as_text(intro), brief)
+    body = _strip_instruction_leak(_as_text(content), brief)
     if heads and re.search(r"(?m)^##\s+", body):
         missing = [h for h in heads if not re.search(rf"(?m)^##\s+{re.escape(h)}\s*$", body)]
         if not missing:
-            return body
+            # Still ensure no section is empty
+            parts = re.split(r"(?m)^##\s+", body)
+            rebuilt = []
+            for part in parts[1:]:
+                nl = part.find("\n")
+                if nl == -1:
+                    heading, rest = part.strip(), ""
+                else:
+                    heading, rest = part[:nl].strip(), part[nl:].strip()
+                rest = _strip_instruction_leak(rest, brief)
+                if not rest or len(rest.split()) < 25:
+                    rest = (
+                        f"{heading}. ZeOrbit covers this in clear, useful detail — what you offer, "
+                        f"who it is for in this area, and the practical next step visitors should take."
+                    )
+                rebuilt.append(f"## {heading}\n\n{rest}")
+            return "\n\n".join(rebuilt)
     # Drop leftover markdown headings so we do not wrap ## twice.
     body = re.sub(r"(?m)^##\s+.+$", "", body).strip()
     paras = [p.strip() for p in re.split(r"\n{2,}", body) if p.strip()]
@@ -392,9 +467,17 @@ def _sectioned_body(h2s: list, intro: str, content: str) -> str:
     out = []
     for i, h in enumerate(heads):
         piece = chunks[i] or [
-            f"{h}. We cover this in plain language so visitors in this area know exactly what to do next."
+            f"{h}. We cover this in plain language so visitors in this area know exactly what to do next. "
+            f"ZeOrbit builds WordPress sites with clear service pages, local signals, and a simple path to contact."
         ]
-        out.append(f"## {h}\n\n" + "\n\n".join(piece))
+        # Ensure minimum substance per section
+        joined = "\n\n".join(piece)
+        if len(joined.split()) < 25:
+            joined = (
+                f"{joined} ZeOrbit helps you turn this into a practical page for local visitors — "
+                f"clear messaging, mobile layout, and a next step that feels natural."
+            )
+        out.append(f"## {h}\n\n{joined}")
     extra = paras[idx:]
     if extra:
         out.append("\n\n".join(extra))
@@ -697,52 +780,100 @@ async def _get_business_image(business_type: str, city: str) -> str:
     
     return image_url
 
-def _kw_words_present(text: str, keyword: str) -> bool:
-    """True if every significant word of `keyword` appears in `text`,
-    regardless of order or adjacency. Real SEO copy rarely repeats a keyword
-    as one exact contiguous phrase — "Web Design Services in San Diego" is
-    better writing than the literal "web design san diego" and should still
-    get full credit for covering the keyword, not be penalized for it."""
-    text_l = text.lower()
-    return all(word in text_l for word in keyword.lower().split())
+def _significant_kw_words(keyword: str) -> list:
+    stop = {
+        "in", "for", "of", "and", "a", "the", "to", "on", "near", "me", "with", "your",
+        "ca", "tx", "ny", "fl", "az", "wa", "or", "nv", "co",
+    }
+    return [w for w in (keyword or "").lower().split() if w and w not in stop and len(w) > 1]
+
+
+def _kw_words_present(text: str, keyword: str, min_ratio: float = 1.0) -> bool:
+    """True if enough significant words of `keyword` appear in `text`.
+
+    Long multi-word primaries (industry + niche + city leftovers) rarely fit
+    entirely into every H2 — require all words by default, or a ratio for softer checks.
+    """
+    text_l = (text or "").lower()
+    words = _significant_kw_words(keyword)
+    if not words:
+        return bool((keyword or "").lower() in text_l)
+    hits = sum(1 for w in words if w in text_l)
+    return hits >= max(1, int(round(len(words) * min_ratio)))
 
 
 def _seo_score(
     text: str, title: str, meta: str, h2s: list, faqs: list,
-    keyword: str, city: str, slug: str
+    keyword: str, city: str, slug: str, h1: str = "",
 ) -> float:
     """
     Composite SEO score 0-100 based on real ranking factors:
-    - Keyword in title (15pts)
-    - Keyword in meta description (10pts)
-    - Keyword in slug (10pts)
-    - Keyword in first 100 words / intro (15pts)
-    - Keyword in at least 2 H2s (10pts)
-    - Content length >= 300 words (10pts)
-    - Has FAQs >= 5 (10pts)
-    - Location in title (10pts)
-    - Has H2s >= 4 (5pts)
-    - Meta length 120-160 chars (5pts)
+    - Keyword coverage in title (15)
+    - Keyword in meta (10)
+    - Keyword in slug (10)
+    - Keyword in intro / first 120 words (15)
+    - Keyword coverage across H2s (10)
+    - Content length (15) — scaled 300→600 words
+    - FAQs (10)
+    - Location in title (5)
+    - H1 keyword coverage (5)
+    - Meta length 120-160 (5)
     """
-    score = 0
-    kw = keyword.lower()
-    city_l = city.lower()
-    title_l = title.lower()
-    meta_l = meta.lower()
-    slug_l = slug.lower()
-    words = text.lower().split()
-    first_100 = " ".join(words[:100])
+    score = 0.0
+    kw = (keyword or "").lower()
+    city_l = (city or "").lower()
+    title_l = (title or "").lower()
+    meta_l = (meta or "").lower()
+    slug_l = (slug or "").lower()
+    h1_l = (h1 or "").lower()
+    words = (text or "").lower().split()
+    first_120 = " ".join(words[:120])
+    sig = _significant_kw_words(keyword)
 
-    if _kw_words_present(title, keyword):                score += 15
-    if _kw_words_present(meta, keyword):                 score += 10
-    if kw.replace(" ", "-") in slug_l or kw.replace(" ", "") in slug_l: score += 10
-    if _kw_words_present(first_100, keyword):            score += 15
-    if sum(1 for h in h2s if _kw_words_present(h, keyword)) >= 2: score += 10
-    if len(words) >= 300:                                score += 10
-    if len(faqs) >= 5:                                   score += 10
-    if city_l in title_l:                                score += 10
-    if len(h2s) >= 4:                                    score += 5
-    if 120 <= len(meta) <= 165:                          score += 5
+    if _kw_words_present(title, keyword, 0.7):
+        score += 15
+    if _kw_words_present(meta, keyword, 0.6):
+        score += 10
+    slug_ok = False
+    if kw:
+        slug_ok = kw.replace(" ", "-") in slug_l or kw.replace(" ", "") in slug_l
+    if not slug_ok and sig:
+        slug_ok = sum(1 for w in sig if w in slug_l) >= max(1, len(sig) // 2)
+    if slug_ok:
+        score += 10
+    if _kw_words_present(first_120, keyword, 0.7):
+        score += 15
+
+    # H2 coverage: majority of significant words across 2+ headings, or soft partial credit
+    h2_hits = sum(1 for h in h2s if _kw_words_present(h, keyword, 0.5))
+    if h2_hits >= 2:
+        score += 10
+    elif h2_hits == 1:
+        score += 5
+    elif any(_kw_words_present(h, keyword, 0.35) for h in h2s):
+        score += 3
+
+    wc = len(words)
+    if wc >= 600:
+        score += 15
+    elif wc >= 450:
+        score += 12
+    elif wc >= 300:
+        score += 10
+    elif wc >= 200:
+        score += 5
+
+    if len(faqs) >= 5:
+        score += 10
+    elif len(faqs) >= 3:
+        score += 6
+
+    if city_l and city_l in title_l:
+        score += 5
+    if h1_l and _kw_words_present(h1, keyword, 0.7):
+        score += 5
+    if 120 <= len(meta or "") <= 165:
+        score += 5
 
     return float(min(score, 100))
 
@@ -860,17 +991,91 @@ VOICE — American English, user-first, conversational (ZeOrbit):
 - Use American spelling: optimize, color, center, organization, favorite.
 - Avoid stiff jargon (synergies, leverage, best-in-class, holistic solutions).
 - Second person ("you") over "businesses seeking world-class partners".
+- NEVER paste Custom Content Requirements, writing briefs, or meta-instructions into the article body.
+- NEVER leave an H2 empty — every heading needs 2–4 full sentences of real content.
+- Vary structure: do not reuse the same five generic H2s on every page. Match the BODY LAYOUT note.
+- Quality bar: content should read like a strong ChatGPT / Claude / Gemini draft — specific, natural, topic-aware.
 """
 
 LAYOUT_VARIANTS = ("qa", "steps", "story", "cards", "split", "timeline")
 
 LAYOUT_INSTRUCTIONS = {
-    "qa": "Use question-style H2s a real customer would ask. Body answers in short paragraphs, then a 3-item list.",
-    "steps": "Structure as a how-to: H2s are numbered steps (Step 1, Step 2…). Body is actionable, not a pitch.",
-    "story": "Open with a local situation, then proof, then what working together looks like. One H2 should be a short anecdote.",
-    "cards": "Each H2 is a distinct benefit/offer card (speed, local SEO, care plan, cost clarity). Keep each section 2-4 sentences.",
+    "qa": "Use question-style H2s a real customer would ask. Body answers in short paragraphs, then a 3-item list under at least one H2.",
+    "steps": "Structure as a how-to: H2s are numbered steps (Step 1…, Step 2…). Body is actionable with concrete deliverables, not a pitch dump.",
+    "story": "Open with a local situation, then proof, then what working together looks like. One H2 should be a short anecdote tied to this industry/location.",
+    "cards": "Each H2 is a distinct benefit/offer card (speed, local SEO, care plan, cost clarity, launch support). Keep each section 2-4 sentences plus one concrete example.",
     "split": "Alternate problem vs solution: first H2 is the pain in this city, next is how you fix it, then who it's for, then timeline, then next step.",
-    "timeline": "Walk the reader through a project timeline (week 1 discovery → design → build → launch → support).",
+    "timeline": "Walk the reader through a project timeline (week 1 discovery → design → build → launch → support). Name real milestones.",
+}
+
+
+def _page_h2_set(
+    layout: str,
+    industry: str,
+    buyers: str,
+    city: str,
+    audience: str,
+    pretty: str,
+) -> list:
+    """Diverse H2 sets so pages don't all share the same five headings."""
+    ind = industry or "local"
+    city_l = city or "your area"
+    aud = audience or "teams"
+    sets = {
+        "qa": [
+            f"What should a {ind} website include?",
+            f"How do {buyers} in {city_l} find you online?",
+            "What makes a WordPress site conversion-ready?",
+            "How does ZeOrbit keep the project clear?",
+            f"Ready for {pretty.lower()} in {city_l}?",
+        ],
+        "steps": [
+            f"Step 1: Clarify your {ind} offers for {city_l}",
+            "Step 2: Map pages visitors actually need",
+            "Step 3: Build WordPress layouts that convert",
+            "Step 4: Add local SEO and AI-ready structure",
+            "Step 5: Launch, measure, and improve",
+        ],
+        "story": [
+            f"A familiar problem for {ind} businesses in {city_l}",
+            "What changed when the website got clearer",
+            "WordPress pages that match how people search",
+            "From first visit to a booked next step",
+            f"Why {aud} in {city_l} work with ZeOrbit",
+        ],
+        "cards": [
+            f"WordPress built for {ind} services",
+            f"Local visibility in {city_l}",
+            "Landing pages that match your campaigns",
+            "Trust, speed, and mobile clarity",
+            "A simple path to start with ZeOrbit",
+        ],
+        "split": [
+            f"Why {ind} sites in {city_l} lose visitors",
+            "How ZeOrbit fixes the experience",
+            f"Who this website is for in {city_l}",
+            "What the build timeline looks like",
+            "Your next step with ZeOrbit",
+        ],
+        "timeline": [
+            "Week 1: Discovery and page plan",
+            "Design: Clear layouts for your services",
+            "Build: WordPress, mobile, and forms",
+            "Launch: Local SEO and AI-friendly structure",
+            "After launch: Care and improvements",
+        ],
+    }
+    return sets.get(layout) or sets["cards"]
+
+
+PROVIDER_STYLE_NOTES = {
+    "openai": "Write with GPT-4-level clarity: crisp sentences, concrete examples, no filler.",
+    "chatgpt": "Write with GPT-4-level clarity: crisp sentences, concrete examples, no filler.",
+    "gpt": "Write with GPT-4-level clarity: crisp sentences, concrete examples, no filler.",
+    "anthropic": "Write with Claude-level care: structured, precise, naturally varied section openings.",
+    "claude": "Write with Claude-level care: structured, precise, naturally varied section openings.",
+    "gemini": "Write with Gemini-level breadth: useful detail, natural local flavor, strong scannability.",
+    "groq": "Write tightly and specifically — every paragraph earns its place; no template filler.",
 }
 
 
@@ -946,8 +1151,8 @@ async def generate_seo_block(
 
     try:
         from services.image_service import generate_article_images
-        # Blogs: topic-only visuals (301 → redirect photos). Pages: niche + industry.
-        img_focus = primary_kw if kind == "blog" else f"{primary_kw} {business_type}"
+        # Use one clean focus phrase — never mash primary_kw + business_type (causes bad captions).
+        img_focus = primary_kw if kind == "blog" else (original_niche or primary_kw or business_type)
         images = await generate_article_images(
             img_focus, f"{city}, {state}".strip(", "), "ZeOrbit", count=3,
             exclude_urls=exclude_image_urls,
@@ -1012,6 +1217,8 @@ async def _generate_ai_block(
     )).strip()
     layout = layout_variant if layout_variant in LAYOUT_INSTRUCTIONS else pick_layout_variant(city, business_type, content_kind)
     layout_note = LAYOUT_INSTRUCTIONS[layout]
+    provider_key = (llm_provider or "").lower().strip()
+    provider_note = PROVIDER_STYLE_NOTES.get(provider_key, "Write at the quality level of ChatGPT, Claude, or Gemini — specific and human.")
 
     if content_kind == "blog":
         topic = article_topic(brief, target_keywords, business_type) or primary_kw
@@ -1033,13 +1240,22 @@ async def _generate_ai_block(
             if place else
             "Do not force a city into the title, H1, or every paragraph. This is a topic article."
         )
-        extra_brief = brief if brief and brief.lower() not in topic.lower() and len(brief) > 20 else ""
+        # Brief is prompt-only — never use instruction briefs as the article topic body.
+        extra_brief = ""
+        if brief and not _looks_like_writing_brief(brief) and brief.lower() not in topic.lower() and len(brief) > 20:
+            extra_brief = brief
+        elif brief and _looks_like_writing_brief(brief):
+            extra_brief = (
+                "(Editor style notes — follow these as writing guidance ONLY; "
+                "do NOT quote or paste them into the article.)\n" + brief
+            )
         prompt = f"""You are a US content writer creating ONE blog post / article for ZeOrbit.com.
+Model style: {provider_note}
 
 THIS ARTICLE'S TOPIC (this is the subject — teach it, do not replace it):
 {topic}
 
-Custom notes from the editor (follow if they refine the topic; ignore if they describe a different service page):
+Custom notes from the editor (guidance only — NEVER paste into the published body):
 {extra_brief or "None — stay on the topic above."}
 
 Business context (only mention if the topic is about hiring help): ZeOrbit builds websites, apps, and SEO for US companies. Do not turn a how-to into a ZeOrbit sales page.
@@ -1056,16 +1272,18 @@ NON-NEGOTIABLE:
 - Do not write generic "web design in San Diego" copy.
 - Do not write about {industry or "an unrelated industry"} unless the topic itself is that industry.
 - Title and H1 must name the topic (e.g. "How to Set 301 Redirects on a Website").
+- content MUST use markdown H2 lines that exactly match each string in h2s, with 2–4 full paragraphs under EVERY H2 (80+ words each). No empty sections.
+- Do NOT include Custom Content Requirements text in intro, content, faqs, or cta.
 
 Generate a JSON response with EXACTLY this structure:
 {{
   "title": "SEO title 50-60 chars, about the topic (not a list of cities)",
   "meta_description": "150-160 chars, promise the reader will learn the topic",
   "h1": "Clear article H1 that matches the topic (question or how-to is fine)",
-  "h2s": ["5 H2s that outline the article: what it is, steps, mistakes, tools, when to get help"],
-  "h3s": ["4 supporting H3s"],
+  "h2s": ["5 DISTINCT H2s shaped by the {layout} layout — not the same generic list every time"],
+  "h3s": ["4 short supporting labels (not empty body sections)"],
   "intro": "2-3 sentences. Open with a user-focused question or situation, then say what this post covers.",
-  "content": "4-6 paragraphs, 500+ words. Numbered or bulleted steps when teaching. Separate paragraphs with double newlines. Include real steps (file names, plugin names, or hosting UI) when the topic is technical.",
+  "content": "Markdown: for EACH h2 write '## Exact H2' then 2-4 paragraphs. 700+ words total. Numbered/bulleted steps when teaching. Separate paragraphs with double newlines. Include real steps (file names, plugin names, or hosting UI) when technical.",
   "faqs": [
     {{"question": "Practical FAQ 1 about the topic", "answer": "2-3 sentence answer"}},
     {{"question": "FAQ 2", "answer": "2-3 sentence answer"}},
@@ -1077,7 +1295,7 @@ Generate a JSON response with EXACTLY this structure:
   "cta": "Soft American CTA: invite a conversation if they need help applying this — not a hard sell."
 }}
 
-Return ONLY valid JSON, no markdown."""
+Return ONLY valid JSON, no markdown fences."""
     else:
         pretty = pretty_keyword(primary_kw)
         keywords = KeywordSet(
@@ -1096,7 +1314,13 @@ Return ONLY valid JSON, no markdown."""
         meta_title_example = _page_meta_title(
             primary_kw, city, state, keyword_index, industry=industry or "",
         )
+        h2_examples = _page_h2_set(layout, industry, buyers, city, audience, pretty)
+        h2_json = json.dumps(h2_examples)
+        brief_block = brief if brief else (
+            "Promote ZeOrbit WordPress / website design for this industry and audience in this location."
+        )
         prompt = f"""You are writing ONE ZeOrbit service / location PAGE (not a blog post, not a medical article).
+Model style: {provider_note}
 
 WHO WE ARE: ZeOrbit is a San Diego technology company. We SELL website design, WordPress, landing pages, SEO, and AI-search-friendly sites. We are NOT a {industry or "healthcare"} provider.
 
@@ -1107,11 +1331,13 @@ PRIMARY KEYWORD (must appear in title, H1, and intro): {pretty}
 Other keywords to use naturally (do not dump as a list): {kw_line}
 TITLE PATTERN to follow closely: {meta_title_example}
 
-CUSTOM CONTENT REQUIREMENTS (honor every point — this is the page brief):
-{brief or "Promote ZeOrbit WordPress / website design for this industry and audience in this location."}
+CUSTOM CONTENT REQUIREMENTS — WRITING BRIEF ONLY (follow these points; NEVER paste this block into intro/content/cta/faqs):
+{brief_block}
 
 {audience_line}
 BODY LAYOUT ({layout}): {layout_note}
+Suggested H2 set for this layout (you may refine wording, but keep this structure variety — do NOT default to the old generic five every time):
+{h2_json}
 {VOICE_RULES}
 
 NON-NEGOTIABLE:
@@ -1119,20 +1345,22 @@ NON-NEGOTIABLE:
 - Do not write as if we treat patients, file lawsuits, or sell houses unless the niche is that trade AND we are that trade. Here we build websites FOR {who}.
 - Open like: "{who[:1].upper() + who[1:] if who else "Businesses"} in {city or "your city"} need a website that is easy to use, easy to find, and built to turn visitors into {buyers}."
 - Then: "ZeOrbit provides WordPress website design for {industry or "local"} businesses..."
-- Cover: custom WordPress, mobile layouts, service pages, high-converting landing pages, contact/appointment paths, local SEO, speed, AI-search-friendly structure, turning visitors into leads.
-- Keep copy simple, credible, localized to {city} only, conversion-driven.
-- Do NOT list other neighborhoods. Do NOT write generic "{{business type}} in {{city}}" filler that ignores Healthcare / Startups / WordPress.
+- Cover: custom WordPress, mobile layouts, service pages, high-converting landing pages, contact/appointment paths, local SEO, speed, AI-search-friendly structure, turning visitors into leads — woven into the layout, not as identical sections every page.
+- Keep copy simple, credible, localized to {city} only, conversion-driven, and UNIQUE to this page's layout + brief.
+- Do NOT list other neighborhoods. Do NOT write generic filler.
 - Name ZeOrbit in the intro and the CTA.
+- content MUST include '## Exact H2' for each h2s item with 2–4 full paragraphs under each (no empty headings). 700+ words.
+- NEVER copy the CUSTOM CONTENT REQUIREMENTS paragraph(s) into the published fields.
 
 Generate a JSON response with EXACTLY this structure:
 {{
   "title": "{meta_title_example}",
   "meta_description": "150-160 chars: ZeOrbit WordPress / website design for {who} in {city}, with a helpful CTA",
   "h1": "{pretty} in {place or city}",
-  "h2s": ["WordPress websites for {industry or "local"} businesses", "Get found by local {buyers}", "Built for search and AI", "Turn website visitors into leads", "Why {city or "local"} {audience or "teams"} choose ZeOrbit"],
+  "h2s": {h2_json},
   "h3s": ["Custom WordPress and landing pages", "Local SEO-friendly content", "Clear next steps for {buyers}", "A simple way to start"],
   "intro": "2-3 sentences. Audience + {city}. ZeOrbit builds the site. What they get.",
-  "content": "4-6 short paragraphs plus a bullet list of deliverables. 400+ words. Separate paragraphs with double newlines. Stay on WordPress / website design for {who} in {city}.",
+  "content": "Markdown sections matching h2s. Each section 2-4 paragraphs. Include one short bullet list of deliverables somewhere. Stay on WordPress / website design for {who} in {city}.",
   "faqs": [
     {{"question": "FAQ 1 for {who} in {city}", "answer": "2-3 sentences, ZeOrbit as the builder"}},
     {{"question": "FAQ 2", "answer": "2-3 sentences"}},
@@ -1147,9 +1375,9 @@ Generate a JSON response with EXACTLY this structure:
 FAQ questions to address:
 {faq_questions}
 
-Return ONLY valid JSON, no markdown."""
+Return ONLY valid JSON, no markdown fences."""
 
-    data = await chat_json(prompt, temperature=0.4 if content_kind == "blog" else 0.55, max_tokens=3500, provider=llm_provider)
+    data = await chat_json(prompt, temperature=0.72 if content_kind == "blog" else 0.78, max_tokens=4500, provider=llm_provider)
     if not data:
         raise RuntimeError("LLM generation failed or returned no data")
     bt = business_type.title()
@@ -1170,14 +1398,18 @@ Return ONLY valid JSON, no markdown."""
             primary_kw, city, state, keyword_index, industry=industry or "",
         )
         h1 = f"{pretty_keyword(primary_kw)} in {place}" if place else pretty_keyword(primary_kw)
-    meta = _as_text(data.get("meta_description"))
+    meta = _strip_instruction_leak(_as_text(data.get("meta_description")), brief)
     h2s = [_as_text(h) for h in (data.get("h2s") or []) if _as_text(h)]
+    if content_kind != "blog" and len(h2s) < 4:
+        h2s = _page_h2_set(layout, industry, buyers, city, audience, pretty_keyword(primary_kw))
     h3s = [_as_text(h) for h in (data.get("h3s") or []) if _as_text(h)]
-    intro = _as_text(data.get("intro"))
-    content = _sectioned_body(h2s, intro, data.get("content"))
+    intro = _strip_instruction_leak(_as_text(data.get("intro")), brief)
+    content = _sectioned_body(h2s, intro, data.get("content"), brief=brief)
+    content = _strip_instruction_leak(content, brief)
+    cta = _strip_instruction_leak(_as_text(data.get("cta")), brief)
     content_text = intro + " " + content
 
-    seo_score = _seo_score(content_text, title, meta, h2s, faqs, primary_kw, city, slug)
+    seo_score = _seo_score(content_text, title, meta, h2s, faqs, primary_kw, city, slug, h1=h1)
     density = _keyword_density(content_text, primary_kw)
 
     return SEOBlock(
@@ -1190,11 +1422,11 @@ Return ONLY valid JSON, no markdown."""
         meta_description=meta,
         h1=h1,
         h2s=h2s,
-        h3s=data.get("h3s", []),
+        h3s=h3s,
         intro=intro,
         content=content,
         faqs=faqs,
-        cta=_as_text(data.get("cta")),
+        cta=cta,
         keywords=keywords,
         schema_markup=schema,
         readability_score=seo_score,
@@ -1294,8 +1526,9 @@ async def _generate_template_block(
             user_questions=[f.question for f in faqs],
         )
         schema = _build_schema(business_type.title(), city or "United States", state, faqs, article_title=title)
-        content = _sectioned_body(h2s, intro, content)
-        seo_score = _seo_score(intro + " " + content, title, "", h2s, faqs, primary, city or "", slug)
+        content = _sectioned_body(h2s, intro, content, brief=brief)
+        content = _strip_instruction_leak(content, brief)
+        seo_score = _seo_score(intro + " " + content, title, "", h2s, faqs, primary, city or "", slug, h1=h1)
         return SEOBlock(
             city=city, state=state, business_type=business_type.title(), industry=industry,
             slug=slug, title=title, meta_description=f"A practical US-English guide to {primary.lower()}. Clear steps, fewer mistakes, and a next step if you need help.",
@@ -1346,15 +1579,11 @@ async def _generate_template_block(
         f"A good site should make it easy to contact you or book. "
         f"We use clear calls to action, simple navigation, trust-building content, and focused landing pages "
         f"to help turn visitors into qualified leads.\n\n"
-        f"{brief}"
+        f"For {who} in {loc}, the goal is simple: a WordPress site that matches how people search, "
+        f"explains {pretty.lower()} clearly, and makes the next step feel natural."
     ).strip()
-    h2s = [
-        f"WordPress websites for {industry or 'local'} businesses",
-        f"Get found by local {buyers}",
-        "Built for search and AI",
-        "Turn website visitors into leads",
-        f"Need {pretty.lower()} in {city}?",
-    ]
+    layout = layout_variant if layout_variant in LAYOUT_INSTRUCTIONS else pick_layout_variant(city, business_type, content_kind)
+    h2s = _page_h2_set(layout, industry, buyers, city, audience, pretty)
     h3s = [
         "Custom WordPress and landing pages",
         "Local SEO-friendly content",
@@ -1389,7 +1618,7 @@ async def _generate_template_block(
         ),
         FAQItem(
             question="How do we get started?",
-            answer="Call or email ZeOrbit. We'll review your current site (if you have one), the {city} market, and a simple plan to launch.",
+            answer=f"Call or email ZeOrbit. We'll review your current site (if you have one), the {city} market, and a simple plan to launch.",
         ),
     ]
     kw = KeywordSet(
@@ -1400,8 +1629,9 @@ async def _generate_template_block(
         user_questions=[f.question for f in faqs],
     )
     schema = _build_schema(bt, city, state, faqs)
-    content = _sectioned_body(h2s, intro, content)
-    seo_score = _seo_score(intro + " " + content, title, meta, h2s, faqs, primary, city, slug)
+    content = _sectioned_body(h2s, intro, content, brief=brief)
+    content = _strip_instruction_leak(content, brief)
+    seo_score = _seo_score(intro + " " + content, title, meta, h2s, faqs, primary, city, slug, h1=h1)
     return SEOBlock(
         city=city, state=state, business_type=bt, industry=industry,
         slug=slug, title=title, meta_description=meta, h1=h1, h2s=h2s, h3s=h3s,
@@ -1482,7 +1712,7 @@ def _article_block_from_fields(
         slug_override=slug,
     )
     full_text = data.get("intro", "") + " " + body
-    seo_score = _seo_score(full_text, title, meta, h2s, faqs, primary_keyword, city, slug)
+    seo_score = _seo_score(full_text, title, meta, h2s, faqs, primary_keyword, city, slug, h1=data.get("h1", ""))
     density = _keyword_density(full_text, primary_keyword)
 
     kw = data.get("_keywords")

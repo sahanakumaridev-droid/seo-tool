@@ -52,6 +52,8 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
     # Avoid colliding with images already saved for other locations (featured + body)
     from services.image_service import normalize_image_key, generate_article_images, topic_image_family
     existing_rows = (await session.execute(select(PageRecord))).scalars().all()
+    # slug -> row for O(1) upserts (preview slug and final slug can differ)
+    by_slug = { (row.slug or "").strip(): row for row in existing_rows if (row.slug or "").strip() }
     niche_family = topic_image_family(req.business_type)
     for row in existing_rows:
         block0 = row.seo_block if isinstance(row.seo_block, dict) else {}
@@ -69,6 +71,8 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             elif hasattr(im, "url") and im.url:
                 used_featured.append(im.url)
 
+    batch_slugs: set[str] = set()
+
     for keyword_index, city_info in enumerate(cities):
         # State chip is for Location Expansion UI; generate for cities + counties only.
         if getattr(city_info, "kind", "city") == "state":
@@ -79,24 +83,36 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
         focus = (
             article_topic(req.custom_requirements, req.target_keywords, req.business_type)
             if req.content_kind == "post"
-            else pick_primary_keyword(req.target_keywords, req.business_type, city_info.name, keyword_index)
+            else pick_primary_keyword(
+                req.target_keywords,
+                req.business_type,
+                city_info.name,
+                keyword_index,
+                industry=req.industry or "",
+            )
         )
         preview_slug = article_slug(
             [focus] + list(req.target_keywords or []),
             city_info.name,
             focus,
         )
-        result = await session.execute(select(PageRecord).where(PageRecord.slug == preview_slug))
-        existing = result.scalar_one_or_none()
-        if existing:
-            prev = existing.seo_block if isinstance(existing.seo_block, dict) else {}
-            free_urls = []
+        # Free images from the row we are about to overwrite (preview OR any city match).
+        candidates = []
+        if preview_slug in by_slug:
+            candidates.append(by_slug[preview_slug])
+        for row in existing_rows:
+            if (row.city or "").strip().lower() == (city_info.name or "").strip().lower():
+                candidates.append(row)
+        free_urls = []
+        for cand in candidates:
+            prev = cand.seo_block if isinstance(cand.seo_block, dict) else {}
             if (prev or {}).get("featured_image_url"):
                 free_urls.append(prev["featured_image_url"])
             for im in (prev or {}).get("in_content_images") or []:
                 u = im.get("url") if isinstance(im, dict) else getattr(im, "url", None)
                 if u:
                     free_urls.append(u)
+        if free_urls:
             free_keys = {normalize_image_key(u) for u in free_urls}
             exclude = [u for u in exclude if normalize_image_key(u) not in free_keys]
 
@@ -136,25 +152,84 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             for im in block.in_content_images or []:
                 if im.url:
                     used_featured.append(im.url)
+
         slug = (block.slug or preview_slug).strip()
+        # Avoid in-batch duplicate inserts (same resolved place listed twice)
+        if slug in batch_slugs:
+            n = 2
+            while f"{slug}-{n}" in batch_slugs or f"{slug}-{n}" in by_slug:
+                n += 1
+            slug = f"{slug}-{n}"
+        batch_slugs.add(slug)
         block.slug = slug
         pages.append(block)
-        
+
+        # Upsert by FINAL slug — preview_slug often differs once industry is applied,
+        # which previously caused UNIQUE constraint failures on INSERT.
+        existing = by_slug.get(slug)
+        if existing is None and preview_slug and preview_slug != slug:
+            # Same city previously saved under an older slug form — update that row
+            # and retarget its slug instead of inserting a duplicate.
+            existing = by_slug.get(preview_slug)
+        if existing is None:
+            for row in existing_rows:
+                if (
+                    (row.city or "").strip().lower() == (city_info.name or "").strip().lower()
+                    and (row.business_type or "").strip().lower() == (req.business_type or "").strip().lower()
+                ):
+                    existing = row
+                    break
+
+        payload = block.model_dump()
         if existing:
-            existing.seo_block = block.model_dump()
-            existing.slug = slug
+            old_slug = (existing.slug or "").strip()
+            existing.seo_block = payload
+            existing.business_type = req.business_type
+            existing.base_location = req.base_location
+            existing.city = city_info.name
+            existing.state = city_info.state
+            # Only retarget slug when the new slug is free
+            if slug != old_slug and slug not in by_slug:
+                if old_slug in by_slug:
+                    by_slug.pop(old_slug, None)
+                existing.slug = slug
+                by_slug[slug] = existing
+            elif slug != old_slug and slug in by_slug and by_slug[slug] is not existing:
+                # Final slug already owned by another row — update that row instead
+                target = by_slug[slug]
+                target.seo_block = payload
+                target.business_type = req.business_type
+                target.base_location = req.base_location
+                target.city = city_info.name
+                target.state = city_info.state
+                target.updated_at = datetime.now(timezone.utc)
+            else:
+                existing.slug = old_slug or slug
             existing.updated_at = datetime.now(timezone.utc)
         else:
-            session.add(PageRecord(
+            row = PageRecord(
                 business_type=req.business_type,
                 base_location=req.base_location,
                 city=city_info.name,
                 state=city_info.state,
                 slug=slug,
-                seo_block=block.model_dump(),
-            ))
-    
-    await session.commit()
+                seo_block=payload,
+            )
+            session.add(row)
+            by_slug[slug] = row
+            existing_rows.append(row)
+
+    try:
+        await session.commit()
+    except Exception as e:
+        await session.rollback()
+        detail = str(e.orig) if getattr(e, "orig", None) else str(e)
+        if "UNIQUE" in detail.upper() or "unique" in detail.lower():
+            raise HTTPException(
+                status_code=409,
+                detail="A page with this URL slug already exists. Trash the old location page, or generate again — we will update it instead of duplicating.",
+            )
+        raise HTTPException(status_code=500, detail=f"Could not save generated pages: {detail[:240]}")
 
     return BulkGenerateResponse(
         total=len(pages),

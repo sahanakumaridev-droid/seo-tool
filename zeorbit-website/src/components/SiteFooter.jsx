@@ -5,26 +5,27 @@ import SocialBrandIcon from './SocialBrandIcon'
 import { SITE_CONTACT } from '../data/revampContent'
 import { goToHomepageTop } from '../utils/goHome'
 
-const OFFER_LINKS = [
+const SERVICES = [
   { label: 'Custom Websites', to: '/website-designing#business' },
   { label: 'Shopify & Ecommerce', to: '/website-designing#ecommerce' },
-  { label: 'Website Care & Hosting', to: '/website-designing#care' },
   { label: 'Mobile Apps', to: '/mobile-apps' },
   { label: 'SEO & Ads', to: '/seo-ppc' },
   { label: 'API Integrations', to: '/custom-software#integrations' },
-  { label: 'Automation & Copilots', to: '/custom-software#automation' },
-  { label: 'Areas We Serve', to: '/contact#areas' },
 ]
 
-const SPECIAL_LINKS = [
-  { label: 'Website Designing', to: '/website-designing' },
-  { label: 'Mobile Apps', to: '/mobile-apps' },
-  { label: 'SEO & PPC Tactics', to: '/seo-ppc' },
-  { label: 'App Timeline', to: '/mobile-apps#timeline' },
-  { label: 'UI / UX Design', to: '/website-designing#ux' },
+const RESOURCES = [
+  { label: 'Blog', to: '/blog' },
   { label: 'Portfolio', to: '/portfolio' },
+  { label: 'Areas We Serve', to: '/contact#areas' },
+  { label: 'App Timeline', to: '/mobile-apps#timeline' },
+  { label: 'Website Care', to: '/website-designing#care' },
+]
+
+const COMPANY = [
+  { label: 'About ZeOrbit', to: '/' },
+  { label: 'Contact', to: '/contact' },
+  { label: 'Privacy Policy', to: '/privacy-policy' },
   { label: "Let's Talk", to: '/contact' },
-  { label: 'Blogs', to: '/blog' },
 ]
 
 export default function SiteFooter() {
@@ -34,6 +35,38 @@ export default function SiteFooter() {
 
   return (
     <footer id="about" className="zo-site-footer">
+      <section className="zo-site-prefoot" aria-label="Get started">
+        <div className="rv-shell zo-site-prefoot-inner">
+          <div className="zo-site-prefoot-copy">
+            <p className="zo-site-prefoot-kicker">Next step</p>
+            <h2 className="zo-site-prefoot-h">Want a clearer plan for your site?</h2>
+            <p className="zo-site-prefoot-p">
+              Talk with ZeOrbit about web design, SEO, and local visibility — no pressure, just a practical next step.
+            </p>
+          </div>
+          <div className="zo-site-prefoot-actions">
+            <a className="zo-article-call" href={`tel:${SITE_CONTACT.phoneTel}`}>
+              CALL NOW : {SITE_CONTACT.phone}
+            </a>
+            <Link className="zo-site-prefoot-quote" to="/contact">
+              Get a Free Quote
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <div className="zo-site-footer-trust" aria-label="What we help with">
+        <div className="rv-shell zo-site-footer-trust-inner">
+          <span className="zo-site-footer-trust-label">Trusted by businesses looking to improve</span>
+          <ul className="zo-site-footer-trust-list">
+            <li>SEO</li>
+            <li>Performance</li>
+            <li>Web Design</li>
+            <li>Digital Growth</li>
+          </ul>
+        </div>
+      </div>
+
       <div className="zo-site-footer-stage">
         <div className="rv-shell zo-site-footer-main">
           <div className="zo-site-footer-brand">
@@ -49,10 +82,8 @@ export default function SiteFooter() {
               <Logo size={40} />
             </Link>
             <p>
-              ZeOrbit is an award-winning web and mobile app development company, building high-performing
-              websites on WordPress, Shopify, Wix, and Squarespace, along with custom iOS and Android apps.
-              We serve clients worldwide with strategic guidance from the first idea and design sketch to
-              final launch.
+              Helping businesses improve their visibility, websites, and digital growth with smarter SEO tools and
+              strategies.
             </p>
             <div className="zo-site-footer-social">
               {SITE_CONTACT.social.map((s) => (
@@ -77,13 +108,16 @@ export default function SiteFooter() {
                 <Mail size={15} strokeWidth={2.2} />
                 {SITE_CONTACT.email}
               </a>
+              <span className="zo-site-footer-address">
+                {SITE_CONTACT.address.line1}, {SITE_CONTACT.address.line2}
+              </span>
             </div>
           </div>
 
           <div className="zo-site-footer-col">
-            <h4>What We Offer</h4>
+            <h4>Services</h4>
             <ul className="zo-site-footer-list">
-              {OFFER_LINKS.map((item) => (
+              {SERVICES.map((item) => (
                 <li key={item.label}>
                   <Link to={item.to}>{item.label}</Link>
                 </li>
@@ -92,9 +126,20 @@ export default function SiteFooter() {
           </div>
 
           <div className="zo-site-footer-col">
-            <h4>Special Links</h4>
+            <h4>Resources</h4>
             <ul className="zo-site-footer-list">
-              {SPECIAL_LINKS.map((item) => (
+              {RESOURCES.map((item) => (
+                <li key={item.label}>
+                  <Link to={item.to}>{item.label}</Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="zo-site-footer-col">
+            <h4>Company</h4>
+            <ul className="zo-site-footer-list">
+              {COMPANY.map((item) => (
                 <li key={item.label}>
                   <Link to={item.to}>{item.label}</Link>
                 </li>

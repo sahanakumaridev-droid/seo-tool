@@ -6,13 +6,210 @@ Features: featured image upload, categories, tags, scheduled publishing, duplica
 """
 import base64
 import json
+import re
 import httpx
 from typing import Optional
 from models.schemas import SEOBlock, WordPressConfig, PublishResult
 from services.image_service import (
     get_image_for_content, upload_image_to_wordpress,
-    fetch_image_bytes,
+    fetch_image_bytes, natural_place_caption,
 )
+
+
+_INSTRUCTION_LEAK_MARKERS = (
+    "focus each page on the specific",
+    "make every page feel unique",
+    "custom content requirements",
+    "honor every point",
+    "avoid generic or repetitive",
+    "keep the content simple, credible",
+    "show how zeorbit can help with seo-",
+    "these should be treated only as ai",
+    "never appear as visible content",
+)
+
+
+def _looks_like_instruction_leak(text: str) -> bool:
+    t = (text or "").strip().lower()
+    if not t:
+        return False
+    return any(m in t for m in _INSTRUCTION_LEAK_MARKERS)
+
+
+def _clean_caption(caption: str, fallback_alt: str = "") -> str:
+    """Title-case / dedupe mashed keyword captions at render time."""
+    raw = (caption or "").strip().rstrip(".")
+    if not raw or _looks_like_instruction_leak(raw):
+        raw = (fallback_alt or "").strip()
+    if not raw:
+        return ""
+    # Drop trailing "— detail N"
+    raw = re.sub(r"\s*[—-]\s*detail\s*\d+\s*$", "", raw, flags=re.I).strip()
+    # Collapse duplicate adjacent phrases ("design Website Redesign")
+    words = raw.split()
+    cleaned = []
+    prev_l = ""
+    for w in words:
+        wl = w.lower()
+        if wl == prev_l:
+            continue
+        # Skip if this word already appeared in the last 3 tokens (mash)
+        recent = {x.lower() for x in cleaned[-3:]}
+        if wl in recent and wl in {"website", "design", "wordpress", "redesign"}:
+            # allow WordPress once; skip second "website"/"design" mash
+            if wl in {"website", "design"} and any(
+                x.lower() in {"website", "design", "redesign"} for x in cleaned
+            ):
+                continue
+        cleaned.append(w)
+        prev_l = wl
+    phrase = " ".join(cleaned).strip(" ,.-")
+    if not phrase:
+        return ""
+    # Prefer natural_place_caption when location-like " in City" is present
+    if re.search(r"\bin\s+\w+", phrase, re.I):
+        m = re.search(r"^(.*?)\s+in\s+(.+)$", phrase, re.I)
+        if m:
+            phrase = natural_place_caption(m.group(1), m.group(2))
+    # Title-ish casing for brands
+    parts = []
+    for i, w in enumerate(phrase.split()):
+        low = w.lower()
+        if low == "wordpress":
+            parts.append("WordPress")
+        elif low in {"seo", "ai"}:
+            parts.append(low.upper())
+        elif i and low in {"in", "for", "of", "and", "a", "the", "to", "on"}:
+            parts.append(low)
+        else:
+            # Preserve contractions without forcing mid-word caps (don't → Don't)
+            if "'" in w or "’" in w:
+                parts.append(w[:1].upper() + w[1:].lower() if w else w)
+            else:
+                parts.append(w[:1].upper() + w[1:] if w else w)
+    out = " ".join(parts).rstrip(" .?!") + "."
+    return out
+
+
+def _para_to_html(para: str) -> str:
+    para = (para or "").strip()
+    if not para or _looks_like_instruction_leak(para):
+        return ""
+    # Never render leftover markdown headings as body copy
+    if re.match(r"^#{1,6}\s+", para):
+        return ""
+    if "•" in para or para.strip().startswith("1."):
+        lines = para.split("\n")
+        html_lines = []
+        in_list = False
+        for line in lines:
+            line = line.strip()
+            if not line or _looks_like_instruction_leak(line):
+                continue
+            if re.match(r"^#{1,6}\s+", line):
+                continue
+            if line.startswith("•") or (len(line) > 2 and line[0].isdigit() and line[1] == "."):
+                if not in_list:
+                    html_lines.append("<ul>")
+                    in_list = True
+                item = line.lstrip("•").lstrip("0123456789.").strip()
+                html_lines.append(f"<li>{item}</li>")
+            else:
+                if in_list:
+                    html_lines.append("</ul>")
+                    in_list = False
+                html_lines.append(f"<p>{line}</p>")
+        if in_list:
+            html_lines.append("</ul>")
+        return "\n".join(html_lines)
+    # Multi-paragraph blob under one H2
+    chunks = [p.strip() for p in re.split(r"\n{2,}", para) if p.strip()]
+    out = []
+    for chunk in chunks:
+        if _looks_like_instruction_leak(chunk) or re.match(r"^#{1,6}\s+", chunk):
+            continue
+        out.append(f"<p>{chunk}</p>")
+    return "\n".join(out)
+
+
+def _sections_aligned_to_h2s(content: str, h2s: list) -> list[str]:
+    """Map body copy onto each H2. Handles ## markdown sections correctly."""
+    heads = [str(h).strip() for h in (h2s or []) if str(h).strip()]
+    text = (content or "").strip()
+    if not heads:
+        return []
+
+    mapped: dict[str, str] = {}
+    if re.search(r"(?m)^##\s+", text):
+        parts = re.split(r"(?m)^##\s+", text)
+        for part in parts[1:]:
+            nl = part.find("\n")
+            if nl == -1:
+                heading, body = part.strip(), ""
+            else:
+                heading, body = part[:nl].strip(), part[nl:].strip()
+            body = re.sub(r"(?m)^#{1,6}\s+.+$", "", body).strip()
+            body = "\n\n".join(
+                p for p in re.split(r"\n{2,}", body)
+                if p.strip() and not _looks_like_instruction_leak(p)
+            )
+            if heading:
+                mapped[heading.lower()] = body
+
+        out = []
+        used_keys = set()
+        for h in heads:
+            key = h.lower()
+            body = mapped.get(key, "")
+            if not body:
+                for k, v in mapped.items():
+                    if k in used_keys:
+                        continue
+                    if key in k or k in key:
+                        body = v
+                        used_keys.add(k)
+                        break
+            else:
+                used_keys.add(key)
+            out.append(body)
+        # Fill empty slots from unused markdown bodies
+        unused = [v for k, v in mapped.items() if k not in used_keys and v]
+        ui = 0
+        for i, body in enumerate(out):
+            if not body and ui < len(unused):
+                out[i] = unused[ui]
+                ui += 1
+        return out
+
+    paras = [
+        p.strip()
+        for p in re.split(r"\n{2,}", text)
+        if p.strip()
+        and not re.match(r"^#{1,6}\s+", p.strip())
+        and not _looks_like_instruction_leak(p)
+    ]
+    n = len(heads)
+    chunks: list[str] = [""] * n
+    idx = 0
+    for i in range(n):
+        remaining_h = n - i
+        remaining_p = len(paras) - idx
+        if remaining_p <= 0:
+            break
+        take = remaining_p if i == n - 1 else max(1, remaining_p // remaining_h)
+        chunks[i] = "\n\n".join(paras[idx: idx + take])
+        idx += take
+    return chunks
+
+
+def _fallback_section_copy(h2: str) -> str:
+    h = (h2 or "This topic").strip()
+    return (
+        f"{h} matters when someone lands on your site and needs a clear answer fast. "
+        f"ZeOrbit builds WordPress pages that explain the offer in plain language, "
+        f"show proof, and make the next step obvious — contact, call, or book — "
+        f"without stuffing keywords or repeating the same template on every page."
+    )
 
 
 def _figure_html(img) -> str:
@@ -21,12 +218,21 @@ def _figure_html(img) -> str:
     alt = img.alt_text if hasattr(img, "alt_text") else (img or {}).get("alt_text", "")
     title = img.title if hasattr(img, "title") else (img or {}).get("title", "")
     caption = img.caption if hasattr(img, "caption") else (img or {}).get("caption", "")
-    return (
+    if not url:
+        return ""
+    # Prefer stable https Unsplash/Pexels URLs; skip obviously broken blanks
+    cap = _clean_caption(caption, fallback_alt=alt)
+    alt_clean = _clean_caption(alt, fallback_alt=title).rstrip(".")
+    title_clean = _clean_caption(title, fallback_alt=alt_clean).rstrip(".")
+    fig = (
         f'<figure class="wp-block-image">'
-        f'<img src="{url}" alt="{alt}" title="{title}" loading="lazy" />'
-        f'<figcaption>{caption}</figcaption>'
-        f'</figure>'
+        f'<img src="{url}" alt="{alt_clean}" title="{title_clean}" loading="lazy" '
+        f'onerror="this.closest(\'figure\').style.display=\'none\'" />'
     )
+    if cap:
+        fig += f"<figcaption>{cap}</figcaption>"
+    fig += "</figure>"
+    return fig
 
 
 def _img_url(img) -> str:
@@ -78,47 +284,37 @@ def _build_content_html(block: SEOBlock) -> str:
             if pos not in img_positions:
                 img_positions[pos] = img
 
-    body_paragraphs = [p.strip() for p in block.content.split('\n\n') if p.strip()]
+    section_bodies = _sections_aligned_to_h2s(block.content or "", block.h2s or [])
 
-    # Red highlight CALL NOW buttons (matches zeorbit.com blog CTAs)
+    # One mid-article CALL NOW + one near the end — not after every section
     call_btn = (
         '<div class="call-now-wrap">'
         '<a class="call-now-btn" href="tel:6197249517">CALL NOW : 619-724-9517</a>'
         '</div>'
     )
+    n_h2 = len(block.h2s or [])
+    mid_cta_at = max(1, (n_h2 // 2) - 1) if n_h2 >= 3 else -1
 
-    for i, h2 in enumerate(block.h2s):
+    for i, h2 in enumerate(block.h2s or []):
         parts.append(f'<h2>{h2}</h2>')
         if i in img_positions:
-            parts.append(_figure_html(img_positions[i]))
-        if i < len(body_paragraphs):
-            para = body_paragraphs[i]
-            if '•' in para or para.strip().startswith('1.'):
-                lines = para.split('\n')
-                html_lines = []
-                in_list = False
-                for line in lines:
-                    line = line.strip()
-                    if line.startswith('•') or (len(line) > 2 and line[0].isdigit() and line[1] == '.'):
-                        if not in_list:
-                            html_lines.append('<ul>')
-                            in_list = True
-                        item = line.lstrip('•').lstrip('0123456789.').strip()
-                        html_lines.append(f'<li>{item}</li>')
-                    else:
-                        if in_list:
-                            html_lines.append('</ul>')
-                            in_list = False
-                        if line:
-                            html_lines.append(f'<p>{line}</p>')
-                if in_list:
-                    html_lines.append('</ul>')
-                parts.append('\n'.join(html_lines))
-            else:
-                parts.append(f'<p>{para}</p>')
-        # Place a red CALL NOW CTA after every other section (like live ZeOrbit blogs)
-        if i % 2 == 0:
+            fig = _figure_html(img_positions[i])
+            if fig:
+                parts.append(fig)
+        body = section_bodies[i] if i < len(section_bodies) else ""
+        html = _para_to_html(body) if body else ""
+        plain = re.sub(r"<[^>]+>", " ", html or "")
+        plain = re.sub(r"\s+", " ", plain).strip()
+        if not html or len(plain.split()) < 25:
+            extra = _para_to_html(_fallback_section_copy(h2))
+            html = f"{html}\n{extra}".strip() if html else extra
+        if html:
+            parts.append(html)
+        if i == mid_cta_at:
             parts.append(call_btn)
+
+    if n_h2 >= 2:
+        parts.append(call_btn)
 
     if block.h3s:
         # These are short trust/benefit statements ("Fast Turnaround for

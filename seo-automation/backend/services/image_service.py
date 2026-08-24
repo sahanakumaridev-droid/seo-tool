@@ -214,20 +214,78 @@ async def fetch_image_bytes(url: str) -> Optional[bytes]:
     return None
 
 
+def _title_caption_words(text: str) -> str:
+    parts = []
+    small = {"in", "for", "of", "and", "a", "the", "to", "on"}
+    for i, w in enumerate((text or "").split()):
+        low = w.lower()
+        if low == "wordpress":
+            parts.append("WordPress")
+        elif low in {"seo", "ai"}:
+            parts.append(low.upper())
+        elif i and low in small:
+            parts.append(low)
+        else:
+            parts.append(w[:1].upper() + w[1:] if w else w)
+    return " ".join(parts)
+
+
+def _dedupe_service_phrase(kw: str) -> str:
+    """Collapse mashed keywords like 'Contractors wordpress website design Website Redesign'."""
+    raw = re.sub(r"\s+", " ", (kw or "").strip())
+    if not raw:
+        return ""
+    low = raw.lower()
+    # Prefer a single service intent — never "Website Design … Website Redesign"
+    if "website redesign" in low and ("website design" in low or "wordpress" in low):
+        # Keep WordPress Website Design (or Website Design); drop Redesign mash
+        raw = re.sub(r"\bwebsite\s+redesign\b", "", raw, flags=re.I)
+        raw = re.sub(r"\bredesign\b", "", raw, flags=re.I)
+        raw = re.sub(r"\s+", " ", raw).strip(" -–,")
+        low = raw.lower()
+    elif "website redesign" in low:
+        # Clean standalone redesign path
+        pass
+    # Collapse "Design Redesign" leftovers
+    raw = re.sub(r"\bdesign\s+redesign\b", "Design", raw, flags=re.I)
+    raw = re.sub(r"\bredesign\s+design\b", "Design", raw, flags=re.I)
+    tokens = raw.split()
+    out = []
+    seen_norm = set()
+    for w in tokens:
+        norm = w.lower()
+        if out and out[-1].lower() == norm:
+            continue
+        if norm in seen_norm and norm in {
+            "website", "websites", "design", "designer", "redesign", "wordpress", "web",
+        }:
+            continue
+        out.append(w)
+        seen_norm.add(norm)
+    return " ".join(out).strip(" -–,")
+
+
 def natural_place_caption(keyword: str, location: str) -> str:
-    """Avoid 'Web Design Spring Valley in Spring Valley, CA'."""
-    kw = re.sub(r"\s+", " ", (keyword or "").strip())
+    """Natural caption: 'Contractors WordPress Website Design in Downtown Chula Vista, CA'."""
+    kw = _dedupe_service_phrase(re.sub(r"\s+", " ", (keyword or "").strip()))
     loc = re.sub(r"\s+", " ", (location or "").strip())
     if not loc:
-        return kw.title() if kw else "Local services"
+        return _title_caption_words(kw) if kw else "Local services"
     city = loc.split(",")[0].strip()
     if city:
         kw = re.sub(re.escape(city), "", kw, flags=re.I)
         kw = re.sub(r"\s+", " ", kw).strip(" -–,")
-    core = kw or (keyword or "Services")
-    if re.search(rf"\bin\s+{re.escape(city)}\b", core, re.I) if city else False:
-        return core[0].upper() + core[1:] if core else loc
-    return f"{core[0].upper() + core[1:] if core else 'Services'} in {loc}"
+        # Also strip trailing state if duplicated in keyword
+        for part in loc.split(","):
+            part = part.strip()
+            if part and len(part) > 1:
+                kw = re.sub(rf"\b{re.escape(part)}\b", "", kw, flags=re.I)
+        kw = re.sub(r"\s+", " ", kw).strip(" -–,")
+    core = _dedupe_service_phrase(kw) or _dedupe_service_phrase(keyword or "Services")
+    pretty = _title_caption_words(core) if core else "Services"
+    if city and re.search(rf"\bin\s+{re.escape(city)}\b", pretty, re.I):
+        return pretty
+    return f"{pretty} in {loc}"
 
 
 def build_image_metadata(
@@ -253,7 +311,9 @@ def build_image_metadata(
         alt = f"{phrase} — detail {idx + 1}"
         title = phrase
         caption = f"{phrase}."
-    description = f"Image illustrating {phrase.lower()}{by}. Optimized for SEO and web performance (WebP)."
+    # Avoid "Topic?." or "Topic.."
+    caption = re.sub(r"[\.?]+$", ".", caption)
+    description = f"Image illustrating {phrase.rstrip('.?!').lower()}{by}. Optimized for SEO and web performance (WebP)."
     return {
         "filename": filename,
         "alt_text": alt,
@@ -617,6 +677,7 @@ _WEB_VERTICAL_MODIFIERS = {
     "real estate": ["real estate website", "property listing laptop", "realtor computer", "home website"],
     "education": ["school website", "student laptop", "university website", "elearning ui"],
     "insurance": ["insurance website", "agent laptop", "policy dashboard", "insurance office"],
+    "construction": ["construction contractor", "job site laptop", "blueprint desk", "contractor website"],
 }
 
 # Audience industries that may bias stock photos — whitelist ONLY (never pass through
@@ -787,10 +848,12 @@ def _curated_pool_for_topic(text: str) -> List[str]:
 def _resolve_visual_industry(industry: str) -> str:
     """Map Industry / Audience to a visual topic key. Whitelist only — never raw."""
     raw = (industry or "").strip().lower()
-    if not raw or raw in ("other", "general", "contractors", "services", "retail",
+    if not raw or raw in ("other", "general", "services", "retail",
                           "professional services", "restaurants", "restaurant"):
         # Restaurants/Retail are niches — they must come from Business Niche, not Industry
         return ""
+    if raw in ("contractors", "contractor", "construction", "remodel", "renovation"):
+        return "construction"
     if raw in _VISUAL_INDUSTRIES:
         return _VISUAL_INDUSTRIES[raw]
     for key, mapped in _VISUAL_INDUSTRIES.items():
@@ -886,24 +949,67 @@ def _curated_image_url(
     seed: str,
     exclude: Optional[Iterable[str]] = None,
 ) -> str:
-    """Pick an unused photo. Niche pool first, then any curated URL, then a unique fallback."""
+    """Pick an on-topic curated Unsplash photo. Never returns random picsum placeholders."""
     exclude_keys = {normalize_image_key(u) for u in (exclude or []) if u}
 
-    def _pick(pool: List[str]) -> str:
-        unused = [u for u in pool if normalize_image_key(u) not in exclude_keys]
-        if not unused:
+    def _pick(pool: List[str], honor_exclude: bool = True) -> str:
+        if not pool:
             return ""
-        unused.sort(key=lambda u: hashlib.md5(f"{seed}|{normalize_image_key(u)}".encode("utf-8")).hexdigest())
-        return _with_unsplash_params(unused[0])
+        candidates = [
+            u for u in pool
+            if (not honor_exclude) or normalize_image_key(u) not in exclude_keys
+        ]
+        if not candidates:
+            candidates = list(pool)
+        candidates.sort(
+            key=lambda u: hashlib.md5(f"{seed}|{normalize_image_key(u)}".encode("utf-8")).hexdigest()
+        )
+        return _with_unsplash_params(candidates[0])
 
-    url = _pick(_curated_pool_for_topic(topic))
+    topic_pool = _curated_pool_for_topic(topic)
+    url = _pick(topic_pool, honor_exclude=True)
     if url:
         return url
-    url = _pick(_all_curated_urls())
+    url = _pick(_all_curated_urls(), honor_exclude=True)
     if url:
         return url
-    digest = hashlib.md5((seed or "seo").encode("utf-8")).hexdigest()[:16]
-    return f"https://picsum.photos/seed/{digest}/1200/675"
+    # Pool exhausted for this batch — reuse topic pool (still on-topic) instead of scenery placeholders
+    url = _pick(topic_pool or _all_curated_urls() or _WEB_DESIGN_IMAGES, honor_exclude=False)
+    return url or _with_unsplash_params(_WEB_DESIGN_IMAGES[0])
+
+
+_OFFTOPIC_STOCK_MARKERS = (
+    "mountain", "mountains", "forest", "beach", "sunset", "sunrise", "ocean wave",
+    "nature landscape", "scenic", "waterfall", "desert dune", "flower field",
+    "wildlife", "snowy peak", "national park", "hiking trail", "autumn leaves",
+)
+
+
+def _stock_result_score(result: dict, query: str) -> int:
+    """Score Unsplash/Pexels hits; 0 means reject (off-topic / scenery)."""
+    tags = result.get("tags") or []
+    tag_txt = " ".join(
+        (t.get("title") if isinstance(t, dict) else str(t)) for t in tags
+    )
+    blob = " ".join([
+        str(result.get("alt_description") or result.get("alt") or ""),
+        str(result.get("description") or ""),
+        str(result.get("title") or ""),
+        tag_txt,
+        query,
+    ]).lower()
+    if any(m in blob for m in _OFFTOPIC_STOCK_MARKERS):
+        # Allow only if clearly tech/business related too
+        if not any(k in blob for k in (
+            "website", "laptop", "computer", "doctor", "clinic", "hospital",
+            "code", "design", "ui", "ux", "office desk", "developer", "medical",
+            "construction", "contractor", "plumber", "marketing",
+        )):
+            return 0
+    words = [w for w in re.findall(r"[a-zA-Z]+", (query or "").lower()) if len(w) > 3]
+    if not words:
+        return 1
+    return sum(1 for w in words if w in blob)
 
 
 def _openverse_relevance(result: dict, topic_words: List[str]) -> int:
@@ -947,13 +1053,20 @@ async def _hosted_image_url(
                 )
                 if resp.status_code == 200:
                     results = resp.json().get("results", [])
-                    fresh = [
-                        r for r in results
-                        if normalize_image_key(r.get("urls", {}).get("regular") or "") not in exclude_keys
-                    ]
-                    if fresh:
-                        pick = fresh[_stable_index(seed, len(fresh))]
-                        return pick["urls"].get("regular") or pick["urls"].get("full") or ""
+                    scored = []
+                    for r in results:
+                        url = (r.get("urls") or {}).get("regular") or (r.get("urls") or {}).get("full") or ""
+                        if not url or normalize_image_key(url) in exclude_keys:
+                            continue
+                        score = _stock_result_score(r, search)
+                        if score <= 0:
+                            continue
+                        scored.append((score, url))
+                    if scored:
+                        scored.sort(key=lambda x: (-x[0], x[1]))
+                        # Prefer higher relevance; break ties with seed
+                        top = [u for s, u in scored if s == scored[0][0]]
+                        return top[_stable_index(seed, len(top))]
         except Exception as e:
             print(f"[Image] Unsplash search error: {e}")
     if settings.PEXELS_API_KEY:
@@ -971,16 +1084,27 @@ async def _hosted_image_url(
                 )
                 if resp.status_code == 200:
                     photos = resp.json().get("photos", [])
-                    fresh = []
+                    scored = []
                     for p in photos:
                         src = (p.get("src") or {})
                         cand = src.get("original") or src.get("large2x") or src.get("large") or ""
-                        if normalize_image_key(cand) not in exclude_keys:
-                            fresh.append(p)
-                    if fresh:
-                        pick = fresh[_stable_index(seed, len(fresh))]
-                        src = pick.get("src") or {}
-                        return src.get("original") or src.get("large2x") or src.get("large")
+                        if not cand or normalize_image_key(cand) in exclude_keys:
+                            continue
+                        # Pexels: use alt/photographer as weak relevance signal
+                        score = _stock_result_score(
+                            {"alt_description": p.get("alt") or "", "description": ""},
+                            search,
+                        )
+                        if score <= 0 and not any(
+                            w in (p.get("alt") or "").lower()
+                            for w in re.findall(r"[a-zA-Z]{4,}", search.lower())
+                        ):
+                            continue
+                        scored.append((max(score, 1), cand))
+                    if scored:
+                        scored.sort(key=lambda x: (-x[0], x[1]))
+                        top = [u for s, u in scored if s == scored[0][0]]
+                        return top[_stable_index(seed, len(top))]
         except Exception as e:
             print(f"[Image] Pexels search error: {e}")
 
@@ -1056,13 +1180,17 @@ async def generate_article_images(
         modifier = modifiers[i % len(modifiers)]
         query = f"{topic} {modifier}".strip()
         seed = f"{topic}|{location}|{focus_keyword}|{i}|{angle_title}|{industry}|{niche}"
-        # Related stock search first; curated pool is the fallback.
-        url = await _hosted_image_url(query, seed=seed, exclude=used, location="")
+        # Curated niche pools first (reliable on-topic). Stock APIs second with relevance filter.
+        # Never fall through to random picsum scenery placeholders.
+        url = _curated_image_url(fallback_topic or topic, seed=seed, exclude=used)
         key = normalize_image_key(url)
+        if not url or (key and key in used):
+            url = await _hosted_image_url(query, seed=seed, exclude=used, location="")
+            key = normalize_image_key(url)
         if key and key in used:
             for attempt in range(12):
                 alt = _curated_image_url(
-                    fallback_topic,
+                    fallback_topic or topic,
                     seed=f"{seed}|retry|{attempt}",
                     exclude=used,
                 )
@@ -1078,7 +1206,10 @@ async def generate_article_images(
         if key:
             used.add(key)
         if i == 0:
-            print(f"[Image] related stock: {query}")
+            print(f"[Image] related stock: {query} → {(url or '')[:80]}")
+        # Hard ban: never ship picsum placeholders
+        if url and "picsum.photos" in url:
+            url = _curated_image_url(fallback_topic or topic or "website", seed=f"{seed}|nopicsum", exclude=set())
         meta = build_image_metadata(focus_keyword, location, business_name, i, is_featured)
         assets.append(ImageAsset(
             url=url,
