@@ -70,11 +70,11 @@ export const WDS_SERVICES = {
     },
     {
       id: 'care',
-      kicker: 'Care & Maintenance',
-      title: 'Hosting, fixes, and ongoing care.',
+      kicker: 'Master Care',
+      title: 'Hosting, fixes, and ongoing Master Care.',
       copy: 'Updates, speed, security, and support after launch so the site stays fast and online.',
       image: '/from-zeorbit/services/ecommerce.jpg',
-      cta: 'Protect my website',
+      cta: 'Start Master Care',
     },
   ],
 }

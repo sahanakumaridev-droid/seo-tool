@@ -1,24 +1,46 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Mail, Phone } from 'lucide-react'
 import Logo from './Logo'
 import SocialBrandIcon from './SocialBrandIcon'
 import { SITE_CONTACT } from '../data/revampContent'
 import { goToHomepageTop } from '../utils/goHome'
 
-const SERVICES = [
+const WEBSITES = [
   { label: 'Custom Websites', to: '/website-designing#business' },
   { label: 'Shopify & Ecommerce', to: '/website-designing#ecommerce' },
-  { label: 'Mobile Apps', to: '/mobile-apps' },
-  { label: 'SEO & Ads', to: '/seo-ppc' },
+  { label: 'Landing Pages', to: '/website-designing#landing' },
+  { label: 'Website Redesign', to: '/website-designing#redesign' },
+  { label: 'UI / UX Design', to: '/website-designing#ux' },
+  { label: 'Care & Maintenance', to: '/website-designing#care' },
+]
+
+const APPS = [
+  { label: 'iOS & Android', to: '/mobile-apps#native' },
+  { label: 'Cross-Platform', to: '/mobile-apps#cross' },
+  { label: 'App Timeline', to: '/mobile-apps#timeline' },
+  { label: 'Mobile UX / UI', to: '/mobile-apps#ux' },
+]
+
+const GROWTH = [
+  { label: 'Technical SEO', to: '/seo-ppc#seo' },
+  { label: 'Local SEO', to: '/seo-ppc#local' },
+  { label: 'Content SEO', to: '/seo-ppc#content' },
+  { label: 'Google Ads', to: '/seo-ppc#ads' },
+  { label: 'Social Ads', to: '/seo-ppc#social-ads' },
+  { label: 'Pricing', to: '/seo-ppc#pricing' },
+]
+
+const SOFTWARE = [
+  { label: 'Dashboards', to: '/custom-software#platforms' },
+  { label: 'CRM & Workflows', to: '/custom-software#crm' },
   { label: 'API Integrations', to: '/custom-software#integrations' },
+  { label: 'Automation', to: '/custom-software#automation' },
 ]
 
 const RESOURCES = [
   { label: 'Blog', to: '/blog' },
   { label: 'Portfolio', to: '/portfolio' },
-  { label: 'Areas We Serve', to: '/contact#areas' },
-  { label: 'App Timeline', to: '/mobile-apps#timeline' },
-  { label: 'Website Care', to: '/website-designing#care' },
+  { label: 'Areas We Serve', to: '/areas' },
+  { label: 'Get a Free Quote', to: '/contact' },
 ]
 
 const COMPANY = [
@@ -28,130 +50,82 @@ const COMPANY = [
   { label: "Let's Talk", to: '/contact' },
 ]
 
+const COLUMNS = [
+  { title: 'Websites', items: WEBSITES },
+  { title: 'Mobile Apps', items: APPS },
+  { title: 'SEO & Ads', items: GROWTH },
+  { title: 'Software', items: SOFTWARE },
+  { title: 'Resources', items: RESOURCES },
+  { title: 'Company', items: COMPANY },
+]
+
 export default function SiteFooter() {
   const year = new Date().getFullYear()
   const navigate = useNavigate()
   const { pathname } = useLocation()
 
   return (
-    <footer id="about" className="zo-site-footer">
-      <section className="zo-site-prefoot" aria-label="Get started">
-        <div className="rv-shell zo-site-prefoot-inner">
-          <div className="zo-site-prefoot-copy">
-            <p className="zo-site-prefoot-kicker">Next step</p>
-            <h2 className="zo-site-prefoot-h">Want a clearer plan for your site?</h2>
-            <p className="zo-site-prefoot-p">
-              Talk with ZeOrbit about web design, SEO, and local visibility — no pressure, just a practical next step.
-            </p>
-          </div>
-          <div className="zo-site-prefoot-actions">
-            <a className="zo-article-call" href={`tel:${SITE_CONTACT.phoneTel}`}>
-              CALL NOW : {SITE_CONTACT.phone}
-            </a>
-            <Link className="zo-site-prefoot-quote" to="/contact">
-              Get a Free Quote
-            </Link>
-          </div>
-        </div>
-      </section>
+    <footer id="about" className="zo-site-footer zo-host-footer">
+      <div className="zo-host-footer-accent" aria-hidden />
 
-      <div className="zo-site-footer-trust" aria-label="What we help with">
-        <div className="rv-shell zo-site-footer-trust-inner">
-          <span className="zo-site-footer-trust-label">Trusted by businesses looking to improve</span>
-          <ul className="zo-site-footer-trust-list">
-            <li>SEO</li>
-            <li>Performance</li>
-            <li>Web Design</li>
-            <li>Digital Growth</li>
-          </ul>
+      <div className="zo-host-footer-main">
+        <div className="rv-shell zo-host-footer-grid">
+          {COLUMNS.map((col) => (
+            <div key={col.title} className="zo-host-footer-col">
+              <h4>{col.title}</h4>
+              <ul>
+                {col.items.map((item) => (
+                  <li key={item.label}>
+                    <Link to={item.to}>{item.label}</Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="zo-site-footer-stage">
-        <div className="rv-shell zo-site-footer-main">
-          <div className="zo-site-footer-brand">
-            <Link
-              to="/"
-              className="zo-site-footer-logo"
-              aria-label="ZeOrbit home"
-              onClick={(event) => {
-                event.preventDefault()
-                goToHomepageTop(navigate, pathname)
-              }}
-            >
-              <Logo size={40} />
-            </Link>
-            <p>
-              Helping businesses improve their visibility, websites, and digital growth with smarter SEO tools and
-              strategies.
-            </p>
-            <div className="zo-site-footer-social">
-              {SITE_CONTACT.social.map((s) => (
-                <a
-                  key={s.label}
-                  href={s.href}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label={s.label}
-                  className={`zo-social is-${s.label.toLowerCase().replace(/\s+/g, '-')}`}
-                >
-                  <SocialBrandIcon label={s.label} />
-                </a>
-              ))}
-            </div>
-            <div className="zo-site-footer-quick">
-              <a href={`tel:${SITE_CONTACT.phoneTel}`}>
-                <Phone size={15} strokeWidth={2.2} />
-                {SITE_CONTACT.phone}
+      <div className="zo-host-footer-mid">
+        <div className="rv-shell zo-host-footer-mid-inner">
+          <Link
+            to="/"
+            className="zo-host-footer-logo"
+            aria-label="ZeOrbit home"
+            onClick={(event) => {
+              event.preventDefault()
+              goToHomepageTop(navigate, pathname)
+            }}
+          >
+            <Logo size={34} />
+          </Link>
+          <div className="zo-host-footer-social">
+            {SITE_CONTACT.social.map((s) => (
+              <a
+                key={s.label}
+                href={s.href}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={s.label}
+                className={`zo-host-social is-${s.label.toLowerCase().replace(/\s+/g, '-')}`}
+              >
+                <SocialBrandIcon label={s.label} />
               </a>
-              <a href={`mailto:${SITE_CONTACT.email}`}>
-                <Mail size={15} strokeWidth={2.2} />
-                {SITE_CONTACT.email}
-              </a>
-              <span className="zo-site-footer-address">
-                {SITE_CONTACT.address.line1}, {SITE_CONTACT.address.line2}
-              </span>
-            </div>
-          </div>
-
-          <div className="zo-site-footer-col">
-            <h4>Services</h4>
-            <ul className="zo-site-footer-list">
-              {SERVICES.map((item) => (
-                <li key={item.label}>
-                  <Link to={item.to}>{item.label}</Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="zo-site-footer-col">
-            <h4>Resources</h4>
-            <ul className="zo-site-footer-list">
-              {RESOURCES.map((item) => (
-                <li key={item.label}>
-                  <Link to={item.to}>{item.label}</Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="zo-site-footer-col">
-            <h4>Company</h4>
-            <ul className="zo-site-footer-list">
-              {COMPANY.map((item) => (
-                <li key={item.label}>
-                  <Link to={item.to}>{item.label}</Link>
-                </li>
-              ))}
-            </ul>
+            ))}
           </div>
         </div>
       </div>
 
-      <div className="zo-site-footer-bottom">
-        <div className="rv-shell zo-site-footer-bottom-inner">
-          <p>© {year} ZeOrbit. All Rights Reserved.</p>
+      <div className="zo-host-footer-legal">
+        <div className="rv-shell zo-host-footer-legal-inner">
+          <p>
+            © {year} ZeOrbit — Websites, apps, SEO, and custom software for ambitious U.S. brands.
+          </p>
+          <div className="zo-host-footer-legal-links">
+            <a href={`mailto:${SITE_CONTACT.email}`}>{SITE_CONTACT.email}</a>
+            <a href={`tel:${SITE_CONTACT.phoneTel}`}>{SITE_CONTACT.phone}</a>
+            <Link to="/privacy-policy">Privacy policy</Link>
+            <Link to="/contact">Contact</Link>
+          </div>
         </div>
       </div>
     </footer>

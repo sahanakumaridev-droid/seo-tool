@@ -99,7 +99,7 @@ export const PRIMARY_NAV = [
   {
     label: 'Contact',
     href: '/contact',
-    children: [{ label: 'Areas We Serve', href: '/contact#areas' }],
+    children: [{ label: 'Areas We Serve', href: '/areas' }],
   },
 ]
 

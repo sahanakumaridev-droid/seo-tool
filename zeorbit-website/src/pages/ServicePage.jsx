@@ -12,6 +12,7 @@ import PricingPlans from '../components/PricingPlans'
 import { Reveal } from '../components/premium/Reveal'
 import { SITE_CONTACT } from '../data/revampContent'
 import { NAV_PAGES } from '../data/navPages'
+import { AREA_CHIPS, AREA_PAGES } from '../data/areas'
 import { useHashScroll, scrollToHashId } from '../hooks/useHashScroll'
 import '../components/premium/premium-home.css'
 import './website-design-page.css'
@@ -73,31 +74,33 @@ function ContactPageLayout({ page }) {
 
       {formFirst ? null : (
       <section className="zo-contact-hero" aria-label="Contact">
-        <div className="zo-contact-hero-bg" aria-hidden="true">
-          <iframe
-            title="San Diego HQ street map"
-            src={SITE_CONTACT.address.streetEmbed}
-            loading="eager"
-            referrerPolicy="no-referrer-when-downgrade"
-            tabIndex={-1}
-          />
-          <div className="zo-contact-hero-shade" />
-        </div>
-        <div className="zo-contact-hero-inner">
-          <h1>Contact Us</h1>
-          <p>
-            Our main focus is to achieve a good reputation amongst our clients. We work on Website Design,
-            software development and marketing projects.
-          </p>
-          <div className="zo-contact-hero-actions">
-            <a className="cz-btn-solid" href="#contact">
-              Start a Project
-              <ArrowRight size={18} strokeWidth={2.4} />
-            </a>
-            <a className="zo-contact-hero-phone" href={`tel:${SITE_CONTACT.phoneTel}`}>
-              <Phone size={16} strokeWidth={2.2} />
-              {SITE_CONTACT.phone}
-            </a>
+        <div className="zo-contact-hero-frame">
+          <div className="zo-contact-hero-bg" aria-hidden="true">
+            <iframe
+              title="San Diego HQ street map"
+              src={SITE_CONTACT.address.streetEmbed}
+              loading="eager"
+              referrerPolicy="no-referrer-when-downgrade"
+              tabIndex={-1}
+            />
+            <div className="zo-contact-hero-shade" />
+          </div>
+          <div className="zo-contact-hero-inner">
+            <h1>Contact Us</h1>
+            <p>
+              Our main focus is to achieve a good reputation amongst our clients. We work on Website Design,
+              software development and marketing projects.
+            </p>
+            <div className="zo-contact-hero-actions">
+              <a className="cz-btn-solid" href="#contact">
+                Start a Project
+                <ArrowRight size={18} strokeWidth={2.4} />
+              </a>
+              <a className="zo-contact-hero-phone" href={`tel:${SITE_CONTACT.phoneTel}`}>
+                <Phone size={16} strokeWidth={2.2} />
+                {SITE_CONTACT.phone}
+              </a>
+            </div>
           </div>
         </div>
       </section>
@@ -198,13 +201,44 @@ function ContactPageLayout({ page }) {
       {formFirst || !page.areas ? null : (
         <section id="areas" className="zo-contact-areas" aria-label="Areas we serve">
           <div className="zo-contact-areas-inner">
-            <p className="cz-kicker">{page.areas.title}</p>
-            <h2>San Diego based. Nationwide reach.</h2>
-            <p className="zo-contact-lead">{page.areas.lead}</p>
-            <div className="zo-contact-area-tags">
-              {page.areas.items.map((area) => (
-                <span key={area}>{area}</span>
-              ))}
+            <div className="zo-contact-areas-head">
+              <div>
+                <p className="cz-kicker">{page.areas.title}</p>
+                <h2>San Diego based. Nationwide reach.</h2>
+                <p className="zo-contact-lead">{page.areas.lead}</p>
+              </div>
+              <Link className="zo-contact-areas-cta" to="/areas">
+                Explore all areas
+                <ArrowRight size={16} strokeWidth={2.4} aria-hidden />
+              </Link>
+            </div>
+
+            <div className="zo-contact-areas-featured" aria-label="Primary markets">
+              {AREA_CHIPS.filter((a) => AREA_PAGES[a.slug]?.tier !== 'b').map((area) => {
+                const city = AREA_PAGES[area.slug]
+                return (
+                  <Link key={area.label} to={`/areas/${area.slug}`} className="zo-contact-area-card">
+                    <span className="zo-contact-area-card-region">{city?.region}</span>
+                    <strong>{city?.name || area.label}</strong>
+                    <span className="zo-contact-area-card-blurb">{city?.lead}</span>
+                    <span className="zo-contact-area-card-go">
+                      View page
+                      <ArrowRight size={14} strokeWidth={2.4} aria-hidden />
+                    </span>
+                  </Link>
+                )
+              })}
+            </div>
+
+            <div className="zo-contact-areas-secondary">
+              <p>Also serving</p>
+              <div className="zo-contact-area-tags">
+                {AREA_CHIPS.filter((a) => AREA_PAGES[a.slug]?.tier === 'b').map((area) => (
+                  <Link key={area.label} to={`/areas/${area.slug}`} className="zo-contact-area-tag">
+                    {area.label}
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
         </section>

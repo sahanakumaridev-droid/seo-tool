@@ -1,22 +1,16 @@
-import { useEffect, useId, useRef, useState } from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { useEffect, useId, useState } from 'react'
 import {
   Accessibility,
   Contrast,
   Eye,
-  Home,
-  LayoutGrid,
   Link2,
-  MessageCircle,
   Moon,
   Move,
-  Search,
   Type,
   Underline,
   X,
   ZoomIn,
 } from 'lucide-react'
-import { goToHomepageTop } from '../utils/goHome'
 
 const A11Y_OPTIONS = [
   { id: 'text', label: 'Larger text', icon: Type, className: 'zo-a11y-text' },
@@ -30,17 +24,11 @@ const A11Y_OPTIONS = [
 ]
 
 export default function SiteDock() {
-  const [searchOpen, setSearchOpen] = useState(false)
   const [a11yOpen, setA11yOpen] = useState(false)
-  const [query, setQuery] = useState('')
   const [a11yFlags, setA11yFlags] = useState(() =>
     Object.fromEntries(A11Y_OPTIONS.map((o) => [o.id, false])),
   )
-  const inputRef = useRef(null)
-  const searchTitleId = useId()
   const a11yTitleId = useId()
-  const navigate = useNavigate()
-  const { pathname } = useLocation()
 
   useEffect(() => {
     const root = document.documentElement
@@ -50,30 +38,13 @@ export default function SiteDock() {
   }, [a11yFlags])
 
   useEffect(() => {
-    if (!searchOpen && !a11yOpen) return undefined
+    if (!a11yOpen) return undefined
     const onKey = (e) => {
-      if (e.key === 'Escape') {
-        setSearchOpen(false)
-        setA11yOpen(false)
-      }
+      if (e.key === 'Escape') setA11yOpen(false)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [searchOpen, a11yOpen])
-
-  useEffect(() => {
-    if (!searchOpen) return undefined
-    const t = window.setTimeout(() => inputRef.current?.focus(), 40)
-    return () => window.clearTimeout(t)
-  }, [searchOpen])
-
-  const submitSearch = (e) => {
-    e.preventDefault()
-    const q = query.trim()
-    setSearchOpen(false)
-    if (!q) return
-    navigate(`/seo-ppc#blog`)
-  }
+  }, [a11yOpen])
 
   const toggleFlag = (id) => {
     setA11yFlags((prev) => ({ ...prev, [id]: !prev[id] }))
@@ -87,51 +58,17 @@ export default function SiteDock() {
 
   return (
     <>
-      <nav className="zo-site-dock" aria-label="Quick tools">
-        <Link
-          to="/"
-          className="zo-site-dock-btn"
-          aria-label="Home"
-          title="Home"
-          onClick={(event) => {
-            event.preventDefault()
-            goToHomepageTop(navigate, pathname)
-          }}
-        >
-          <Home size={18} strokeWidth={2.1} />
-        </Link>
-        <a href="/#solutions" className="zo-site-dock-btn" aria-label="Sitemap" title="Sitemap">
-          <LayoutGrid size={18} strokeWidth={2.1} />
-        </a>
-        <button
-          type="button"
-          className="zo-site-dock-btn"
-          aria-label="Search"
-          title="Search"
-          onClick={() => {
-            setA11yOpen(false)
-            setSearchOpen(true)
-          }}
-        >
-          <Search size={18} strokeWidth={2.1} />
-        </button>
+      <nav className="zo-site-dock zo-site-dock--a11y-only" aria-label="Accessibility">
         <button
           type="button"
           className={`zo-site-dock-btn${a11yOpen || a11yActive ? ' is-active' : ''}`}
           aria-label="Accessibility tools"
           aria-expanded={a11yOpen}
           title="Accessibility"
-          onClick={() => {
-            setSearchOpen(false)
-            setA11yOpen((v) => !v)
-          }}
+          onClick={() => setA11yOpen((v) => !v)}
         >
           <Accessibility size={18} strokeWidth={2.1} />
         </button>
-        <Link to="/contact" className="zo-site-dock-contact" aria-label="Contact">
-          <MessageCircle size={17} strokeWidth={2.1} />
-          <span>Contact</span>
-        </Link>
       </nav>
 
       {a11yOpen ? (
@@ -179,36 +116,6 @@ export default function SiteDock() {
               </a>
             </div>
           </div>
-        </div>
-      ) : null}
-
-      {searchOpen ? (
-        <div className="zo-site-search" role="dialog" aria-modal="true" aria-labelledby={searchTitleId}>
-          <button
-            type="button"
-            className="zo-site-search-backdrop"
-            aria-label="Close search"
-            onClick={() => setSearchOpen(false)}
-          />
-          <form className="zo-site-search-panel" onSubmit={submitSearch}>
-            <div className="zo-site-search-head">
-              <h2 id={searchTitleId}>Search</h2>
-              <button type="button" aria-label="Close" onClick={() => setSearchOpen(false)}>
-                <X size={18} strokeWidth={2.2} />
-              </button>
-            </div>
-            <input
-              ref={inputRef}
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search blogs and topics…"
-              autoComplete="off"
-            />
-            <button type="submit" className="zo-site-search-go">
-              Search
-            </button>
-          </form>
         </div>
       ) : null}
     </>

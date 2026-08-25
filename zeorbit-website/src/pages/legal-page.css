@@ -1,0 +1,71 @@
+.zo-legal-page {
+  background: #ffffff;
+  color: #111111;
+  min-height: 100vh;
+}
+
+.zo-legal-main {
+  padding: calc(var(--cz-header-clear, 108px) + 28px) 0 72px;
+}
+
+.zo-legal-inner {
+  max-width: 760px;
+}
+
+.zo-legal-kicker {
+  margin: 0 0 10px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.zo-legal-inner h1 {
+  margin: 0 0 12px;
+  font-family: var(--font-sans);
+  font-size: clamp(32px, 4vw, 44px);
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: #0a0a0a;
+}
+
+.zo-legal-updated {
+  margin: 0 0 20px;
+  font-size: 13px;
+  color: #6b7280;
+  font-family: var(--font-sans);
+}
+
+.zo-legal-lead {
+  margin: 0 0 32px;
+  font-size: 17px;
+  line-height: 1.55;
+  color: #374151;
+  font-family: var(--font-sans);
+}
+
+.zo-legal-section {
+  margin: 0 0 28px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.zo-legal-section h2 {
+  margin: 18px 0 10px;
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #111111;
+}
+
+.zo-legal-section p {
+  margin: 0 0 12px;
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: #374151;
+  font-family: var(--font-sans);
+}

@@ -1,8 +1,28 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronLeft, Menu, Phone, X } from 'lucide-react'
+import {
+  ArrowRight,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  FileText,
+  Globe,
+  Layout,
+  LineChart,
+  MapPin,
+  Menu,
+  Paintbrush,
+  Phone,
+  RefreshCw,
+  Server,
+  ShoppingBag,
+  Smartphone,
+  Sparkles,
+  UserRound,
+  Wrench,
+  X,
+} from 'lucide-react'
 import Logo from '../Logo'
-import SocialBrandIcon from '../SocialBrandIcon'
 import { PRIMARY_NAV, SITE_CONTACT } from '../../data/revampContent'
 import { scrollToHashId } from '../../hooks/useHashScroll'
 import { goToHomepageTop } from '../../utils/goHome'
@@ -12,24 +32,265 @@ function isActive(pathname, href) {
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
-function socialSlug(label) {
-  return label.toLowerCase().replace(/\s+/g, '-')
+const COUNTRIES = [
+  { code: 'AU', label: 'Australia', flag: '🇦🇺' },
+  { code: 'BD', label: 'Bangladesh', flag: '🇧🇩' },
+  { code: 'CA', label: 'Canada', flag: '🇨🇦' },
+  { code: 'DE', label: 'Germany', flag: '🇩🇪' },
+  { code: 'IN', label: 'India', flag: '🇮🇳' },
+  { code: 'GB', label: 'United Kingdom', flag: '🇬🇧' },
+  { code: 'US', label: 'United States (Global)', flag: '🇺🇸' },
+]
+
+const ICON_MAP = {
+  Globe,
+  ShoppingBag,
+  Layout,
+  RefreshCw,
+  Paintbrush,
+  Wrench,
+  Smartphone,
+  Sparkles,
+  FileText,
+  LineChart,
+  MapPin,
+  Server,
 }
 
-const HEADER_SOCIAL = SITE_CONTACT.social.filter((s) =>
-  ['Facebook', 'Instagram', 'LinkedIn', 'YouTube', 'X', 'Pinterest', 'Apple Maps', 'Google Maps', 'Yelp'].includes(
-    s.label,
-  ),
-)
+const MEGA_BY_LABEL = {
+  Websites: {
+    columns: [
+      {
+        title: 'Hosting',
+        items: [
+          {
+            label: 'Custom Websites',
+            href: '/website-designing#business',
+            icon: 'Globe',
+            blurb: 'Sites built around your brand and conversion goals.',
+          },
+          {
+            label: 'Shopify & Ecommerce',
+            href: '/website-designing#ecommerce',
+            icon: 'ShoppingBag',
+            blurb: 'Stores that sell — design, checkout, and care.',
+          },
+          {
+            label: 'Landing Pages',
+            href: '/website-designing#landing',
+            icon: 'Layout',
+            blurb: 'Focused pages that turn traffic into leads.',
+          },
+        ],
+      },
+      {
+        title: 'Get Online',
+        items: [
+          {
+            label: 'Website Redesign',
+            href: '/website-designing#redesign',
+            icon: 'RefreshCw',
+            blurb: 'Refresh outdated sites without losing SEO equity.',
+          },
+          {
+            label: 'Care & Maintenance',
+            href: '/website-designing#care',
+            icon: 'Wrench',
+            blurb: 'Updates, security, and ongoing support.',
+          },
+        ],
+      },
+      {
+        title: 'Design',
+        items: [
+          {
+            label: 'UI / UX Design',
+            href: '/website-designing#ux',
+            icon: 'Paintbrush',
+            blurb: 'Interfaces that feel clear and convert better.',
+          },
+        ],
+      },
+    ],
+    promo: {
+      image: '/showcase/pro/ux-office-monitors.jpg',
+      title: 'Talk to our sales team',
+      copy: 'Get in touch with our team to find the best solution for you.',
+      href: '/contact',
+    },
+  },
+  'Mobile Apps': {
+    columns: [
+      {
+        title: 'Build',
+        items: [
+          {
+            label: 'iOS & Android',
+            href: '/mobile-apps#native',
+            icon: 'Smartphone',
+            blurb: 'Native apps ready for App Store and Play.',
+          },
+          {
+            label: 'Cross-Platform',
+            href: '/mobile-apps#cross',
+            icon: 'Sparkles',
+            blurb: 'One codebase that ships on both platforms.',
+          },
+        ],
+      },
+      {
+        title: 'Plan',
+        items: [
+          {
+            label: 'App Timeline',
+            href: '/mobile-apps#timeline',
+            icon: 'FileText',
+            blurb: 'How we plan, build, and launch your app.',
+          },
+          {
+            label: 'Mobile UX / UI',
+            href: '/mobile-apps#ux',
+            icon: 'Paintbrush',
+            blurb: 'Mobile-first flows that users finish.',
+          },
+        ],
+      },
+    ],
+    promo: {
+      image: '/showcase/mobile-phones-grid.png',
+      title: 'Talk to our sales team',
+      copy: 'Get in touch with our team to find the best solution for you.',
+      href: '/contact',
+    },
+  },
+  'SEO & Ads': {
+    columns: [
+      {
+        title: 'SEO',
+        items: [
+          {
+            label: 'Technical SEO',
+            href: '/seo-ppc#seo',
+            icon: 'Server',
+            blurb: 'Crawl health, speed, and indexation fixes.',
+          },
+          {
+            label: 'Local SEO',
+            href: '/seo-ppc#local',
+            icon: 'MapPin',
+            blurb: 'Maps, citations, and city-level visibility.',
+          },
+          {
+            label: 'Content SEO',
+            href: '/seo-ppc#content',
+            icon: 'FileText',
+            blurb: 'Pages and posts that rank and convert.',
+          },
+        ],
+      },
+      {
+        title: 'Ads',
+        items: [
+          {
+            label: 'Google Ads',
+            href: '/seo-ppc#ads',
+            icon: 'LineChart',
+            blurb: 'Search and display campaigns that pay back.',
+          },
+          {
+            label: 'Social Ads',
+            href: '/seo-ppc#social-ads',
+            icon: 'Sparkles',
+            blurb: 'Paid social that reaches the right audience.',
+          },
+        ],
+      },
+      {
+        title: 'More',
+        items: [
+          {
+            label: 'Blog & Insights',
+            href: '/seo-ppc#blog',
+            icon: 'FileText',
+            blurb: 'Guides and updates from the ZeOrbit team.',
+          },
+          {
+            label: 'Pricing',
+            href: '/seo-ppc#pricing',
+            icon: 'Layout',
+            blurb: 'Clear packages for websites, apps, and growth.',
+          },
+        ],
+      },
+    ],
+    promo: {
+      image: '/showcase/growth-charts-blue.png',
+      title: 'Talk to our sales team',
+      copy: 'Get in touch with our team to find the best solution for you.',
+      href: '/contact',
+    },
+  },
+  'Custom Software': {
+    columns: [
+      {
+        title: 'Platforms',
+        items: [
+          {
+            label: 'Dashboards',
+            href: '/custom-software#platforms',
+            icon: 'Layout',
+            blurb: 'Internal tools your team actually uses.',
+          },
+          {
+            label: 'CRM & Workflows',
+            href: '/custom-software#crm',
+            icon: 'Server',
+            blurb: 'Systems that match how you sell and deliver.',
+          },
+        ],
+      },
+      {
+        title: 'Connect',
+        items: [
+          {
+            label: 'API Integrations',
+            href: '/custom-software#integrations',
+            icon: 'Sparkles',
+            blurb: 'Connect the tools you already rely on.',
+          },
+          {
+            label: 'Automation',
+            href: '/custom-software#automation',
+            icon: 'Wrench',
+            blurb: 'Cut busywork with reliable automations.',
+          },
+        ],
+      },
+    ],
+    promo: {
+      image: '/showcase/web-dashboard-product.webp',
+      title: 'Talk to our sales team',
+      copy: 'Get in touch with our team to find the best solution for you.',
+      href: '/contact',
+    },
+  },
+}
 
+const MAIN_NAV = PRIMARY_NAV.filter((item) => item.label !== 'Contact')
 
 export default function RevampHeader() {
   const [open, setOpen] = useState(false)
   const [openMenu, setOpenMenu] = useState(null)
+  const [utilityOpen, setUtilityOpen] = useState(null)
+  const [scrolled, setScrolled] = useState(false)
+  const [country, setCountry] = useState(COUNTRIES.find((c) => c.code === 'US'))
   const [mobilePanel, setMobilePanel] = useState(null)
   const headerRef = useRef(null)
   const { pathname, hash } = useLocation()
   const navigate = useNavigate()
+
+  const activeMega = useMemo(() => (openMenu ? MEGA_BY_LABEL[openMenu] : null), [openMenu])
+
   const onHome = (event) => {
     event.preventDefault()
     closeMobile()
@@ -39,6 +300,7 @@ export default function RevampHeader() {
   useEffect(() => {
     setOpen(false)
     setOpenMenu(null)
+    setUtilityOpen(null)
     setMobilePanel(null)
   }, [pathname, hash])
 
@@ -50,12 +312,18 @@ export default function RevampHeader() {
   }, [open])
 
   useEffect(() => {
-    if (!openMenu) return undefined
+    if (!openMenu && !utilityOpen) return undefined
     const onPointer = (event) => {
-      if (!headerRef.current?.contains(event.target)) setOpenMenu(null)
+      if (!headerRef.current?.contains(event.target)) {
+        setOpenMenu(null)
+        setUtilityOpen(null)
+      }
     }
     const onKey = (event) => {
-      if (event.key === 'Escape') setOpenMenu(null)
+      if (event.key === 'Escape') {
+        setOpenMenu(null)
+        setUtilityOpen(null)
+      }
     }
     document.addEventListener('pointerdown', onPointer)
     document.addEventListener('keydown', onKey)
@@ -63,10 +331,39 @@ export default function RevampHeader() {
       document.removeEventListener('pointerdown', onPointer)
       document.removeEventListener('keydown', onKey)
     }
-  }, [openMenu])
+  }, [openMenu, utilityOpen])
+
+  useEffect(() => {
+    const hero = document.getElementById('cz-hero-dark')
+    if (!hero) {
+      setScrolled(true)
+      return undefined
+    }
+
+    const update = () => {
+      const headerH = headerRef.current?.offsetHeight ?? 108
+      const heroBottom = hero.getBoundingClientRect().bottom
+      // Switch to light header once the dark hero has cleared the sticky chrome
+      setScrolled(heroBottom <= headerH + 8)
+    }
+
+    update()
+    window.addEventListener('scroll', update, { passive: true })
+    window.addEventListener('resize', update)
+    return () => {
+      window.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [pathname])
 
   const toggleMenu = (label) => {
+    setUtilityOpen(null)
     setOpenMenu((current) => (current === label ? null : label))
+  }
+
+  const toggleUtility = (key) => {
+    setOpenMenu(null)
+    setUtilityOpen((current) => (current === key ? null : key))
   }
 
   const closeMobile = () => {
@@ -74,43 +371,45 @@ export default function RevampHeader() {
     setMobilePanel(null)
   }
 
-  const headerClass = ['zo-site-header', 'is-solid', open ? 'is-menu-open' : ''].filter(Boolean).join(' ')
+  const closeMegaLink = (href) => {
+    setOpenMenu(null)
+    const id = href.split('#')[1]
+    if (id) window.setTimeout(() => scrollToHashId(id), 40)
+  }
+
+  const onDark = !scrolled && !openMenu && !open
+  const headerClass = [
+    'zo-site-header',
+    'zo-host-header',
+    scrolled || openMenu || open ? 'is-scrolled' : 'is-top',
+    open ? 'is-menu-open' : '',
+    openMenu ? 'is-mega-open' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <header ref={headerRef} className={headerClass}>
-      <div className="zo-topbar" aria-label="Social links">
+      <div className="zo-topbar">
         <div className="zo-topbar-inner">
-          <a className="zo-topbar-tagline" href={`mailto:${SITE_CONTACT.email}`}>
+          <a className="zo-topbar-email" href={`mailto:${SITE_CONTACT.email}`}>
             {SITE_CONTACT.email}
           </a>
-          <div className="zo-topbar-social">
-            {HEADER_SOCIAL.map((item) => (
-              <a
-                key={item.label}
-                href={item.href}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={item.label}
-                className={`zo-topbar-social-link is-${socialSlug(item.label)}`}
-              >
-                <SocialBrandIcon label={item.label} />
-              </a>
-            ))}
-          </div>
+          <div className="zo-topbar-spacer" aria-hidden />
         </div>
       </div>
 
-      <div className="zo-navbar">
-        <div className="zo-navbar-inner">
+      <div className="zo-host-bar">
+        <div className="zo-host-bar-inner">
           <div className="zo-brand">
             <Link to="/" className="zo-logo" aria-label="ZeOrbit home" onClick={onHome}>
-              <Logo size={48} onDark={false} />
+              <Logo size={36} onDark={onDark} />
             </Link>
           </div>
 
           <nav className="zo-nav" aria-label="Primary">
-            {PRIMARY_NAV.map((item) => {
-              const hasChildren = Boolean(item.children?.length)
+            {MAIN_NAV.map((item) => {
+              const hasChildren = Boolean(item.children?.length) && Boolean(MEGA_BY_LABEL[item.label])
               const isOpen = openMenu === item.label
               const active = isActive(pathname, item.href)
 
@@ -135,68 +434,78 @@ export default function RevampHeader() {
               }
 
               return (
-                <div
-                  key={item.label}
-                  className={`zo-nav-item has-children${isOpen ? ' is-open' : ''}`}
-                  onMouseEnter={() => setOpenMenu(item.label)}
-                  onMouseLeave={() => setOpenMenu(null)}
-                >
-                  <div className="zo-nav-parent">
-                    <Link
-                      to={item.href}
-                      className={`zo-nav-parent-link${active ? ' active' : ''}`}
-                      onClick={() => setOpenMenu(null)}
-                    >
-                      {item.label}
-                    </Link>
-                    <button
-                      type="button"
-                      className={`zo-nav-caret-btn${active || isOpen ? ' active' : ''}`}
-                      aria-expanded={isOpen}
-                      aria-label={`${item.label} sections`}
-                      onClick={(event) => {
-                        event.preventDefault()
-                        event.stopPropagation()
-                        toggleMenu(item.label)
-                      }}
-                    >
-                      <ChevronDown size={13} className="zo-nav-caret" aria-hidden />
-                    </button>
-                  </div>
-                  {isOpen ? (
-                    <div className="zo-dropdown" role="menu">
-                      {item.children.map((child) => (
-                        <Link
-                          key={child.label}
-                          to={child.href}
-                          role="menuitem"
-                          onClick={() => {
-                            setOpenMenu(null)
-                            const id = child.href.split('#')[1]
-                            if (id) window.setTimeout(() => scrollToHashId(id), 40)
-                          }}
-                        >
-                          {child.label}
-                        </Link>
-                      ))}
-                    </div>
-                  ) : null}
+                <div key={item.label} className={`zo-nav-item has-children${isOpen ? ' is-open' : ''}`}>
+                  <button
+                    type="button"
+                    className={`zo-nav-trigger${active || isOpen ? ' active' : ''}`}
+                    aria-expanded={isOpen}
+                    aria-haspopup="true"
+                    onClick={() => toggleMenu(item.label)}
+                  >
+                    <span>{item.label}</span>
+                    <ChevronDown size={14} className="zo-nav-caret" aria-hidden />
+                  </button>
                 </div>
               )
             })}
           </nav>
 
-          <div className="zo-nav-actions">
-            <a
-              className="zo-phone-cta"
-              href={`tel:${SITE_CONTACT.phoneTel}`}
-              aria-label={`Call ${SITE_CONTACT.phone}`}
-            >
-              <span className="zo-phone-btn" aria-hidden>
-                <Phone size={20} strokeWidth={2.6} />
-              </span>
-              <span className="zo-phone-number">{SITE_CONTACT.phone}</span>
+          <div className="zo-host-actions">
+            <div className={`zo-util-item${utilityOpen === 'country' ? ' is-open' : ''}`}>
+              <button
+                type="button"
+                className="zo-util-trigger zo-lang-trigger"
+                aria-expanded={utilityOpen === 'country'}
+                aria-haspopup="listbox"
+                onClick={() => toggleUtility('country')}
+              >
+                <span className="zo-util-flag" aria-hidden>
+                  {country.flag}
+                </span>
+                <span className="zo-util-label">EN</span>
+                <ChevronDown size={12} className="zo-util-caret" aria-hidden />
+              </button>
+              {utilityOpen === 'country' ? (
+                <div className="zo-util-dropdown zo-country-dropdown" role="listbox" aria-label="Select your country">
+                  <p className="zo-util-dropdown-kicker">Select your country</p>
+                  <ul className="zo-country-list">
+                    {COUNTRIES.map((item) => {
+                      const selected = item.code === country.code
+                      return (
+                        <li key={item.code}>
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={selected}
+                            className={`zo-country-option${selected ? ' is-selected' : ''}`}
+                            onClick={() => {
+                              setCountry(item)
+                              setUtilityOpen(null)
+                            }}
+                          >
+                            <span className="zo-util-flag" aria-hidden>
+                              {item.flag}
+                            </span>
+                            <span>{item.label}</span>
+                            {selected ? <Check size={16} className="zo-country-check" aria-hidden /> : null}
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  <p className="zo-country-footer">
+                    Serving clients <strong>nationwide</strong>
+                  </p>
+                </div>
+              ) : null}
+            </div>
+
+            <a className="zo-nav-icon-btn" href={`tel:${SITE_CONTACT.phoneTel}`} aria-label={`Call ${SITE_CONTACT.phone}`}>
+              <Phone size={18} strokeWidth={2.2} />
             </a>
+            <Link to="/contact" className="zo-nav-icon-btn" aria-label="Contact ZeOrbit" onClick={() => setOpenMenu(null)}>
+              <UserRound size={18} strokeWidth={2.2} />
+            </Link>
             <button
               type="button"
               className="zo-mobile-toggle"
@@ -205,6 +514,8 @@ export default function RevampHeader() {
               onClick={() => {
                 setOpen((prev) => !prev)
                 setMobilePanel(null)
+                setUtilityOpen(null)
+                setOpenMenu(null)
               }}
             >
               {open ? <X size={22} strokeWidth={2.6} /> : <Menu size={22} strokeWidth={2.6} />}
@@ -212,6 +523,51 @@ export default function RevampHeader() {
           </div>
         </div>
       </div>
+
+      {activeMega ? (
+        <div className="zo-mega zo-host-mega" role="menu" aria-label={`${openMenu} menu`}>
+          <div className="zo-mega-grid">
+            {activeMega.columns.map((column) => (
+              <div key={column.title} className="zo-mega-col">
+                <p className="zo-mega-col-title">{column.title}</p>
+                <div className="zo-mega-col-items">
+                  {column.items.map((child) => {
+                    const Icon = ICON_MAP[child.icon] || Globe
+                    return (
+                      <Link
+                        key={child.label}
+                        to={child.href}
+                        role="menuitem"
+                        className="zo-mega-card"
+                        onClick={() => closeMegaLink(child.href)}
+                      >
+                        <span className="zo-mega-card-icon" aria-hidden>
+                          <Icon size={18} strokeWidth={2} />
+                        </span>
+                        <span className="zo-mega-card-copy">
+                          <strong>{child.label}</strong>
+                          <small>{child.blurb}</small>
+                        </span>
+                        <ArrowRight size={16} className="zo-mega-card-arrow" aria-hidden />
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+            <Link to={activeMega.promo.href} className="zo-mega-promo" onClick={() => setOpenMenu(null)}>
+              <img src={activeMega.promo.image} alt="" className="zo-mega-promo-media" />
+              <span className="zo-mega-promo-body">
+                <strong>{activeMega.promo.title}</strong>
+                <small>{activeMega.promo.copy}</small>
+                <span className="zo-mega-promo-arrow" aria-hidden>
+                  <ArrowRight size={16} />
+                </span>
+              </span>
+            </Link>
+          </div>
+        </div>
+      ) : null}
 
       {open ? (
         <nav className="zo-mobile-nav" aria-label="Mobile">
@@ -239,7 +595,7 @@ export default function RevampHeader() {
             </div>
           ) : (
             <>
-              {PRIMARY_NAV.map((item) => {
+              {MAIN_NAV.map((item) => {
                 const hasChildren = Boolean(item.children?.length)
                 if (!hasChildren) {
                   return (
@@ -282,23 +638,12 @@ export default function RevampHeader() {
                   </div>
                 )
               })}
-              <div className="zo-mobile-social">
-                {HEADER_SOCIAL.map((item) => (
-                  <a
-                    key={item.label}
-                    href={item.href}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label={item.label}
-                    className={`is-${socialSlug(item.label)}`}
-                  >
-                    <SocialBrandIcon label={item.label} />
-                  </a>
-                ))}
-              </div>
               <a className="zo-mobile-call" href={`tel:${SITE_CONTACT.phoneTel}`} onClick={closeMobile}>
                 Call {SITE_CONTACT.phone}
               </a>
+              <Link to="/contact" className="zo-mobile-call is-secondary" onClick={closeMobile}>
+                Contact us
+              </Link>
             </>
           )}
         </nav>

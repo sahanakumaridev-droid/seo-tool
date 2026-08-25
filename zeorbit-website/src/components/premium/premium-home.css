@@ -20,7 +20,7 @@
   --cz-section-tight: clamp(28px, 4vw, 52px);
   --cz-block: clamp(16px, 2.5vw, 28px);
   --cz-gap: clamp(14px, 2.2vw, 28px);
-  --cz-header-clear: 120px;
+  --cz-header-clear: 108px;
   --cz-light-pad-y: clamp(48px, 6.2vw, 84px);
   --cz-light-pad-y-first: clamp(64px, 7.8vw, 108px);
   --cz-light-wash:
@@ -43,6 +43,10 @@
 .cz-page .cz-film-title,
 .cz-page .cz-hero-copy h1 {
   font-family: var(--font-display);
+}
+
+.cz-page .cz-hero-stagepad .cz-hero-copy h1 {
+  font-family: var(--font-sans);
 }
 
 .cz-page .cz-strip-copy h2 {
@@ -181,26 +185,26 @@
 .cz-btn-ghost {
   appearance: none;
   cursor: pointer;
-  border-radius: 980px;
-  padding: 16px 30px;
-  font: 650 16px/1 var(--font-sans);
+  border-radius: 14px;
+  padding: 15px 28px;
+  font: 650 15px/1 var(--font-sans);
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  transition: transform 0.25s var(--ease), background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+  transition: transform 0.22s var(--ease), background 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease, color 0.22s ease;
 }
 
 .cz-btn-solid {
   border: 0;
   color: #fff;
   background: var(--coral);
-  box-shadow: 0 16px 40px rgba(255, 90, 78, 0.35);
+  box-shadow: 0 12px 28px rgba(255, 90, 78, 0.28);
   text-decoration: none;
 }
 
 .cz-btn-solid:hover {
   background: var(--coral-d);
-  transform: translateY(-2px) scale(1.02);
+  transform: translateY(-1px);
 }
 
 .cz-btn-solid:active {
@@ -208,9 +212,10 @@
 }
 
 .cz-btn-ghost {
-  border: 1px solid rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(0, 0, 0, 0.16);
   background: transparent;
   color: var(--ink);
+  text-decoration: none;
 }
 
 .cz-btn-ghost:hover {
@@ -218,46 +223,17 @@
   transform: translateY(-2px);
 }
 
-/* Header — black labels and icons on the light navbar */
+/* Header type only — colors come from host-chrome (dark/light scroll states) */
 .cz-page .zo-nav a,
 .cz-page .zo-nav-trigger,
 .cz-page .zo-nav-parent-link,
 .cz-page .zo-nav-caret-btn {
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-size: 14px;
-  font-weight: 700;
-  color: #111111;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-size: 13px;
+  font-weight: 500;
   text-shadow: none;
   font-family: var(--font-sans);
-}
-
-.cz-page .zo-nav a:hover,
-.cz-page .zo-nav a.active,
-.cz-page .zo-nav-trigger:hover,
-.cz-page .zo-nav-trigger.active,
-.cz-page .zo-nav-item.is-open .zo-nav-trigger,
-.cz-page .zo-nav-parent-link:hover,
-.cz-page .zo-nav-parent-link.active,
-.cz-page .zo-nav-item.is-open .zo-nav-parent-link,
-.cz-page .zo-nav-caret-btn:hover,
-.cz-page .zo-nav-caret-btn.active,
-.cz-page .zo-nav-item.is-open .zo-nav-caret-btn {
-  color: #000000;
-  background: rgba(0, 0, 0, 0.06);
-}
-
-.cz-page .zo-nav-caret,
-.cz-page .zo-mobile-toggle {
-  color: #111111;
-}
-
-.cz-page .zo-phone-number {
-  color: #111111;
-}
-
-.cz-page .zo-phone-cta:hover .zo-phone-number {
-  color: #000000;
 }
 
 /* Dropdown links sit on white — keep black (override nav white) */
@@ -467,6 +443,84 @@
   min-height: 100dvh;
 }
 
+/* Hostinger-style: black stage + padded rounded video panel */
+.cz-hero-film.cz-hero-stagepad {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  min-height: auto;
+  padding:
+    calc(var(--cz-header-clear) + 12px)
+    clamp(48px, 5vw, 64px)
+    clamp(36px, 5vw, 56px);
+  background: #0a0a0a;
+}
+
+.cz-hero-stagepad-frame {
+  position: relative;
+  width: 100%;
+  max-width: 1360px;
+  margin: 0 auto;
+  min-height: min(78vh, 820px);
+  border-radius: 28px;
+  overflow: hidden;
+  isolation: isolate;
+  background: #0a0a0a;
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.cz-hero-stagepad .cz-hero-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.cz-hero-stagepad .cz-hero-scrim {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0.18) 28%, transparent 48%),
+    linear-gradient(105deg, rgba(0, 0, 0, 0.62) 0%, rgba(0, 0, 0, 0.28) 42%, rgba(0, 0, 0, 0.12) 100%),
+    linear-gradient(180deg, transparent 40%, rgba(0, 0, 0, 0.22) 70%, rgba(0, 0, 0, 0.5) 100%);
+}
+
+.cz-hero-stagepad .cz-hero-film-inner {
+  display: flex;
+  align-items: flex-end;
+  min-height: min(78vh, 820px);
+  padding: clamp(40px, 6vh, 72px) clamp(28px, 4.5vw, 64px) clamp(40px, 5vh, 68px);
+  box-sizing: border-box;
+}
+
+.cz-hero-stagepad h1.cz-hero-title {
+  font-size: clamp(32px, 4.2vw, 58px);
+  font-weight: 700;
+  max-width: none;
+  letter-spacing: -0.035em;
+}
+
+.cz-hero-stagepad h1.cz-hero-title .cz-hero-title-line {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  white-space: nowrap !important;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+.cz-hero-stagepad .cz-hero-line {
+  max-width: min(38rem, 92%);
+  font-size: clamp(16px, 1.5vw, 19px);
+}
+
+.cz-hero-stagepad .cz-hero-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
+
 .cz-hero-film-inner {
   display: block;
   grid-template-columns: none;
@@ -545,14 +599,14 @@
 
 .cz-hero-film h1.cz-hero-title {
   color: #fff;
-  font-family: var(--font-display);
-  font-size: clamp(34px, 5.6vw, 72px);
-  font-weight: 900;
-  line-height: 0.96;
+  font-family: var(--font-sans);
+  font-size: clamp(28px, 4.4vw, 56px);
+  font-weight: 700;
+  line-height: 1.08;
   margin: 0;
-  max-width: 11ch;
-  letter-spacing: -0.05em;
-  text-transform: uppercase;
+  max-width: 16ch;
+  letter-spacing: -0.03em;
+  text-transform: none;
   text-shadow: 0 14px 44px rgba(0, 0, 0, 0.4);
 }
 
@@ -561,6 +615,19 @@
   width: max-content;
   max-width: 100%;
   white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+.cz-hero-stagepad h1.cz-hero-title {
+  max-width: none;
+}
+
+.cz-hero-stagepad h1.cz-hero-title .cz-hero-title-line {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  white-space: nowrap !important;
   word-break: keep-all;
   overflow-wrap: normal;
 }
@@ -676,8 +743,8 @@
 .cz-strips {
   position: relative;
   isolation: isolate;
-  background: #f7f9fc;
-  padding: 0;
+  background: #ffffff;
+  padding: clamp(24px, 4vw, 48px) 0 0;
   overflow: clip;
 }
 
@@ -1702,7 +1769,7 @@
 
 /* ═══════════════ WORK / CASES ═══════════════ */
 .cz-work {
-  background: var(--cz-light-wash);
+  background: #ffffff;
   padding: var(--cz-light-pad-y) 0;
   scroll-margin-top: var(--cz-header-clear);
 }
@@ -3337,17 +3404,10 @@
     min-height: 0;
   }
 
-  .cz-hero.cz-hero-film,
-  .cz-hero-film,
-  .cz-hero-film-inner {
+  .cz-hero.cz-hero-film:not(.cz-hero-stagepad),
+  .cz-hero-film:not(.cz-hero-stagepad),
+  .cz-hero-film:not(.cz-hero-stagepad) .cz-hero-film-inner {
     min-height: 78dvh;
-  }
-
-  .cz-hero-film-inner {
-    padding: 136px var(--zo-page-gutter) 36px;
-    display: flex;
-    align-items: flex-end;
-    box-sizing: border-box;
   }
 
   .cz-hero-film h1 {
@@ -3669,14 +3729,70 @@
   }
 }
 
+@media (max-width: 900px) {
+  .cz-hero-film.cz-hero-stagepad {
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+
+  .cz-hero-stagepad-frame {
+    border-radius: 24px;
+  }
+
+  .cz-hero-stagepad-frame,
+  .cz-hero-stagepad .cz-hero-film-inner {
+    min-height: min(72dvh, 680px);
+  }
+}
+
 @media (max-width: 640px) {
   .cz-hero-phone { width: 120px; }
   .cz-hero-tablet { display: none; }
 
-  .cz-hero.cz-hero-film,
-  .cz-hero-film,
-  .cz-hero-film-inner {
+  .cz-hero.cz-hero-film:not(.cz-hero-stagepad),
+  .cz-hero-film:not(.cz-hero-stagepad),
+  .cz-hero-film:not(.cz-hero-stagepad) .cz-hero-film-inner {
     min-height: 82dvh;
+  }
+
+  .cz-hero-film.cz-hero-stagepad {
+    padding-left: 16px;
+    padding-right: 16px;
+    padding-bottom: 28px;
+  }
+
+  .cz-hero-stagepad-frame,
+  .cz-hero-stagepad .cz-hero-film-inner {
+    min-height: min(70dvh, 560px);
+    border-radius: 20px;
+  }
+
+  .cz-hero-stagepad .cz-hero-film-inner {
+    padding: 28px 20px 28px;
+  }
+
+  .cz-hero-stagepad h1.cz-hero-title {
+    font-size: clamp(26px, 6.8vw, 36px);
+  }
+
+  .cz-hero-stagepad h1.cz-hero-title .cz-hero-title-line {
+    white-space: normal;
+  }
+
+  .cz-hero-stagepad .cz-hero-cta {
+    width: 100%;
+    margin-top: 22px;
+  }
+
+  .cz-hero-stagepad .cz-btn-solid {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+    white-space: normal;
+    line-height: 1.25;
+    min-height: 48px;
+    padding: 12px 16px;
+    font-size: 14px;
   }
 
   .cz-hero-film-inner {

@@ -11,6 +11,12 @@ echo "Building zeorbit-website with VITE_API_URL=$API_URL"
 npm install --silent
 VITE_API_URL="$API_URL" npm run build
 
+# nginx (www-data) must be able to read LLM/SEO plain-text files
+chmod 644 dist/llms.txt dist/robots.txt 2>/dev/null || true
+for f in dist/sitemap.xml dist/page-sitemap.xml dist/post-sitemap.xml; do
+  [ -f "$f" ] && chmod 644 "$f" || true
+done
+
 python3 - <<'PY'
 from pathlib import Path
 import re

@@ -191,7 +191,7 @@ function HeroVideo({ preferVideo }) {
         className="cz-hero-poster"
         src="/videos/hero-agency-poster.webp"
         srcSet="/videos/hero-agency-poster-800.webp 800w, /videos/hero-agency-poster.webp 1200w, /videos/hero-agency-poster-1600.webp 1600w"
-        sizes="100vw"
+        sizes="(max-width: 768px) 100vw, min(1320px, 92vw)"
         width={1500}
         height={900}
         alt=""
@@ -417,26 +417,28 @@ export default function PremiumHome() {
     <div className="cz-page" id="main">
       <RevampHeader />
 
-      <section className="cz-hero cz-hero-film" aria-label="Introduction">
-        <HeroVideo preferVideo={preferHeroVideo} />
-        <div className="cz-hero-inner cz-hero-film-inner">
-          <Reveal className="cz-hero-copy" eager>
-            <p className="cz-hero-eyebrow">{HERO.eyebrow}</p>
-            <h1 className="cz-hero-title">
-              <span className="cz-hero-title-line">Digital Solutions</span>
-              <span className="cz-hero-title-line">That Drive Results.</span>
-            </h1>
-            <p className="cz-hero-line">{HERO.line}</p>
-            <div className="cz-hero-cta">
-              <Link to="/contact#contact" className="cz-btn-solid">
-                {HERO.primaryCta}
-                <ArrowRight size={18} strokeWidth={2.4} />
-              </Link>
-            </div>
-          </Reveal>
-        </div>
-        <div className="cz-scroll-hint" aria-hidden="true">
-          <span />
+      <section id="cz-hero-dark" className="cz-hero cz-hero-film cz-hero-stagepad" aria-label="Introduction">
+        <div className="cz-hero-stagepad-frame">
+          <HeroVideo preferVideo={preferHeroVideo} />
+          <div className="cz-hero-inner cz-hero-film-inner">
+            <Reveal className="cz-hero-copy" eager>
+              <p className="cz-hero-eyebrow">{HERO.eyebrow}</p>
+              <h1 className="cz-hero-title">
+                {HERO.headline.split('\n').map((line) => (
+                  <span key={line} className="cz-hero-title-line">
+                    {line}
+                  </span>
+                ))}
+              </h1>
+              <p className="cz-hero-line">{HERO.line}</p>
+              <div className="cz-hero-cta">
+                <Link to={HERO.primaryHref} className="cz-btn-solid">
+                  {HERO.primaryCta}
+                  <ArrowRight size={18} strokeWidth={2.4} />
+                </Link>
+              </div>
+            </Reveal>
+          </div>
         </div>
       </section>
 
