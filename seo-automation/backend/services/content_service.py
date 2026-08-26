@@ -1730,6 +1730,7 @@ async def _generate_ai_block(
     provider_note = PROVIDER_STYLE_NOTES.get(provider_key, "Write at the quality level of ChatGPT, Claude, or Gemini — specific and human.")
 
     if content_kind == "blog":
+        from services.zeorbit_local_seo import master_voice_rules
         topic = article_topic(brief, target_keywords, business_type) or primary_kw
         primary_kw = topic
         keywords = KeywordSet(
@@ -1775,6 +1776,7 @@ BODY LAYOUT ({layout}): {layout_note}
 {loc_note}
 
 {VOICE_RULES}
+{master_voice_rules()}
 
 NON-NEGOTIABLE:
 - If the topic is about 301 redirects (or any how-to), explain WHAT a 301 is, WHEN to use it, HOW to set it (Apache .htaccess, Nginx, WordPress plugins, hosting panels), how to test it, and common mistakes.

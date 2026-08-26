@@ -303,12 +303,12 @@ async def resolve_generation_cities(
     num_cities: int,
     extra_labels: Optional[List[str]] = None,
 ) -> List[CityInfo]:
-    """Build the page list: chips first, then nearby fill up to num_cities.
+    """Build the page list for generate.
 
-    - Chips alone under the drag count → fill with nearby cities so Generate 50
-      still yields ~50 pages when the user only pinned a few communities.
-    - Chips alone at/above the drag count → chips are the full list.
-    - No chips → nearby expansion from the base city.
+    Automation path (no chips): expand from base_location into nearby cities,
+    plus local areas / streets when catalog data exists (e.g. San Diego County).
+
+    Legacy path: chips first, then nearby fill up to num_cities.
     """
     default_state = ""
     if base_location and "," in base_location:
@@ -324,18 +324,131 @@ async def resolve_generation_cities(
 
     nearby: List[CityInfo] = []
     if loc:
-        nearby = await get_nearby_cities(loc, num)
-        nearby = [c for c in nearby if getattr(c, "kind", "city") != "state"]
+        nearby = await expand_places_from_base(loc, num)
     elif extras:
-        # No base city — expand from the first chip
         seed = f"{extras[0].name}, {extras[0].state}".strip(", ")
         if seed.strip(", "):
-            nearby = await get_nearby_cities(seed, num)
-            nearby = [c for c in nearby if getattr(c, "kind", "city") != "state"]
+            nearby = await expand_places_from_base(seed, num)
 
     if extras:
         return merge_extra_locations(nearby, extra_labels)[:num]
     return nearby[:num]
+
+
+_SD_COUNTY_CACHE = None
+
+
+def _san_diego_county_data() -> Optional[dict]:
+    global _SD_COUNTY_CACHE
+    if _SD_COUNTY_CACHE is not None:
+        return _SD_COUNTY_CACHE or None
+    path = os.path.join(_DATA_DIR, "san_diego_county.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            _SD_COUNTY_CACHE = json.load(f)
+    except Exception:
+        _SD_COUNTY_CACHE = {}
+    return _SD_COUNTY_CACHE or None
+
+
+def _catalog_places_for_base(base_location: str, num: int) -> List[CityInfo]:
+    """
+    Prefer city → local areas → streets from regional catalogs when the base
+    matches (currently San Diego County). Frontend no longer picks these chips.
+    """
+    data = _san_diego_county_data()
+    if not data:
+        return []
+    loc = (base_location or "").strip()
+    city_part = loc.split(",")[0].strip().lower()
+    state = "CA"
+    if "," in loc:
+        maybe = loc.split(",")[-1].strip()
+        if _STATE_ABBR.fullmatch(maybe):
+            state = maybe.upper()
+
+    cities = list(data.get("cities") or [])
+    uninc = data.get("unincorporated") or {}
+    # Match a catalog city, or treat "San Diego" / county-wide as expand-all
+    match = None
+    for c in cities:
+        if (c.get("name") or "").strip().lower() == city_part:
+            match = c
+            break
+    county_wide = city_part in {
+        "san diego", "san diego county", "all cities", "chula vista",
+    } or "san diego" in city_part
+
+    out: List[CityInfo] = []
+    seen = set()
+
+    def add(name: str, kind: str, lat: float = 0.0, lon: float = 0.0):
+        key = (name.lower(), state.lower(), kind)
+        if key in seen or not (name or "").strip():
+            return
+        seen.add(key)
+        out.append(_city_info(name.strip(), state, lat, lon, kind))
+
+    # Base city first
+    if match:
+        add(match["name"], "city")
+        for area in (match.get("local_areas") or []):
+            add(area, "area")
+            if len(out) >= num:
+                return out[:num]
+        for street in (match.get("streets") or []):
+            add(f"{street}, {match['name']}", "street")
+            if len(out) >= num:
+                return out[:num]
+    elif county_wide or city_part == "chula vista":
+        # Expand across SD cities → areas → streets until num filled
+        for c in cities:
+            add(c.get("name") or "", "city")
+            if len(out) >= num:
+                return out[:num]
+        for c in cities:
+            for area in (c.get("local_areas") or []):
+                add(area, "area")
+                if len(out) >= num:
+                    return out[:num]
+        for place in (uninc.get("local_areas") or []):
+            add(place, "area")
+            if len(out) >= num:
+                return out[:num]
+        for c in cities:
+            for street in (c.get("streets") or []):
+                add(f"{street}, {c.get('name')}", "street")
+                if len(out) >= num:
+                    return out[:num]
+
+    return out[:num]
+
+
+async def expand_places_from_base(base_location: str, num: int) -> List[CityInfo]:
+    """Backend automation: cities + localities (+ streets when catalog allows)."""
+    num = max(1, min(int(num or 1), 100))
+    catalog = _catalog_places_for_base(base_location, num)
+    if len(catalog) >= num:
+        return catalog[:num]
+
+    nearby = await get_nearby_cities(base_location, num)
+    nearby = [c for c in nearby if getattr(c, "kind", "city") != "state"]
+
+    if not catalog:
+        return nearby[:num]
+
+    # Merge catalog (areas/streets) with nearby cities
+    out: List[CityInfo] = []
+    seen = set()
+    for info in list(catalog) + list(nearby):
+        key = (info.name.lower(), (info.state or "").lower(), getattr(info, "kind", "city"))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(info)
+        if len(out) >= num:
+            break
+    return out[:num]
 
 
 def merge_extra_locations(cities: List[CityInfo], extra_labels: Optional[List[str]]) -> List[CityInfo]:

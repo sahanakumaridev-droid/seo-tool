@@ -613,6 +613,8 @@ def facts_blurb(variant: int = 0) -> str:
 
 
 def master_voice_rules() -> str:
+    from services.master_custom_instruction import master_instruction_for_prompt
+
     return f"""
 VOICE — helpful small-business English (ZeOrbit local SEO):
 - Write as if explaining to a real {ZEORBIT_FACTS['experience']} shop owner sitting across from you.
@@ -624,6 +626,9 @@ VOICE — helpful small-business English (ZeOrbit local SEO):
 - Make entity relationships explicit: ZeOrbit → website design → WordPress/Shopify/mobile apps → small businesses → this location → industry → customer problem.
 - Every location page must feel unique: different intro, problem, industry examples, FAQs, and CTA — not city-name swap.
 - NEVER paste writing briefs or Custom Content Requirements into published fields.
+
+MASTER CUSTOM INSTRUCTION (keyword + niche + location drive the article; follow this for intent, problem, service focus, FAQs, CTA, tone):
+{master_instruction_for_prompt()}
 """
 
 

@@ -40,7 +40,10 @@ def assign_canonical_images(images: List["ImageAsset"]) -> tuple:
     cleaned: List[ImageAsset] = []
     seen: Set[str] = set()
     for im in images:
-        key = normalize_image_key(getattr(im, "url", "") or "")
+        raw = (getattr(im, "url", "") or "").strip()
+        if not raw:
+            continue
+        key = normalize_image_key(raw)
         if key and key in seen:
             continue
         if key:
@@ -1364,26 +1367,39 @@ async def generate_article_images(
                     if hosted and hkey and hkey not in used:
                         url, key = hosted, hkey
                         break
-        # Still colliding — only rotate within website-design curated pool (never cameras/classrooms).
-        if key and key in used:
+        # Still colliding — rotate unused website pool first
+        if (not url) or (key and key in used):
+            picked = False
             for u in web_only_pool:
                 uk = normalize_image_key(u)
                 if uk and uk not in used:
                     url, key = _with_unsplash_params(u), uk
+                    picked = True
                     break
-            else:
-                print(f"[Image] skip slot {i}: no unique website URL left for {query}")
-                continue
+            if not picked:
+                # Prefer unique, but NEVER leave a page with 0 images — reuse with rotation
+                pool = [u for u in web_only_pool if normalize_image_key(u) not in _DEAD_UNSPLASH_IDS] or list(_WEB_DESIGN_IMAGES)
+                pick = pool[(keyword_index + i) % len(pool)]
+                url = _with_unsplash_params(pick)
+                key = normalize_image_key(url)
+                print(
+                    f"[Image] uniqueness exhausted for slot {i} ({query[:60]}); "
+                    f"reusing pool image so page is never blank"
+                )
+        if not url:
+            url = _with_unsplash_params(_WEB_DESIGN_IMAGES[(keyword_index + i) % len(_WEB_DESIGN_IMAGES)])
+            key = normalize_image_key(url)
         if key:
             used.add(key)
         if i == 0:
             print(f"[Image] related stock: {query} → {(url or '')[:80]}")
         if url and "picsum.photos" in url:
             url = _curated_image_url("website design", seed=f"{seed}|nopicsum", exclude=used)
+            if not url:
+                url = _with_unsplash_params(_WEB_DESIGN_IMAGES[(keyword_index + i) % len(_WEB_DESIGN_IMAGES)])
             key = normalize_image_key(url)
-            if key in used:
-                continue
-            used.add(key)
+            if key:
+                used.add(key)
         # Clean focus for captions — never pass brief blobs.
         clean_focus = "website design"
         meta = build_image_metadata(
@@ -1401,31 +1417,17 @@ async def generate_article_images(
             description=meta["description"],
             is_featured=(len(assets) == 0),
         ))
-    # Guarantee at least one image — still avoid excluded keys when possible
+    # Drop any empty-URL accidents, then guarantee ≥1 real image
+    assets = [a for a in assets if (a.url or "").strip()]
     if not assets:
-        url = _curated_image_url("website design", seed=f"{topic}|{location}|solo", exclude=used)
-        if not url and (settings.UNSPLASH_ACCESS_KEY or settings.PEXELS_API_KEY):
-            url = await _hosted_image_url(
-                "website design laptop mockup",
-                seed=f"{topic}|{location}|solo-host",
-                exclude=used,
-                location="",
-            ) or ""
-        if not url:
-            # Absolute last resort: first unused web photo, else first pool photo
-            for u in _WEB_DESIGN_IMAGES:
-                uk = normalize_image_key(u)
-                if uk and uk not in used and uk not in _DEAD_UNSPLASH_IDS:
-                    url = _with_unsplash_params(u)
-                    break
-            if not url:
-                url = _with_unsplash_params(_WEB_DESIGN_IMAGES[0])
+        url = _with_unsplash_params(_WEB_DESIGN_IMAGES[keyword_index % len(_WEB_DESIGN_IMAGES)])
         meta = build_image_metadata("website design", location, business_name, 0, True, image_concept_text="", industry="")
         assets.append(ImageAsset(
             url=url, filename=meta["filename"], mime_type="image/webp",
             alt_text=meta["alt_text"], title=meta["title"], caption=meta["caption"],
             description=meta["description"], is_featured=True,
         ))
+        print(f"[Image] forced fallback featured for {location or focus_keyword}")
     return assets
 
 

@@ -963,7 +963,7 @@ export default function ContentPage() {
     }
   }
 
-  /** Fill every missing piece so generate can pass the 90% gate. */
+  /** Fill missing keyword / niche / location defaults so Generate can run. */
   const handleAiFillFor90 = async () => {
     setBriefAiBusy('ready90')
     setError('')
@@ -972,16 +972,14 @@ export default function ContentPage() {
       if (!contentKind) setContentKind('page')
 
       const niche = (form.business_type || '').trim() || 'Web Design'
-      const industry = (form.industry || '').trim() || 'Professional Services'
-      const audience = (form.audience || '').trim() || 'Small businesses'
       const baseLoc = (form.base_location || '').trim() || 'San Diego, CA'
       const numCities = form.num_cities >= 1 ? form.num_cities : 5
 
       setForm((f) => ({
         ...f,
         business_type: niche,
-        industry,
-        audience,
+        industry: '',
+        audience: '',
         base_location: baseLoc,
         num_cities: numCities,
       }))
@@ -990,7 +988,7 @@ export default function ContentPage() {
       if (!kws.length) {
         const suggestions = buildKeywordSuggestions({
           niche,
-          industry,
+          industry: '',
           city: baseLoc,
           contentKind: kind,
         })
@@ -998,27 +996,13 @@ export default function ContentPage() {
         setTargetKeywords(kws)
       }
 
-      const briefPatch = {
-        ...briefFields,
-        pricing: (briefFields.pricing || '').trim() || '$500–$3,000',
-      }
-      setBriefFields(briefPatch)
-
       setUseAi(true)
-      await handleSuggestBrief('ready90', {
-        contentKind: kind,
-        business_type: niche,
-        industry,
-        audience,
-        base_location: baseLoc,
-        target_keywords: kws,
-        briefFields: briefPatch,
-      })
-      showToast('AI filled setup for 90%+ — review, then Generate', 'success')
-      document.getElementById('custom-brief-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      showToast('Defaults set — Generate will fill the brief in the backend', 'success')
+      document.getElementById('target-keywords-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     } catch (err) {
-      setError(err.message || 'AI fill failed — complete the highlighted fields manually.')
-      showToast('AI fill failed', 'warning')
+      setError(err.message || 'Could not set defaults')
+      showToast('Fill failed', 'warning')
+    } finally {
       setBriefAiBusy('')
     }
   }
@@ -1028,26 +1012,23 @@ export default function ContentPage() {
     if (contentKind !== 'page' && contentKind !== 'post') {
       missing.push('Select Page or Post / Blog')
     }
-    if (!briefHasSubstance(briefFields, customRequirements)) {
-      missing.push('Content brief (working title, problem, or notes)')
-    }
-    if (!(briefFields.pricing || '').trim()) {
-      missing.push('Pricing (e.g. $500–$3,000)')
-    }
     if (contentKind === 'page') {
       if (!(form.business_type || '').trim()) missing.push('Business Niche')
-      if (!(form.industry || '').trim()) missing.push('Industry')
-      if (!targetKeywords.length) missing.push('At least one Target Keyword (type or click a suggestion)')
+      if (!targetKeywords.length) missing.push('At least one Target Keyword')
       if (!extraLocations.length && !(form.base_location || '').trim()) {
-        missing.push('Base city or location chips')
+        missing.push('Base city')
       }
-      if (!extraLocations.length && !(form.num_cities >= 1)) {
-        missing.push('How many locations (drag slider)')
+      if (!(form.num_cities >= 1)) {
+        missing.push('How many locations')
       }
     }
-    if (contentKind === 'post' && postLocalize) {
-      if (!extraLocations.length && !(form.base_location || '').trim()) {
-        missing.push('Base city (localize is on)')
+    if (contentKind === 'post') {
+      if (!targetKeywords.length) missing.push('At least one Target Keyword')
+      if (!(form.business_type || '').trim()) missing.push('Business niche / category')
+      if (postLocalize) {
+        if (!(form.base_location || '').trim()) {
+          missing.push('Base city (localize is on)')
+        }
       }
     }
     return missing
@@ -1057,50 +1038,49 @@ export default function ContentPage() {
     e.preventDefault()
     const blockers = getGenerateBlockers()
     if (blockers.length) {
-      const msg = `Cannot generate yet — score will stay below 90% until you fix: ${blockers.join('; ')}.`
+      const msg = `Add: ${blockers.join('; ')}. Brief fields are managed in the backend.`
       setError(msg)
-      showToast('Fill required fields first (90% gate)', 'warning')
+      showToast('Add keyword, niche, and location', 'warning')
       const scrollId = !contentKind ? 'content-kind-section'
-        : !briefHasSubstance(briefFields, customRequirements) || !(briefFields.pricing || '').trim() ? 'custom-brief-section'
-          : !targetKeywords.length && contentKind === 'page' ? 'target-keywords-section'
-            : contentKind === 'page' && (!(form.business_type || '').trim() || !(form.industry || '').trim()) ? 'business-niche-section'
-              : 'target-locations-panel'
+        : !targetKeywords.length ? 'target-keywords-section'
+          : contentKind === 'page' && !(form.business_type || '').trim() ? 'business-niche-section'
+            : 'target-locations-panel'
       document.getElementById(scrollId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
-    const brief = composeBriefFromParts(briefFields, customRequirements)
-    const niche = (form.business_type || '').trim()
-    const pendingLocs = splitLocations(extraLocDraft)
-    const chips = [...extraLocations]
-    pendingLocs.forEach((loc) => {
-      if (!chips.some((x) => locKey(x) === locKey(loc))) chips.push(loc)
-    })
-    if (pendingLocs.length) {
-      setExtraLocations(chips)
-      setExtraLocDraft('')
-    }
-    const useLocations = contentKind === 'page' || postLocalize || chips.length > 0
+
     setLoading(true)
     setError('')
+    setUseAi(true)
+
+    const niche = (form.business_type || '').trim()
+    setExtraLocations([])
+    setExtraLocDraft('')
+    const useLocations = contentKind === 'page' || postLocalize
+    const pageCount = useLocations ? Number(form.num_cities) || 1 : 1
+    // Auto async for large batches
+    const runAsync = useAsync || pageCount >= 20
     setPublishResults({})
     setAsyncJobId('')
     try {
       const payload = {
         ...form,
         business_type: niche || (contentKind === 'post' ? 'Digital Services' : niche),
-        num_cities: useLocations ? Number(form.num_cities) : 1,
+        industry: '',
+        audience: '',
+        num_cities: pageCount,
         base_location: useLocations ? (form.base_location || '') : '',
         target_keywords: targetKeywords.length
           ? [...targetKeywords]
-          : [((briefFields.topic_title || '').trim() || 'website design').slice(0, 80).toLowerCase()],
-        extra_locations: useLocations ? chips : [],
+          : ['website design'],
+        // Backend expands cities / localities / streets — no frontend chips
+        extra_locations: [],
         content_kind: contentKind,
-        custom_requirements: brief,
-        audience: form.audience || '',
-        use_ai: useAi,
+        custom_requirements: '',
+        use_ai: true,
         llm_provider: llmProvider || null,
       }
-      if (useAsync) {
+      if (runAsync) {
         const res = await startBulkGenerateJob(payload)
         setAsyncJobId(res.data.job_id)
         const existing = JSON.parse(localStorage.getItem('seo_jobs') || '[]')
@@ -1221,11 +1201,9 @@ export default function ContentPage() {
       <div className="crm-stepper" aria-label="Generation steps">
         {[
           ['1', 'Page or Post', !!contentKind],
-          ['2', 'Keywords', contentKind === 'post' || targetKeywords.length > 0],
-          ['3', 'Setup', !!contentKind && !!(form.business_type || contentKind === 'post')],
-          ['4', 'Content brief', briefHasSubstance(briefFields, customRequirements)],
-          ['5', 'Locations', extraLocations.length > 0 || contentKind === 'post'],
-          ['6', 'Generate', pages.length > 0],
+          ['2', 'Keywords', targetKeywords.length > 0],
+          ['3', 'Niche + location', !!contentKind && (contentKind === 'post' || (!!(form.business_type || '').trim() && (!!extraLocations.length || !!(form.base_location || '').trim())))],
+          ['4', 'Generate', pages.length > 0],
         ].map(([n, label, on]) => (
           <span key={label} className={`crm-step${on ? ' is-on' : ''}`}><b>{n}</b> {label}</span>
         ))}
@@ -1371,20 +1349,29 @@ export default function ContentPage() {
       )}
 
       {contentKind === 'post' && (
-        <div id="target-keywords-section" className="card p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <Tag size={15} className="text-indigo-400" />
+        <div id="target-keywords-section" className="card p-5"
+          style={targetKeywords.length
+            ? { borderColor: 'rgba(91,92,230,0.25)' }
+            : { borderColor: 'var(--amber)', boxShadow: '0 0 0 1px var(--amber-soft)' }}
+        >
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <Tag size={15} style={{ color: 'var(--brand)' }} />
             <span className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>Target Keywords</span>
-            <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-raised)', color: 'var(--text-3)' }}>Optional</span>
-            <span className="text-xs" style={{ color: 'var(--text-4)' }}>— click suggestions or type your own; all selected keywords are used</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: 'var(--amber-soft)', color: 'var(--amber)' }}>Required</span>
+            <span className="text-xs" style={{ color: 'var(--text-4)' }}>— topic for the blog; AI writes the rest</span>
           </div>
+          {!targetKeywords.length && (
+            <div className="mb-3 text-xs font-semibold rounded-lg px-3 py-2.5" style={{ color: '#92400e', background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(180, 83, 9, 0.35)' }}>
+              Add at least one keyword (e.g. 301 redirects, Shopify vs WordPress).
+            </div>
+          )}
           <div className="flex gap-2 mb-3">
             <input type="text" value={kwInput}
               onChange={e => setKwInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword() } }}
               placeholder="e.g. 301 redirects — press Enter to add"
               className="flex-1 rounded-lg px-4 py-2.5 text-sm"
-              style={{ background: '#fff', border: '1px solid var(--border-bright)', color: 'var(--text-1)' }} />
+              style={{ background: '#fff', border: `1px solid ${targetKeywords.length ? 'var(--border-bright)' : 'var(--amber)'}`, color: 'var(--text-1)' }} />
             <button type="button" onClick={() => addKeyword()}
               className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium"
               style={{ background: 'var(--brand-soft)', color: 'var(--brand-dark)', border: '1px solid var(--border)' }}>
@@ -1429,198 +1416,24 @@ export default function ContentPage() {
         <div className="card p-5">
           <h3 className="text-sm font-semibold mb-1 flex items-center gap-2" style={{ color: 'var(--text-1)' }}>
             <Zap size={14} style={{ color: 'var(--brand)' }} />
-            {contentKind === 'post' ? 'Blog post setup' : 'Page setup'}
+            {contentKind === 'post' ? 'Blog — AI automation' : 'Location pages — AI automation'}
           </h3>
           <p className="text-[11px] mb-4" style={{ color: 'var(--text-4)' }}>
             {contentKind === 'post'
-              ? 'Educational / how-to copy. Published URLs go to post-sitemap.xml.'
-              : 'Service / location landing pages. Published URLs go to page-sitemap.xml.'}
+              ? 'Type keyword + niche. Backend writes the brief and article.'
+              : 'Type keyword + niche + base city. Backend expands places and writes each page.'}
           </p>
           <form onSubmit={handleGenerate} className="space-y-4">
-            <div id="custom-brief-section" className="rounded-xl p-3 space-y-3" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
-              <div className="flex items-start justify-between gap-2 flex-wrap">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--text-3)' }}>
-                    <Sparkles size={13} style={{ color: 'var(--brand)' }} />
-                    Content brief
-                    <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ background: 'var(--amber-soft)', color: 'var(--amber)' }}>AI + Manual</span>
-                  </div>
-                  <p className="text-[11px] mt-1 leading-relaxed" style={{ color: 'var(--text-4)' }}>
-                    Fill fields yourself, or use AI on any row. Everything is editable before you generate.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAdvancedBrief((v) => !v)}
-                    className="text-[11px] px-2 py-1 rounded-md"
-                    style={{ color: 'var(--text-3)', border: '1px solid var(--border)' }}
-                  >
-                    {showAdvancedBrief ? 'Hide extras' : 'Show all fields'}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!!briefAiBusy || !contentKind}
-                    onClick={() => handleSuggestBrief('all')}
-                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg disabled:opacity-50"
-                    style={{ background: 'var(--brand-soft)', color: 'var(--brand-dark)', border: '1px solid var(--border)' }}
-                  >
-                    {briefAiBusy === 'all' ? <RefreshCw size={12} className="animate-spin" /> : <Wand2 size={12} />}
-                    AI fill all
-                  </button>
-                </div>
-              </div>
-
-              <BriefField
-                label="Working title / topic"
-                hint={contentKind === 'post' ? 'e.g. How to set 301 redirects on a website' : 'e.g. Affordable Website Design for Small Businesses in Coronado'}
-                value={briefFields.topic_title}
-                onChange={(v) => updateBriefField('topic_title', v)}
-                onAi={() => handleSuggestBrief('topic_title')}
-                aiBusy={briefAiBusy === 'topic_title'}
-                rows={2}
-              />
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-3)' }}>Search intent</label>
-                  <AiFieldBtn busy={briefAiBusy === 'search_intent'} onClick={() => handleSuggestBrief('search_intent')} />
-                </div>
-                <select
-                  value={SEARCH_INTENT_OPTIONS.includes(briefFields.search_intent) ? briefFields.search_intent : (briefFields.search_intent ? '__custom__' : '')}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    if (v === '__custom__') updateBriefField('search_intent', briefFields.search_intent || '')
-                    else updateBriefField('search_intent', v)
-                  }}
-                  className="w-full rounded-lg px-3 py-2 text-sm mb-1.5"
-                  style={{ background: '#fff', border: '1px solid var(--border-bright)', color: 'var(--text-1)' }}
-                >
-                  <option value="">Pick an intent (or type below)</option>
-                  {SEARCH_INTENT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-                  <option value="__custom__">Custom…</option>
-                </select>
-                <input
-                  type="text"
-                  value={briefFields.search_intent}
-                  onChange={(e) => updateBriefField('search_intent', e.target.value)}
-                  placeholder="Or type a custom intent"
-                  className="w-full rounded-lg px-3 py-2 text-sm"
-                  style={{ background: '#fff', border: '1px solid var(--border-bright)', color: 'var(--text-1)' }}
-                />
-              </div>
-
-              <BriefField
-                label="Customer problem"
-                hint="What is the business owner trying to fix? (outdated site, need leads, Shopify store, first website…)"
-                value={briefFields.customer_problem}
-                onChange={(v) => updateBriefField('customer_problem', v)}
-                onAi={() => handleSuggestBrief('customer_problem')}
-                aiBusy={briefAiBusy === 'customer_problem'}
-                rows={3}
-              />
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5 gap-2">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-3)' }}>
-                    Pricing
-                  </label>
-                  <AiFieldBtn busy={briefAiBusy === 'pricing'} onClick={() => handleSuggestBrief('pricing')} />
-                </div>
-                <input
-                  type="text"
-                  value={briefFields.pricing}
-                  onChange={(e) => updateBriefField('pricing', e.target.value)}
-                  placeholder="$500–$3,000"
-                  className="w-full rounded-lg px-3 py-2 text-sm"
-                  style={{ background: '#fff', border: '1px solid var(--border-bright)', color: 'var(--text-1)' }}
-                />
-                <p className="mt-1 text-[10px] leading-relaxed" style={{ color: 'var(--text-4)' }}>
-                  ZeOrbit typical website project range. Edit if this campaign needs a different range — woven into the copy.
-                </p>
-              </div>
-
-              {showAdvancedBrief && (
-                <>
-                  <BriefField
-                    label="Key points to cover"
-                    hint="One bullet per line — AI and manual both welcome"
-                    value={briefFields.key_points}
-                    onChange={(v) => updateBriefField('key_points', v)}
-                    onAi={() => handleSuggestBrief('key_points')}
-                    aiBusy={briefAiBusy === 'key_points'}
-                    rows={5}
-                    placeholder={"- Who this helps\n- WordPress / Shopify / redesign\n- What to do next"}
-                  />
-                  <BriefField
-                    label="FAQ ideas"
-                    hint="Questions a real customer would ask"
-                    value={briefFields.faq_ideas}
-                    onChange={(v) => updateBriefField('faq_ideas', v)}
-                    onAi={() => handleSuggestBrief('faq_ideas')}
-                    aiBusy={briefAiBusy === 'faq_ideas'}
-                    rows={4}
-                    placeholder={"- How much does a small-business website cost?\n- Is WordPress a good choice?"}
-                  />
-                  <BriefField
-                    label="CTA direction"
-                    hint="Soft next step — not a hard sell"
-                    value={briefFields.cta_direction}
-                    onChange={(v) => updateBriefField('cta_direction', v)}
-                    onAi={() => handleSuggestBrief('cta_direction')}
-                    aiBusy={briefAiBusy === 'cta_direction'}
-                    rows={2}
-                  />
-                  <BriefField
-                    label="Tone / voice notes"
-                    hint="e.g. plain English for a contractor owner; no marketing fluff"
-                    value={briefFields.tone_notes}
-                    onChange={(v) => updateBriefField('tone_notes', v)}
-                    onAi={() => handleSuggestBrief('tone_notes')}
-                    aiBusy={briefAiBusy === 'tone_notes'}
-                    rows={2}
-                  />
-                </>
-              )}
-
-              <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-3)' }}>
-                  Extra notes <span className="font-normal normal-case" style={{ color: 'var(--text-4)' }}>(optional)</span>
-              </label>
-              <textarea
-                value={customRequirements}
-                onChange={(e) => setCustomRequirements(e.target.value)}
-                  rows={3}
-                  placeholder="Anything else the writer should know — competitors to avoid naming, must-include services, etc."
-                className="w-full rounded-lg px-3 py-2 text-sm"
-                style={{ background: '#fff', border: '1px solid var(--border-bright)', color: 'var(--text-1)', resize: 'vertical' }}
-              />
-              </div>
-            </div>
             <div id="business-niche-section">
               <SearchSelect
-                label="Business Niche"
+                label="Business niche / category"
                 required={contentKind === 'page'}
                 value={form.business_type}
                 onChange={(v) => updateForm((f) => ({ ...f, business_type: v }))}
                 options={BUSINESS_TYPES}
-                placeholder="Search or type a niche…"
+                placeholder="e.g. Web Design, WordPress, Mobile Apps…"
               />
             </div>
-            <SearchSelect
-              label="Industry"
-              value={form.industry}
-              onChange={(v) => updateForm((f) => ({ ...f, industry: v }))}
-              options={INDUSTRIES}
-              placeholder="Search or type an industry…"
-            />
-            <SearchSelect
-              label="Audience"
-              value={form.audience || ''}
-              onChange={(v) => updateForm((f) => ({ ...f, audience: v }))}
-              options={AUDIENCES}
-              placeholder="Who is this for?"
-            />
             {contentKind === 'post' && (
               <label className="flex items-start gap-2 text-xs" style={{ color: 'var(--text-2)' }}>
                 <input type="checkbox" checked={postLocalize} onChange={(e) => {
@@ -1631,7 +1444,7 @@ export default function ContentPage() {
                     setExtraLocations([])
                   }
                 }} className="mt-0.5" />
-                <span>Mention a city in this article (optional). Leave off for a national how-to post.</span>
+                <span>Localize this post to a city (optional)</span>
               </label>
             )}
             {(contentKind === 'page' || postLocalize) && (
@@ -1656,9 +1469,9 @@ export default function ContentPage() {
                   </label>
                   <span className="text-sm font-bold" style={{ color: 'var(--brand)' }}>
                     {form.num_cities}
-                    {extraLocations.length > 0 ? ` · ${extraLocations.length} chips pinned` : ''}
+                    {extraLocations.length > 0 ? ` · ${extraLocations.length} chips` : ''}
                   </span>
-            </div>
+                </div>
                 <input
                   type="range"
                   min="1"
@@ -1667,139 +1480,18 @@ export default function ContentPage() {
                   onChange={(e) => updateForm((f) => ({ ...f, num_cities: Number(e.target.value) }))}
                   className="w-full accent-indigo-500"
                 />
-                <p className="text-[10px] mt-1" style={{ color: 'var(--text-4)' }}>
-                  {extraLocations.length > 0
-                    ? `Chips pin ${extraLocations.length} places first; drag count (${form.num_cities}) fills the rest with nearby cities up to that total.`
-                    : 'Drag to set how many nearby cities to generate from the base city (1–50).'}
-                </p>
-                {extraLocations.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setExtraLocations([])}
-                    className="mt-1.5 text-[11px] font-semibold"
-                    style={{ color: 'var(--brand)' }}
-                  >
-                    Clear chips & use drag count only
-                  </button>
-                )}
-                </div>
               </div>
+            </div>
             )}
             {error && (
               <div
-                className="rounded-xl p-3.5 flex gap-3"
-                style={{
-                  background: '#FEF2F2',
-                  border: '2px solid #DC2626',
-                  boxShadow: '0 0 0 3px rgba(220,38,38,0.12)',
-                }}
+                className="rounded-xl p-3 flex gap-2"
+                style={{ background: '#FEF2F2', border: '1px solid #FECACA' }}
               >
-                <AlertTriangle size={20} className="flex-shrink-0 mt-0.5" style={{ color: '#B91C1C' }} />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-bold" style={{ color: '#7F1D1D' }}>Cannot generate yet</div>
-                  <p className="text-[13px] mt-1 leading-snug font-medium" style={{ color: '#0f172a' }}>{error}</p>
-                </div>
+                <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" style={{ color: '#B91C1C' }} />
+                <p className="text-[13px] font-medium" style={{ color: '#7F1D1D' }}>{error}</p>
               </div>
             )}
-            {(() => {
-              const blockers = getGenerateBlockers()
-              if (!blockers.length) {
-                return (
-                  <div
-                    className="rounded-xl p-3.5 flex gap-3"
-                    style={{
-                      background: '#ECFDF5',
-                      border: '2px solid #059669',
-                      boxShadow: '0 0 0 3px rgba(5,150,105,0.12)',
-                    }}
-                  >
-                    <CheckCircle size={20} className="flex-shrink-0 mt-0.5" style={{ color: '#047857' }} />
-                    <div>
-                      <div className="text-sm font-bold" style={{ color: '#064E3B' }}>Ready for 90%+ quality</div>
-                      <p className="text-[13px] mt-1 leading-snug font-medium" style={{ color: '#0f172a' }}>
-                        Generate will keep only pages that score 90% or higher. Weak results are blocked and not saved.
-                      </p>
-                    </div>
-                  </div>
-                )
-              }
-              return (
-                <div
-                  className="rounded-xl p-3.5 flex gap-3"
-                  style={{
-                    background: '#FFFBEB',
-                    border: '2px solid #D97706',
-                    boxShadow: '0 0 0 3px rgba(217,119,6,0.14)',
-                  }}
-                >
-                  <AlertTriangle size={20} className="flex-shrink-0 mt-0.5" style={{ color: '#B45309' }} />
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <div className="text-sm font-bold" style={{ color: '#78350F' }}>Setup incomplete — generate blocked</div>
-                    <p className="text-[13px] font-medium leading-snug" style={{ color: '#0f172a' }}>
-                      Fill these so quality can hit 90%+:
-                    </p>
-                    <ul className="list-disc pl-4 space-y-1 text-[13px] font-semibold" style={{ color: '#0f172a' }}>
-                      {blockers.map((b) => <li key={b}>{b}</li>)}
-                    </ul>
-                    <button
-                      type="button"
-                      disabled={!!briefAiBusy}
-                      onClick={handleAiFillFor90}
-                      className="inline-flex items-center gap-1.5 mt-1 px-3 py-2 rounded-lg text-[13px] font-bold disabled:opacity-50"
-                      style={{ background: '#0f172a', color: '#fff', border: 'none' }}
-                    >
-                      {briefAiBusy === 'ready90' || briefAiBusy === 'all'
-                        ? <RefreshCw size={14} className="animate-spin" />
-                        : <Wand2 size={14} />}
-                      AI fill for 90%
-                    </button>
-                  </div>
-                </div>
-              )
-            })()}
-
-            {/* AI + Async toggles */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between px-2.5 py-2 rounded-lg bg-white/3 border border-white/6">
-                <div>
-                  <div className="text-xs font-semibold text-slate-300">AI Content</div>
-                  <div className="text-[10px] text-slate-500">Unique copy per location</div>
-                </div>
-                <button type="button" onClick={() => setUseAi(a => !a)}
-                  className={`w-9 h-5 rounded-full transition-colors relative flex-shrink-0 ${useAi ? 'bg-indigo-500' : 'bg-white/10'}`}>
-                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${useAi ? 'left-4' : 'left-0.5'}`} />
-                </button>
-              </div>
-              <div className="flex items-center justify-between px-2.5 py-2 rounded-lg bg-white/3 border border-white/6">
-                <div>
-                  <div className="text-xs font-semibold text-slate-300">AI Model</div>
-                  <div className="text-[10px] text-slate-500">
-                    {llmAvailability.active ? `Active: ${llmAvailability.active}` : 'Turn on AI Content to use'}
-                  </div>
-                </div>
-                <select
-                  value={llmProvider}
-                  onChange={e => { setLlmProvider(e.target.value); if (e.target.value) setUseAi(true) }}
-                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none min-w-[120px]"
-                >
-                  <option value="">Auto</option>
-                  <option value="gemini">Gemini</option>
-                  <option value="anthropic">Claude</option>
-                  <option value="openai">ChatGPT (GPT-4)</option>
-                  <option value="groq">Groq</option>
-                </select>
-              </div>
-              <div className="flex items-center justify-between px-2.5 py-2 rounded-lg bg-white/3 border border-white/6">
-                <div>
-                  <div className="text-xs font-semibold text-slate-300">⚡ Async Job (50+ pages)</div>
-                  <div className="text-[10px] text-slate-500">Background processing</div>
-                </div>
-                <button type="button" onClick={() => setUseAsync(a => !a)}
-                  className={`w-9 h-5 rounded-full transition-colors relative flex-shrink-0 ${useAsync ? 'bg-amber-500' : 'bg-white/10'}`}>
-                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${useAsync ? 'left-4' : 'left-0.5'}`} />
-                </button>
-              </div>
-            </div>
 
             {asyncJobId && (() => {
               const total = jobProgress?.total || form.num_cities
@@ -1816,160 +1508,57 @@ export default function ContentPage() {
                   </svg>
                   <div style={{ marginTop: -52, fontSize: 15, fontWeight: 800, color: 'var(--text-1)' }}>{pct}%</div>
                   <div style={{ marginTop: 34, fontSize: 12.5, fontWeight: 600, color: 'var(--text-2)' }}>
-                    Generating with AI… {done} / {total} pages
+                    Generating… {done} / {total}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-4)' }}>You can review &amp; publish each below when ready</div>
                 </div>
               )
             })()}
 
-            <button type="submit" disabled={
-              loading || !!asyncJobId
-              || !briefHasSubstance(briefFields, customRequirements)
-              || (contentKind === 'page' && (!(form.business_type || '').trim() || !targetKeywords.length))
-            }
+            <button
+              type="submit"
+              disabled={
+                loading || !!asyncJobId
+                || (contentKind === 'page' && (!(form.business_type || '').trim() || !targetKeywords.length || !(form.base_location || '').trim()))
+                || (contentKind === 'post' && (!(form.business_type || '').trim() || !targetKeywords.length))
+              }
               className="btn-primary w-full py-2.5 rounded-lg text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
-              title={
-                !briefHasSubstance(briefFields, customRequirements) ? 'Add a title, problem, or notes in the content brief'
-                  : contentKind === 'page' && !(form.business_type || '').trim() ? 'Select a Business Niche first'
-                  : contentKind === 'page' && !targetKeywords.length ? 'Add at least one target keyword first'
-                    : undefined
-              }>
+            >
               {loading || asyncJobId
-                ? <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.2)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/></svg>{asyncJobId ? 'Generating…' : `Generating ${contentKind === 'post' ? 'post' : 'pages'}…`}</>
-                : <><Zap size={14} />{useAsync ? 'Start Async Job' : (contentKind === 'post' && !postLocalize ? 'Generate blog post' : `Generate ${form.num_cities || (extraLocations.length || 1)} ${(contentKind === 'post' ? 'posts' : 'pages')}`)}{useAi ? ' (AI)' : ''}</>}
+                ? <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.2)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/></svg>Generating…</>
+                : <><Zap size={14} />{contentKind === 'post' && !postLocalize ? 'Generate post' : `Generate ${form.num_cities || 1} ${(contentKind === 'post' ? 'posts' : 'pages')}`}</>}
             </button>
             <p className="text-[10px] text-center" style={{ color: 'var(--text-3)' }}>
-              {contentKind === 'post' && !postLocalize
-                ? 'Writes one how-to / educational article from your brief. Lives on post-sitemap.xml after publish.'
-                : `Creates up to ${form.num_cities || 1} location-specific ${contentKind === 'post' ? 'posts' : 'pages'} (chips first, then nearby fill). Only ${90}%+ quality is kept. Lives on ${contentKind === 'post' ? 'post' : 'page'}-sitemap.xml after publish.`}
+              Backend fills intent, problem, pricing, FAQs, and tone from the master instruction. Only 90%+ quality is kept.
             </p>
           </form>
         </div>
 
         {(contentKind === 'page' || postLocalize) ? (
-        <div className="card p-3 lg:col-span-2">
-          <h4 className="text-[11px] font-semibold uppercase tracking-wider mb-2 flex items-center justify-between gap-1.5" style={{ color: 'var(--text-2)' }}>
-            <span className="inline-flex items-center gap-1.5"><Globe size={11} /> Bulk locations — {extraLocations.length || nearbyCities.length || form.num_cities} separate {contentKind === 'post' ? 'posts' : 'pages'}</span>
-            {extraLocations.length > 0 && (
-              <span className="inline-flex gap-2">
-                <button type="button" className="text-[11px]" style={{ color: 'var(--brand)' }}
-                  onClick={() => navigator.clipboard.writeText(extraLocations.join(', '))}>Copy</button>
-                <button type="button" className="text-[11px]" style={{ color: 'var(--red)' }}
-                  onClick={() => setExtraLocations([])}>Clear</button>
-              </span>
-            )}
+        <div className="card p-5 lg:col-span-2">
+          <h4 className="text-sm font-semibold mb-1 flex items-center gap-2" style={{ color: 'var(--text-1)' }}>
+            <Globe size={14} style={{ color: 'var(--brand)' }} />
+            Locations (backend auto-expand)
           </h4>
-          <div className="flex flex-col gap-2 mb-2">
-            <div className="flex flex-col sm:flex-row gap-1.5">
-              <select
-                value={sdPick}
-                onChange={(e) => {
-                  const v = e.target.value
-                  setSdPick(v)
-                  setSdFilter('')
-                  updateForm((f) => ({
-                    ...f,
-                    base_location: v === 'Unincorporated' || v === 'All cities'
-                      ? 'Chula Vista, CA'
-                      : `${v}, CA`,
-                  }))
-                }}
-                className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--border)', color: 'var(--text-1)' }}
-              >
-                <option value="All cities">All San Diego County cities</option>
-                {sdCityNames.map((n) => <option key={n} value={n}>{n}</option>)}
-                <option value="Unincorporated">Unincorporated county</option>
-              </select>
-              <div className="crm-seg" role="tablist" aria-label="Cities, local areas, or streets">
-                <button type="button" aria-pressed={sdLayer === 'cities'} onClick={() => { setSdLayer('cities'); setSdFilter('') }}>Cities</button>
-                <button type="button" aria-pressed={sdLayer === 'areas'} onClick={() => { setSdLayer('areas'); setSdFilter('') }}>Local areas</button>
-                <button type="button" aria-pressed={sdLayer === 'streets'} onClick={() => { setSdLayer('streets'); setSdFilter('') }}>Streets</button>
-              </div>
-            </div>
-            <div className="flex gap-1.5">
-              <input
-                type="search"
-                value={sdFilter}
-                onChange={(e) => setSdFilter(e.target.value)}
-                placeholder={
-                  sdLayer === 'streets'
-                    ? 'Search any street (e.g. Carlsbad Blvd)…'
-                    : sdLayer === 'cities'
-                      ? 'Search any city (e.g. Coronado)…'
-                      : 'Search any community (e.g. Eastlake, Downtown Chula Vista)…'
-                }
-                className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
-                style={{ borderColor: sdFilter && !sdItems.length ? '#ef4444' : 'var(--border)', color: 'var(--text-1)' }}
-              />
-              <button
-                type="button"
-                disabled={!sdItems.length}
-                onClick={() => addSdItems(sdItems)}
-                className="px-3 py-2 rounded-lg text-xs font-semibold text-white flex-shrink-0 disabled:opacity-50"
-                style={{ background: 'var(--brand, #4f46e5)' }}
-              >
-                Add all {sdItems.length}
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto">
-              {sdItems.slice(0, 80).map((name, i) => (
-                <button
-                  key={`${sdLayer}-${name}-${i}`}
-                  type="button"
-                  onClick={() => addExtraLocation(name)}
-                  className="text-[11px] px-2 py-0.5 rounded font-medium"
-                  style={{
-                    background: extraLocations.some((x) => locKey(x) === locKey(name)) ? '#ecfdf5' : '#fff',
-                    border: '1px solid var(--border)',
-                    color: 'var(--text-2)',
-                  }}
-                >
-                  {name}
-                </button>
-              ))}
-              {sdItems.length > 80 && (
-                <span className="text-[11px]" style={{ color: 'var(--text-4)' }}>+{sdItems.length - 80} more — search or Add all</span>
-              )}
-              {sdFilter && !sdItems.length && (
-                <span className="text-[11px]" style={{ color: '#b91c1c' }}>
-                  No match in this list. Try All San Diego County cities, or pick the city (Carlsbad Blvd is in Carlsbad; Chula Vista communities are under Chula Vista).
-                </span>
-              )}
-            </div>
-            <div className="flex gap-1.5">
-              <input type="text" value={extraLocDraft}
-                onChange={e => setExtraLocDraft(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addExtraLocation() } }}
-                placeholder="Or type / paste a list and press Add"
-                className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--border)', color: 'var(--text-1)' }} />
-              <button type="button" onClick={() => addExtraLocation()}
-                className="px-3 py-2 rounded-lg text-xs font-semibold text-white flex-shrink-0"
-                style={{ background: 'var(--brand, #4f46e5)' }}>
-                Add
-              </button>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
-            {extraLocations.map(loc => (
-              <span key={`extra-${loc}`}
-                className="text-[11px] px-2 py-0.5 rounded font-semibold inline-flex items-center gap-1"
-                style={{ background: '#ecfdf5', border: '1px solid #059669', color: '#065f46' }}>
-                {loc}
-                <button type="button" onClick={() => removeExtraLocation(loc)} aria-label={`Remove ${loc}`}
-                  className="leading-none opacity-70 hover:opacity-100">×</button>
-              </span>
-            ))}
-            {nearbyCities.slice(0, 40).map(c => {
+          <p className="text-[12px] mb-3 leading-relaxed" style={{ color: 'var(--text-4)' }}>
+            From your base city, the backend picks nearby <strong>cities</strong>, <strong>localities</strong>, and <strong>streets</strong> (when catalog data exists). No manual chip picking.
+          </p>
+          {!form.base_location.trim() && (
+            <p className="text-xs" style={{ color: 'var(--amber)' }}>Set a base city on the left to preview expansion.</p>
+          )}
+          {nearbyError && (
+            <p className="text-xs mb-2" style={{ color: 'var(--red)' }}>{nearbyError}</p>
+          )}
+          <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto">
+            {nearbyCities.slice(0, 60).map((c) => {
               const kind = c.kind || 'city'
               const label = `${c.name}${c.state ? `, ${c.state}` : ''}`
-              const style = kind === 'state'
-                ? { background: '#eef2ff', border: '1px solid #6366f1', color: '#312e81' }
-                : kind === 'county'
+              const style = kind === 'area'
+                ? { background: '#ecfdf5', border: '1px solid #059669', color: '#065f46' }
+                : kind === 'street'
                   ? { background: '#fff7ed', border: '1px solid #ea580c', color: '#9a3412' }
-                  : { background: '#f8fafc', border: '1px solid #64748b', color: '#0f172a' }
+                  : kind === 'county'
+                    ? { background: '#eef2ff', border: '1px solid #6366f1', color: '#312e81' }
+                    : { background: '#f8fafc', border: '1px solid #64748b', color: '#0f172a' }
               return (
                 <span
                   key={`${c.name}-${c.state}-${kind}`}
@@ -1985,28 +1574,26 @@ export default function ContentPage() {
                 </span>
               )
             })}
-            {nearbyCities.length > 40 && (
+            {nearbyCities.length > 60 && (
               <span className="text-[11px] px-2 py-0.5 rounded font-semibold"
                 style={{ background: '#eef2ff', border: '1px solid #6366f1', color: '#3730a3' }}>
-                +{nearbyCities.length - 40} more
+                +{nearbyCities.length - 60} more at generate
               </span>
             )}
-            {!nearbyCities.length && !nearbyError && !extraLocations.length && form.base_location.trim() && (
+            {!nearbyCities.length && !nearbyError && form.base_location.trim() && (
               <span className="text-xs" style={{ color: 'var(--text-3)' }}>Looking up locations…</span>
             )}
           </div>
-          <p className="text-[10px] mt-2" style={{ color: 'var(--text-3)' }}>
-            Each chip is one {contentKind === 'post' ? 'blog post' : 'page'} with its own body copy and images. Type 2+ letters to search. Pick a city, then Cities / Local areas / Streets, then Add all. Max one place per chip.
+          <p className="text-[10px] mt-3" style={{ color: 'var(--text-3)' }}>
+            Generate creates up to <strong>{form.num_cities || 1}</strong> location pages. Intent, niche adaptation, and copy stay in the backend agent.
           </p>
-          <LocationMap places={extraLocations} city={form.base_location} />
         </div>
         ) : (
         <div className="card p-5 lg:col-span-2">
-          <h4 className="text-sm font-semibold mb-2" style={{ color: 'var(--text-1)' }}>Topic article — not a location page</h4>
+          <h4 className="text-sm font-semibold mb-2" style={{ color: 'var(--text-1)' }}>Topic article</h4>
           <p className="text-sm leading-relaxed" style={{ color: 'var(--text-3)' }}>
-            We’ll write one post from your content brief (for example, how to set 301 redirects).
-            American, user-focused tone. After you publish to ZeOrbit it is listed on <strong>post-sitemap.xml</strong>.
-            Check “Mention a city” only if you want local examples.
+            One how-to / educational post from your keyword + niche. Backend fills the brief from the master instruction.
+            Turn on “Localize” only if you want city examples.
           </p>
         </div>
         )}

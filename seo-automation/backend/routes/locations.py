@@ -83,8 +83,10 @@ async def nearby_cities(
     base_location: str = Query(default="San Diego, CA"),
     num_cities: int = Query(default=10, ge=1, le=100)
 ):
+    """Preview of places the generate agent will expand from the base city."""
+    from services.location_service import expand_places_from_base
     try:
-        cities = await get_nearby_cities(base_location, num_cities)
+        cities = await expand_places_from_base(base_location, num_cities)
     except LocationNotResolvedError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return cities

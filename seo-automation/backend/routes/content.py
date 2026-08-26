@@ -53,6 +53,97 @@ def _compose_brief_text(data: dict) -> str:
     return "\n\n".join(parts).strip()
 
 
+def _brief_needs_autofill(brief: str) -> bool:
+    text = (brief or "").strip()
+    if len(text) < 40:
+        return True
+    has_pricing = bool(re.search(r"(?im)^\s*pricing\s*:", text) or re.search(r"\$\s*\d", text))
+    has_intent = bool(re.search(r"(?im)^\s*search intent\s*:", text))
+    has_problem = bool(re.search(r"(?im)^\s*customer problem\s*:", text))
+    return not (has_pricing and has_intent and has_problem)
+
+
+async def ensure_brief_for_generate(req: GenerateRequest) -> GenerateRequest:
+    """
+    Minimal UI path: keyword + niche + location.
+    Always compose the structured brief from the master instruction when thin/missing.
+    """
+    from services.zeorbit_local_seo import ZEORBIT_FACTS
+
+    if not (req.industry or "").strip():
+        req.industry = "Professional Services"
+    if not (req.audience or "").strip():
+        req.audience = "Small business owners"
+
+    brief = (req.custom_requirements or "").strip()
+    if not _brief_needs_autofill(brief):
+        return req
+
+    suggest_req = BriefSuggestRequest(
+        content_kind=req.content_kind,
+        business_type=req.business_type or "",
+        industry=req.industry or "",
+        audience=req.audience or "",
+        base_location=req.base_location or ((req.extra_locations or [""])[0] if req.extra_locations else ""),
+        target_keywords=list(req.target_keywords or []),
+        extra_notes=brief,
+        field="all",
+        llm_provider=req.llm_provider,
+    )
+    base = _template_brief_fields(suggest_req)
+    try:
+        from services.llm_service import chat_json, llm_available
+        from services.master_custom_instruction import master_instruction_for_prompt
+        # Prefer LLM whenever available — frontend no longer sends a brief
+        if llm_available():
+            place = suggest_req.base_location or "United States"
+            kind = "blog post" if req.content_kind == "post" else "location / service page"
+            prompt = f"""You fill a ZeOrbit content brief for a {kind}.
+Follow this MASTER CUSTOM INSTRUCTION exactly (this is the format and rule set):
+{master_instruction_for_prompt(6500)}
+
+Business niche: {req.business_type or "Web Design"}
+Industry (client type — infer if blank): {req.industry or "infer from keyword + niche"}
+Audience (infer if blank): {req.audience or "infer from keyword + niche"}
+Location: {place}
+Keywords: {', '.join(req.target_keywords) or 'website design'}
+
+Return ONLY JSON:
+{{
+  "topic_title": "working title",
+  "search_intent": "short intent label matched to the keyword",
+  "customer_problem": "1-2 sentences",
+  "pricing": "{ZEORBIT_FACTS['pricing_range']}",
+  "key_points": "5-7 bullet lines starting with -",
+  "faq_ideas": "4-6 bullet questions starting with -",
+  "cta_direction": "1 soft CTA sentence",
+  "tone_notes": "1-2 sentences on voice",
+  "industry": "inferred industry label if helpful",
+  "audience": "inferred audience label if helpful"
+}}"""
+            data = await chat_json(prompt, temperature=0.55, max_tokens=1400, provider=req.llm_provider)
+            if data:
+                for key in ("topic_title", "search_intent", "customer_problem", "pricing", "key_points", "faq_ideas", "cta_direction", "tone_notes"):
+                    val = data.get(key)
+                    if isinstance(val, str) and val.strip():
+                        base[key] = val.strip()
+                    elif isinstance(val, list):
+                        base[key] = "\n".join(f"- {x}" for x in val if x)
+                if isinstance(data.get("industry"), str) and data["industry"].strip():
+                    req.industry = data["industry"].strip()
+                if isinstance(data.get("audience"), str) and data["audience"].strip():
+                    req.audience = data["audience"].strip()
+    except Exception as e:
+        print(f"[Generate] brief autofill AI failed, using template: {e}")
+
+    if not (base.get("pricing") or "").strip():
+        base["pricing"] = ZEORBIT_FACTS["pricing_range"]
+    if brief and "Extra editor notes" not in brief:
+        base["extra_notes"] = brief
+    req.custom_requirements = _compose_brief_text(base)
+    return req
+
+
 def _template_brief_fields(req: BriefSuggestRequest) -> dict:
     from services.zeorbit_local_seo import (
         pick_search_intent,
@@ -110,6 +201,7 @@ def _template_brief_fields(req: BriefSuggestRequest) -> dict:
 async def suggest_brief(req: BriefSuggestRequest):
     """Fill structured Page/Post brief fields with AI (or templates if no LLM)."""
     from services.llm_service import chat_json, llm_available
+    from services.master_custom_instruction import master_instruction_for_prompt
 
     base = _template_brief_fields(req)
     field = (req.field or "all").strip().lower()
@@ -119,6 +211,9 @@ async def suggest_brief(req: BriefSuggestRequest):
         place = req.base_location or "United States"
         kind = "blog post" if req.content_kind == "post" else "location / service page"
         prompt = f"""You help an editor fill a structured content brief for ZeOrbit ({kind}).
+Follow this MASTER CUSTOM INSTRUCTION when choosing intent, problem, FAQs, CTA, and tone:
+{master_instruction_for_prompt(4500)}
+
 Business niche: {req.business_type or "Web Design"}
 Industry (client type): {req.industry or "small business"}
 Audience: {req.audience or "small business owners"}
@@ -129,16 +224,16 @@ Existing notes: {req.extra_notes or 'none'}
 Return ONLY JSON with these keys (short, editable draft text — not the full article):
 {{
   "topic_title": "working title",
-  "search_intent": "one of: Website discovery | Affordable website | WordPress | Shopify | Website redesign | Lead generation | New business | Website vs mobile app | Industry local — or a short custom intent",
+  "search_intent": "short intent matched to the keyword (e.g. WordPress | Website redesign | Mobile app | SEO | eCommerce)",
   "customer_problem": "1-2 sentences: what the customer is trying to solve",
-  "pricing": "typical project range, e.g. $500–$3,000",
+  "pricing": "typical project range, e.g. $500–$3,000 — only when website-related",
   "key_points": "5-7 bullet lines starting with -",
   "faq_ideas": "4-6 bullet questions starting with -",
   "cta_direction": "1 sentence soft CTA guidance",
   "tone_notes": "1-2 sentences on voice"
 }}
 
-Rules: factual ZeOrbit services only (WordPress, Shopify, redesign, mobile-friendly, SEO structure, conversions, mobile apps). Default pricing $500–$3,000 unless a different range is already set. No fake reviews/offices/#1 claims. Field focus: {field}."""
+Rules: match services to the keyword (do not force every ZeOrbit service). Default website pricing $500–$3,000 when applicable. No fake reviews/offices/#1 claims. Field focus: {field}."""
         try:
             data = await chat_json(prompt, temperature=0.7, max_tokens=1200, provider=req.llm_provider)
             if data:
@@ -183,9 +278,10 @@ async def _places_for_generate(req: GenerateRequest) -> List:
 
 @router.post("/generate", response_model=BulkGenerateResponse)
 async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(get_session)):
-    """Generate location pages. Refuses incomplete setups and drops results under 90% quality."""
+    """Generate location pages. Autofills brief from keyword+niche+location; drops under 90%."""
     from services.zeorbit_local_seo import MIN_PUBLISH_SCORE, MIN_KEYWORD_USE_SCORE, scores_meet_floor
 
+    req = await ensure_brief_for_generate(req)
     cities = await _places_for_generate(req)
     requested_n = len(cities)
 
@@ -299,14 +395,16 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
                 if images:
                     from services.image_service import assign_canonical_images
                     feat, foot, cleaned = assign_canonical_images(images)
-                    block.in_content_images = cleaned
-                    block.featured_image_url = feat
-                    block.footer_image_url = foot
+                    # Never wipe a good image with an empty uniqueness regen
+                    if feat:
+                        block.in_content_images = cleaned
+                        block.featured_image_url = feat
+                        block.footer_image_url = foot
+                    else:
+                        print(f"[Image] uniqueness regen empty for {city_info.name}; keeping prior featured")
+            # Prefer unique featured across pages; body images may reuse after pool stretch
             if block.featured_image_url:
                 used_featured.append(block.featured_image_url)
-            for im in block.in_content_images or []:
-                if im.url:
-                    used_featured.append(im.url)
 
         # Track bodies for in-batch duplicate detection
         existing_bodies.append(f"{block.intro or ''}\n{block.content or ''}")

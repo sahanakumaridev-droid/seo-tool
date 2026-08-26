@@ -19,17 +19,17 @@ class GenerateRequest(BaseModel):
     industry: str = Field(default="", example="Contractors")
     audience: str = Field(default="", description="Who the copy speaks to")
     content_kind: Literal["page", "post"] = Field(..., description="Mandatory: website page vs blog post")
-    custom_requirements: str = Field(..., min_length=8, description="What to generate — topic, intent, and purpose")
+    custom_requirements: str = Field(
+        default="",
+        description="Optional writing brief — auto-composed from keyword + niche + location when empty",
+    )
     use_ai: bool = Field(default=False, description="Use an LLM for content generation")
     llm_provider: Optional[str] = Field(default=None, description="auto | groq | gemini | openai | anthropic — overrides server default for this request")
 
     @field_validator("custom_requirements")
     @classmethod
-    def _brief_not_blank(cls, v: str) -> str:
-        text = (v or "").strip()
-        if len(text) < 8:
-            raise ValueError("Describe the content you want in Custom content requirements (at least a short sentence).")
-        return text
+    def _brief_trim(cls, v: str) -> str:
+        return (v or "").strip()
 
     @model_validator(mode="after")
     def _page_needs_niche_and_keywords(self):
@@ -43,17 +43,18 @@ class GenerateRequest(BaseModel):
             missing = []
             if not niche:
                 missing.append("Business Niche")
-            if not (self.industry or "").strip():
-                missing.append("Industry")
             if not kws:
                 missing.append("at least one Target Keyword")
             if not (self.base_location or "").strip() and not (self.extra_locations or []):
-                missing.append("Base city or location chips")
-            if not re.search(r"(?im)^\s*pricing\s*:", brief) and not re.search(r"\$\s*\d", brief):
-                missing.append("Pricing in the brief (e.g. Pricing: $500–$3,000)")
+                missing.append("Base city")
+            # Industry / pricing / full brief are optional — backend autofills from master instruction
+            if not (self.industry or "").strip():
+                self.industry = "Professional Services"
+            if not (self.audience or "").strip():
+                self.audience = "Small business owners"
             if missing:
                 raise ValueError(
-                    "Cannot generate — quality would stay below 90%% until you fix: %s."
+                    "Cannot generate — add: %s. Brief fields (intent, problem, pricing, FAQs) are filled by the agent."
                     % "; ".join(missing)
                 )
         if kind == "post" and not kws:

@@ -12,6 +12,8 @@ router = APIRouter()
 @router.post("/generate")
 async def start_bulk_generate_job(req: GenerateRequest, background_tasks: BackgroundTasks):
     """Start an async bulk content generation job. Returns job_id for polling."""
+    from routes.content import ensure_brief_for_generate
+    req = await ensure_brief_for_generate(req)
     try:
         cities = await resolve_generation_cities(req.base_location, req.num_cities, req.extra_locations)
     except LocationNotResolvedError as e:
@@ -104,14 +106,14 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
                     if images:
                         from services.image_service import assign_canonical_images
                         feat, foot, cleaned = assign_canonical_images(images)
-                        block.in_content_images = cleaned
-                        block.featured_image_url = feat
-                        block.footer_image_url = foot
+                        if feat:
+                            block.in_content_images = cleaned
+                            block.featured_image_url = feat
+                            block.footer_image_url = foot
+                        else:
+                            print(f"[Image] uniqueness regen empty for {name}; keeping prior featured")
                 if block.featured_image_url:
                     used_featured.append(block.featured_image_url)
-                for im in block.in_content_images or []:
-                    if im.url:
-                        used_featured.append(im.url)
             existing_bodies.append(f"{block.intro or ''}\n{block.content or ''}")
         from services.zeorbit_local_seo import MIN_PUBLISH_SCORE, MIN_KEYWORD_USE_SCORE, scores_meet_floor
         q = float(getattr(block, "quality_score", None) or getattr(block, "readability_score", None) or 0)
