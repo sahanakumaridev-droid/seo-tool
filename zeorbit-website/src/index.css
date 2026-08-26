@@ -3,7 +3,8 @@
 @font-face {
   font-family: 'Manrope';
   font-style: normal;
-  font-weight: 400 800;
+  /* Local latin file is the variable Manrope (wght 200–800) — must declare the range */
+  font-weight: 200 800;
   font-display: swap;
   src: url('/fonts/manrope-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -367,15 +368,16 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
   min-width: 0;
   font-family: var(--font-sans);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0.01em;
-  color: rgba(255, 255, 255, 0.9);
+  color: #ffffff !important;
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   transition: color 0.16s ease;
   flex-shrink: 1;
+  -webkit-font-smoothing: antialiased;
 }
 
 .zo-topbar-email:hover {
@@ -424,8 +426,34 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
 }
 
 .zo-util-flag {
-  font-size: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 16px;
   line-height: 1;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+  font-size: 16px;
+}
+
+.zo-util-flag-img {
+  display: block;
+  width: 20px;
+  height: 15px;
+  object-fit: cover;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.12);
+}
+
+.zo-util-flag-emoji {
+  display: inline-block;
+  line-height: 1;
+  font-size: 16px;
+}
+
+.zo-util-flag-emoji[hidden] {
+  display: none !important;
 }
 
 .zo-util-label {
@@ -495,10 +523,14 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
   color: #111111;
   font-family: var(--font-sans);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   text-align: left;
   cursor: pointer;
   transition: background-color 0.12s ease;
+}
+
+.zo-country-option .zo-util-flag {
+  margin-right: 2px;
 }
 
 .zo-country-option:hover,
@@ -701,11 +733,11 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #111111;
+  color: #0b1220;
   text-decoration: none;
   font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 700;
   letter-spacing: 0.01em;
   text-transform: none;
   padding: 0 14px;
@@ -717,6 +749,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
   line-height: 1.2;
   white-space: nowrap;
   transition: color 0.12s ease, background-color 0.12s ease;
+  -webkit-font-smoothing: antialiased;
 }
 
 .zo-nav a:hover,

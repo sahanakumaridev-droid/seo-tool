@@ -6,7 +6,7 @@
   left: 0;
   right: 0;
   z-index: 80;
-  background: #000000;
+  background: #ffffff;
   border: 0;
   box-shadow: none;
   transition:
@@ -17,7 +17,7 @@
 }
 
 .zo-host-header .zo-topbar {
-  background: #000000;
+  background: #000000 !important;
   color: #ffffff;
   border-bottom: 0;
 }
@@ -40,15 +40,17 @@
   margin-right: auto;
   font-family: var(--font-sans);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0.01em;
-  color: rgba(255, 255, 255, 0.92);
+  color: #ffffff !important;
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: left;
   transition: color 0.16s ease;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 .zo-host-header .zo-topbar-spacer {
@@ -56,19 +58,21 @@
 }
 
 .zo-host-header .zo-topbar-email:hover {
-  color: #ffffff;
+  color: #ffffff !important;
+  opacity: 0.92;
 }
 
-/* Solid black while over the dark hero — never let page content show through */
+/* White chrome over the dark hero — logo + nav stay readable */
 .zo-host-header.is-top {
-  background: #000000;
+  background: #ffffff;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
 }
 
 .zo-host-header.is-top .zo-host-bar {
-  background: #000000;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: #ffffff;
+  border-bottom: 0;
 }
 
 .zo-host-header.is-scrolled,
@@ -88,12 +92,20 @@
   border-bottom: 0;
 }
 
-/* Keep email strip black so it stays readable after scroll */
+/* Email strip stays black with white text for contrast */
 .zo-host-header.is-scrolled .zo-topbar,
 .zo-host-header.is-mega-open .zo-topbar,
-.zo-host-header.is-menu-open .zo-topbar {
-  background: #000000;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+.zo-host-header.is-menu-open .zo-topbar,
+.zo-host-header.is-top .zo-topbar {
+  background: #000000 !important;
+  border-bottom: 0;
+}
+
+.zo-host-header.is-scrolled .zo-topbar-email,
+.zo-host-header.is-mega-open .zo-topbar-email,
+.zo-host-header.is-menu-open .zo-topbar-email,
+.zo-host-header.is-top .zo-topbar-email {
+  color: #ffffff !important;
 }
 
 .zo-host-header .zo-nav a,
@@ -206,12 +218,13 @@
 .zo-host-header.is-top .zo-nav-trigger span,
 .zo-host-header:not(.is-scrolled):not(.is-mega-open):not(.is-menu-open) .zo-nav a,
 .zo-host-header:not(.is-scrolled):not(.is-mega-open):not(.is-menu-open) .zo-nav-trigger {
-  font-family: var(--font-sans);
+  font-family: 'Manrope', 'Outfit', system-ui, sans-serif !important;
   font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
+  font-weight: 800 !important;
+  letter-spacing: 0.005em;
   text-transform: none;
-  color: #ffffff !important;
+  color: #0a0a0a !important;
+  -webkit-text-fill-color: #0a0a0a !important;
   height: 40px;
   min-height: 40px;
   padding: 0 14px;
@@ -220,21 +233,23 @@
   display: inline-flex;
   align-items: center;
   line-height: 1;
+  -webkit-font-smoothing: antialiased;
 }
 
 .zo-host-header.is-top .zo-nav-caret,
 .zo-host-header:not(.is-scrolled):not(.is-mega-open):not(.is-menu-open) .zo-nav-caret {
-  color: rgba(255, 255, 255, 0.9) !important;
+  color: #0b1220 !important;
 }
 
 .zo-host-header .zo-nav a,
 .zo-host-header .zo-nav-trigger {
-  font-family: var(--font-sans);
+  font-family: 'Manrope', 'Outfit', system-ui, sans-serif !important;
   font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
+  font-weight: 800 !important;
+  letter-spacing: 0.005em;
   text-transform: none;
-  color: rgba(255, 255, 255, 0.94);
+  color: #0a0a0a !important;
+  -webkit-text-fill-color: #0a0a0a !important;
   height: 40px !important;
   min-height: 40px !important;
   max-height: 40px;
@@ -247,6 +262,13 @@
   line-height: 1 !important;
   margin: 0;
   box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+}
+
+.zo-host-header .zo-nav a span,
+.zo-host-header .zo-nav-trigger span {
+  font-weight: 700 !important;
+  color: inherit !important;
 }
 
 .zo-host-header.is-scrolled .zo-nav a,
@@ -255,7 +277,8 @@
 .zo-host-header.is-mega-open .zo-nav-trigger,
 .zo-host-header.is-menu-open .zo-nav a,
 .zo-host-header.is-menu-open .zo-nav-trigger {
-  color: #111111 !important;
+  color: #0b1220 !important;
+  font-weight: 700 !important;
 }
 
 .zo-host-header.is-scrolled .zo-nav-caret,
@@ -294,6 +317,7 @@
   position: relative;
   height: 100%;
   min-width: 0;
+  overflow: visible;
 }
 
 .zo-ask-btn {
@@ -305,12 +329,12 @@
   min-height: 36px;
   padding: 0 14px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border: 1px solid rgba(15, 23, 42, 0.18);
   background: transparent;
-  color: #ffffff !important;
+  color: #111111 !important;
   font-family: var(--font-sans);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.01em;
   cursor: pointer;
   line-height: 1;
@@ -338,13 +362,14 @@
 }
 
 .zo-host-header .zo-util-trigger {
-  color: #ffffff !important;
+  color: #111111 !important;
   border-color: transparent;
   height: 36px;
   min-height: 36px;
   display: inline-flex;
   align-items: center;
   line-height: 1;
+  font-weight: 700;
 }
 
 .zo-host-header.is-scrolled .zo-util-trigger,
@@ -354,9 +379,9 @@
 }
 
 .zo-host-header .zo-nav-icon-btn {
-  border-color: rgba(255, 255, 255, 0.28);
-  background: transparent;
-  color: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+  color: #111111 !important;
   width: 36px;
   height: 36px;
   min-height: 36px;
@@ -374,9 +399,9 @@
 }
 
 .zo-host-header .zo-mobile-toggle {
-  border-color: rgba(255, 255, 255, 0.28);
-  background: transparent;
-  color: #ffffff;
+  border-color: rgba(15, 23, 42, 0.14);
+  background: rgba(15, 23, 42, 0.04);
+  color: #0b1220;
 }
 
 .zo-host-header.is-scrolled .zo-mobile-toggle,
@@ -398,6 +423,8 @@
 
 .zo-host-header .zo-util-item {
   position: relative;
+  z-index: 70;
+  overflow: visible;
 }
 
 .zo-host-header .zo-contact-dropdown {
@@ -408,6 +435,7 @@
 .zo-host-header .zo-country-dropdown {
   right: 0;
   top: calc(100% + 10px);
+  z-index: 90;
 }
 
 .zo-host-header .zo-mobile-nav {

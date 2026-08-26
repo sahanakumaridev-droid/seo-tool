@@ -191,7 +191,7 @@ function HeroVideo({ preferVideo }) {
         className="cz-hero-poster"
         src="/videos/hero-agency-poster.webp"
         srcSet="/videos/hero-agency-poster-800.webp 800w, /videos/hero-agency-poster.webp 1200w, /videos/hero-agency-poster-1600.webp 1600w"
-        sizes="(max-width: 768px) 100vw, min(1320px, 92vw)"
+        sizes="100vw"
         width={1500}
         height={900}
         alt=""

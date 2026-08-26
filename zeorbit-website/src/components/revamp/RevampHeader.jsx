@@ -42,6 +42,33 @@ const COUNTRIES = [
   { code: 'US', label: 'United States (Global)', flag: '🇺🇸' },
 ]
 
+function CountryFlag({ code, label, emoji }) {
+  const iso = String(code || '').toLowerCase()
+  return (
+    <span className="zo-util-flag" title={label || code} aria-hidden>
+      <img
+        className="zo-util-flag-img"
+        src={`https://flagcdn.com/w40/${iso}.png`}
+        srcSet={`https://flagcdn.com/w40/${iso}.png 1x, https://flagcdn.com/w80/${iso}.png 2x`}
+        width={20}
+        height={15}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        onError={(event) => {
+          const img = event.currentTarget
+          img.style.display = 'none'
+          const fallback = img.parentElement?.querySelector('.zo-util-flag-emoji')
+          if (fallback) fallback.hidden = false
+        }}
+      />
+      <span className="zo-util-flag-emoji" hidden>
+        {emoji || iso.toUpperCase()}
+      </span>
+    </span>
+  )
+}
+
 const ICON_MAP = {
   Globe,
   ShoppingBag,
@@ -282,7 +309,6 @@ export default function RevampHeader() {
   const [open, setOpen] = useState(false)
   const [openMenu, setOpenMenu] = useState(null)
   const [utilityOpen, setUtilityOpen] = useState(null)
-  const [scrolled, setScrolled] = useState(false)
   const [country, setCountry] = useState(COUNTRIES.find((c) => c.code === 'US'))
   const [mobilePanel, setMobilePanel] = useState(null)
   const headerRef = useRef(null)
@@ -333,29 +359,6 @@ export default function RevampHeader() {
     }
   }, [openMenu, utilityOpen])
 
-  useEffect(() => {
-    const hero = document.getElementById('cz-hero-dark')
-    if (!hero) {
-      setScrolled(true)
-      return undefined
-    }
-
-    const update = () => {
-      const headerH = headerRef.current?.offsetHeight ?? 108
-      const heroBottom = hero.getBoundingClientRect().bottom
-      // Switch to light header once the dark hero has cleared the sticky chrome
-      setScrolled(heroBottom <= headerH + 8)
-    }
-
-    update()
-    window.addEventListener('scroll', update, { passive: true })
-    window.addEventListener('resize', update)
-    return () => {
-      window.removeEventListener('scroll', update)
-      window.removeEventListener('resize', update)
-    }
-  }, [pathname])
-
   const toggleMenu = (label) => {
     setUtilityOpen(null)
     setOpenMenu((current) => (current === label ? null : label))
@@ -377,11 +380,12 @@ export default function RevampHeader() {
     if (id) window.setTimeout(() => scrollToHashId(id), 40)
   }
 
-  const onDark = !scrolled && !openMenu && !open
+  // Always light chrome so the logo stays readable over the dark full-bleed hero video.
+  const onDark = false
   const headerClass = [
     'zo-site-header',
     'zo-host-header',
-    scrolled || openMenu || open ? 'is-scrolled' : 'is-top',
+    'is-scrolled',
     open ? 'is-menu-open' : '',
     openMenu ? 'is-mega-open' : '',
   ]
@@ -392,7 +396,11 @@ export default function RevampHeader() {
     <header ref={headerRef} className={headerClass}>
       <div className="zo-topbar">
         <div className="zo-topbar-inner">
-          <a className="zo-topbar-email" href={`mailto:${SITE_CONTACT.email}`}>
+          <a
+            className="zo-topbar-email"
+            href={`mailto:${SITE_CONTACT.email}`}
+            style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+          >
             {SITE_CONTACT.email}
           </a>
           <div className="zo-topbar-spacer" aria-hidden />
@@ -459,9 +467,7 @@ export default function RevampHeader() {
                 aria-haspopup="listbox"
                 onClick={() => toggleUtility('country')}
               >
-                <span className="zo-util-flag" aria-hidden>
-                  {country.flag}
-                </span>
+                <CountryFlag code={country.code} label={country.label} emoji={country.flag} />
                 <span className="zo-util-label">EN</span>
                 <ChevronDown size={12} className="zo-util-caret" aria-hidden />
               </button>
@@ -483,9 +489,7 @@ export default function RevampHeader() {
                               setUtilityOpen(null)
                             }}
                           >
-                            <span className="zo-util-flag" aria-hidden>
-                              {item.flag}
-                            </span>
+                            <CountryFlag code={item.code} label={item.label} emoji={item.flag} />
                             <span>{item.label}</span>
                             {selected ? <Check size={16} className="zo-country-check" aria-hidden /> : null}
                           </button>
