@@ -203,8 +203,10 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
         row_family = topic_image_family(
             f"{row.business_type or ''} {(block0 or {}).get('business_type') or ''}"
         )
-        if niche_family and row_family and niche_family != row_family:
-            continue
+        # Blog posts all share website stock — exclude every published photo, not just same niche
+        if req.content_kind != "post":
+            if niche_family and row_family and niche_family != row_family:
+                continue
         url0 = (block0 or {}).get("featured_image_url") or ""
         if url0:
             used_featured.append(url0)

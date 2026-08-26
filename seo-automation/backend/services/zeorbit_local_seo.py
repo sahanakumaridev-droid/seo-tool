@@ -736,6 +736,67 @@ def _body_mentions_city(body: str, city: str) -> int:
     return sum(1 for t in _location_tokens(city) if t and t in body_l)
 
 
+# Places that often leak from a shared Content Brief into the wrong city page.
+_BRIEF_PLACE_HINTS = (
+    "San Diego", "Chula Vista", "Coronado", "La Jolla", "Carlsbad", "Oceanside",
+    "Escondido", "El Cajon", "National City", "Imperial Beach", "Lemon Grove",
+    "Poway", "Santee", "Encinitas", "Solana Beach", "Del Mar", "Vista",
+    "Los Angeles", "Orange County", "Irvine", "San Francisco", "Sacramento",
+    "Austin", "Dallas", "Houston", "Driftwood", "Miami", "Phoenix", "Seattle",
+)
+
+
+def extract_foreign_places(brief: str, city: str) -> List[str]:
+    """Place names from a shared editor brief that must not appear on this city page."""
+    city_l = (city or "").strip().lower()
+    found: List[str] = []
+    blob = brief or ""
+    for place in _BRIEF_PLACE_HINTS:
+        if place.lower() == city_l:
+            continue
+        if city_l and place.lower() in city_l:
+            continue
+        if re.search(rf"\b{re.escape(place)}\b", blob, flags=re.I):
+            found.append(place)
+    for m in re.finditer(r"\bin\s+([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)?)\b", blob):
+        cand = m.group(1).strip()
+        if cand.lower() in {"the", "your", "this", "that", "united", "wordpress", "shopify"}:
+            continue
+        if cand.lower() == city_l or (city_l and cand.lower() in city_l):
+            continue
+        if cand not in found and len(cand) >= 4:
+            found.append(cand)
+    return sorted(set(found), key=len, reverse=True)
+
+
+def scrub_foreign_places(text: str, city: str, foreign: Sequence[str]) -> str:
+    """Replace leaked place names with the page's city."""
+    out = text or ""
+    if not city or not foreign:
+        return out
+    for place in foreign:
+        if not place or place.lower() == city.lower():
+            continue
+        out = re.sub(rf"\b{re.escape(place)}\b", city, out, flags=re.I)
+    return out
+
+
+def ensure_title_names_city(title: str, city: str, state: str = "") -> str:
+    """Guarantee title/H1 includes this page's city (bulk pages must not share one title)."""
+    t = (title or "").strip()
+    c = (city or "").strip()
+    if not c:
+        return t
+    foreign = extract_foreign_places(t, c)
+    if foreign:
+        t = scrub_foreign_places(t, c, foreign)
+    if c.lower() in t.lower():
+        return t
+    place = f"{c}, {state}".strip(", ") if state else c
+    base = re.sub(r"[\s|,\-–—]+$", "", t) or "Website Design"
+    return f"{base} in {place}"
+
+
 def ensure_location_body(
     *,
     intro: str,
@@ -745,15 +806,17 @@ def ensure_location_body(
     industry: str = "",
     intent_id: str = "",
     index: int = 0,
+    brief: str = "",
 ) -> Tuple[str, str]:
-    """Guarantee city-specific body — replace vague 'local / this area' stubs."""
+    """Guarantee city-specific body — scrub foreign places + vague 'local / this area' stubs."""
     place = f"{city}, {state}".strip(", ") if state else (city or "").strip()
     if not place:
         return intro or "", content or ""
     ind = industry or "small business"
-    intro_out = intro or ""
-    content_out = content or ""
-    body = f"{intro_out}\n{content_out}"
+    foreign = extract_foreign_places(brief or "", city)
+    foreign = list(dict.fromkeys(foreign + extract_foreign_places(f"{intro}\n{content}", city)))
+    intro_out = scrub_foreign_places(intro or "", city, foreign)
+    content_out = scrub_foreign_places(content or "", city, foreign)
     # Scrub generic locality phrases that tank local relevance.
     generics = (
         (r"\blocal visitors\b", f"visitors in {city}"),

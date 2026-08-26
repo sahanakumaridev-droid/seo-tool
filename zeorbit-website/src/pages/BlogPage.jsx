@@ -6,6 +6,50 @@ import { listBlogPosts } from '../api'
 import { ZEORBIT_BLOG } from '../data/zeorbitBlog'
 import { isOffsiteBlogHref, toSiteBlogHref } from '../lib/blogUrls'
 
+const STOCK_FALLBACKS = [
+  'https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?auto=format&fit=crop&w=1400&q=80',
+  'https://images.unsplash.com/photo-1559028012-481c04fa702d?auto=format&fit=crop&w=1400&q=80',
+  'https://images.unsplash.com/photo-1581291518633-83b4ebd1d83e?auto=format&fit=crop&w=1400&q=80',
+  'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1400&q=80',
+  'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1400&q=80',
+  'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1400&q=80',
+  'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=1400&q=80',
+  'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1400&q=80',
+  'https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1400&q=80',
+  'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&w=1400&q=80',
+  'https://images.unsplash.com/photo-1600880292203-757bb62b4baf?auto=format&fit=crop&w=1400&q=80',
+  'https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=1400&q=80',
+]
+
+function imageKey(url) {
+  if (!url) return ''
+  const m = String(url).match(/(photo-[a-zA-Z0-9_-]+)/i)
+  return (m ? m[1] : String(url).split('?')[0]).toLowerCase()
+}
+
+/** Ensure the listing never shows the same stock photo twice in one view. */
+function withUniqueImages(items) {
+  const seen = new Set()
+  let fi = 0
+  return items.map((item) => {
+    const key = imageKey(item.featured_image_url)
+    if (key && !seen.has(key)) {
+      seen.add(key)
+      return item
+    }
+    let next = STOCK_FALLBACKS[fi % STOCK_FALLBACKS.length]
+    fi += 1
+    let guard = 0
+    while (seen.has(imageKey(next)) && guard < STOCK_FALLBACKS.length) {
+      next = STOCK_FALLBACKS[fi % STOCK_FALLBACKS.length]
+      fi += 1
+      guard += 1
+    }
+    seen.add(imageKey(next))
+    return { ...item, featured_image_url: next, _imageRemapped: true }
+  })
+}
+
 function formatDate(iso) {
   if (!iso) return ''
   const d = new Date(iso)
@@ -48,7 +92,6 @@ export default function BlogPage() {
       try {
         const { data } = await listBlogPosts(0, 60)
         const apiPosts = Array.isArray(data?.posts) ? data.posts : []
-        // Always trust the API (including empty) so purged test blogs do not linger.
         if (!cancelled) setPosts(apiPosts)
       } catch {
         if (!cancelled) setPosts([])
@@ -66,15 +109,17 @@ export default function BlogPage() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return posts.filter((p) => {
-      if (topic !== 'All' && p.category !== topic) return false
-      if (!q) return true
-      return (
-        (p.title || '').toLowerCase().includes(q) ||
-        (p.excerpt || '').toLowerCase().includes(q) ||
-        (p.category || '').toLowerCase().includes(q)
-      )
-    })
+    return withUniqueImages(
+      posts.filter((p) => {
+        if (topic !== 'All' && p.category !== topic) return false
+        if (!q) return true
+        return (
+          (p.title || '').toLowerCase().includes(q) ||
+          (p.excerpt || '').toLowerCase().includes(q) ||
+          (p.category || '').toLowerCase().includes(q)
+        )
+      }),
+    )
   }, [posts, topic, query])
 
   const featured = filtered[0] || null
@@ -131,6 +176,7 @@ export default function BlogPage() {
             <a className="zo-blog-feature" {...postLinkProps(featured)}>
               <div className="zo-blog-feature-media">
                 <PostImage src={featured.featured_image_url} alt="" />
+                <div className="zo-blog-feature-shade" aria-hidden />
               </div>
               <div className="zo-blog-feature-copy">
                 <div className="zo-blog-card-meta">

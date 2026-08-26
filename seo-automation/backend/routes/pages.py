@@ -363,6 +363,11 @@ async def list_blog_posts(
     posts = []
     for r in page_rows:
         block = r.seo_block if isinstance(r.seo_block, dict) else {}
+        content_type = (block.get("content_type") or "service").lower()
+        # /blog is for blog posts only — service/location pages clutter the feed
+        # and often share the same website-stock photos.
+        if content_type not in ("blog", "post"):
+            continue
         title = (block.get("title") or block.get("h1") or r.business_type or "Untitled").strip()
         excerpt = (
             block.get("meta_description")
@@ -394,18 +399,38 @@ async def list_blog_posts(
             .order_by(PublishedUrlRecord.created_at.desc())
             .limit(100)
         )
+        # SEO-tool location / industry landing pages must not appear as "blog" posts.
+        _test_landing = re.compile(
+            r"^/(contractors|healthcare|web-design|plumbing|software-engineer|"
+            r"local-service|website-redesign|education)[-/]",
+            re.I,
+        )
         for u in wp_result.scalars().all():
             if not u.url:
                 continue
             parsed = urlparse(u.url if "://" in u.url else f"https://{u.url}")
-            path = (parsed.path or "").rstrip("/")
+            host = (parsed.hostname or "").lower()
+            # Skip SEO-tool / test hosts — those duplicate or aren't the live marketing site.
+            if "nip.io" in host or host.startswith("seo.") or host.endswith(".nip.io"):
+                continue
+            path = (parsed.path or "").rstrip("/") or "/"
+            if _test_landing.search(path):
+                continue
             if path.startswith("/p/"):
                 slug = path.rsplit("/", 1)[-1]
                 if slug in page_slugs:
                     continue
+                if _test_landing.search(f"/{slug}"):
+                    continue
                 live = _rewrite_reader_url(u.url, slug)
                 rel = f"/{slug}"
             else:
+                # Only keep real zeorbit.com article paths (not homepage / menu).
+                if host and "zeorbit.com" not in host:
+                    continue
+                if path in ("", "/", "/blog", "/website-designing", "/mobile-apps", "/seo-ppc",
+                            "/custom-software", "/portfolio", "/contact"):
+                    continue
                 live = _rewrite_reader_url(u.url)
                 rel = live
             posts.append({
@@ -436,6 +461,19 @@ async def list_blog_posts(
         "skip": skip,
         "limit": limit,
     }
+
+
+@router.post("/admin/dedupe-images", response_model=dict)
+async def dedupe_page_images(
+    session: AsyncSession = Depends(get_session),
+):
+    """One-shot: reassign featured images so pages/blogs don't share the same Unsplash photo."""
+    from services.image_service import reassign_unique_featured_images
+    result = await session.execute(select(PageRecord).order_by(PageRecord.created_at.asc()))
+    rows = result.scalars().all()
+    updated = await reassign_unique_featured_images(rows)
+    await session.commit()
+    return {"updated": updated, "total": len(rows)}
 
 
 @router.get("/", response_model=List[dict])

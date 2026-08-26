@@ -1,0 +1,385 @@
+/* ZeOrbit marketing chrome — matched to zeorbit.com host header/footer */
+
+.seo-site-shell {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 max(24px, env(safe-area-inset-right)) 0 max(24px, env(safe-area-inset-left));
+  box-sizing: border-box;
+}
+
+.seo-site-header {
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  background: #000000;
+  border: 0;
+  box-shadow: none;
+  transition:
+    background-color 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.32s ease;
+}
+
+.seo-site-topbar {
+  background: #000000;
+  color: #ffffff;
+}
+
+.seo-site-topbar-inner {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 34px;
+  padding: 8px max(24px, env(safe-area-inset-right)) 4px max(24px, env(safe-area-inset-left));
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.seo-site-topbar-email {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.92);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.16s ease;
+}
+
+.seo-site-topbar-email:hover {
+  color: #ffffff;
+}
+
+.seo-site-header.is-scrolled {
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.seo-site-header.is-scrolled .seo-site-topbar {
+  background: #000000;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.seo-site-bar {
+  background: #000000;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.seo-site-header.is-scrolled .seo-site-bar {
+  background: transparent;
+  border-bottom: 0;
+}
+
+.seo-site-bar-inner {
+  width: 100%;
+  box-sizing: border-box;
+  height: 64px;
+  min-height: 64px;
+  padding: 0 max(24px, env(safe-area-inset-right)) 0 max(24px, env(safe-area-inset-left));
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.seo-site-brand {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  height: 100%;
+  text-decoration: none;
+}
+
+.seo-site-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.seo-site-nav a {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: #ffffff;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  transition: background-color 0.16s ease, color 0.32s ease;
+}
+
+.seo-site-nav a:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.seo-site-header.is-scrolled .seo-site-nav a {
+  color: #111111;
+}
+
+.seo-site-header.is-scrolled .seo-site-nav a:hover {
+  background: rgba(15, 23, 42, 0.06);
+  color: #000000;
+}
+
+.seo-site-actions {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 8px;
+  height: 100%;
+}
+
+.seo-site-login {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: transparent;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.32s ease;
+}
+
+.seo-site-login:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.55);
+  color: #ffffff;
+}
+
+.seo-site-header.is-scrolled .seo-site-login {
+  border-color: rgba(15, 23, 42, 0.18);
+  color: #111111;
+}
+
+.seo-site-header.is-scrolled .seo-site-login:hover {
+  background: rgba(15, 23, 42, 0.05);
+  border-color: rgba(15, 23, 42, 0.28);
+  color: #000000;
+}
+
+.seo-site-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 0;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  transition: transform 0.14s ease, background-color 0.14s ease, color 0.32s ease;
+}
+
+.seo-site-cta:hover {
+  background: #f8fafc;
+  transform: translateY(-1px);
+}
+
+.seo-site-header.is-scrolled .seo-site-cta {
+  background: #0f2d5c;
+  color: #ffffff;
+}
+
+.seo-site-header.is-scrolled .seo-site-cta:hover {
+  background: #184078;
+  color: #ffffff;
+}
+
+/* Offset marketing page under sticky chrome */
+.mkt.has-site-chrome {
+  padding-top: 0;
+}
+
+.mkt.has-site-chrome .mkt-hero {
+  padding-top: 48px;
+}
+
+/* ── Footer ── */
+.seo-site-footer {
+  background: #ffffff;
+  color: #111111;
+  margin-top: 0;
+}
+
+.seo-site-footer-accent {
+  height: 10px;
+  width: 100%;
+  background: linear-gradient(90deg, #58b0e8 0%, #2a6db0 38%, #184078 72%, #0f2d5c 100%);
+}
+
+.seo-site-footer-main {
+  padding: 48px 0 36px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.seo-site-footer-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 28px 20px;
+}
+
+.seo-site-footer-col h4 {
+  margin: 0 0 14px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #111111;
+}
+
+.seo-site-footer-col ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.seo-site-footer-col a {
+  color: #4b5563;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  transition: color 0.14s ease;
+}
+
+.seo-site-footer-col a:hover {
+  color: #111111;
+}
+
+.seo-site-footer-mid {
+  padding: 22px 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.seo-site-footer-mid-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.seo-site-footer-logo {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.seo-site-footer-social {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.seo-site-social {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #111111;
+  background: #ffffff;
+  text-decoration: none;
+  transition: transform 0.14s ease, border-color 0.14s ease;
+}
+
+.seo-site-social:hover {
+  transform: translateY(-1px);
+  border-color: rgba(15, 23, 42, 0.28);
+}
+
+.seo-site-social svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+
+.seo-site-footer-legal {
+  padding: 18px 0 28px;
+}
+
+.seo-site-footer-legal-inner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px 24px;
+  flex-wrap: wrap;
+}
+
+.seo-site-footer-legal p {
+  margin: 0;
+  max-width: 520px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #6b7280;
+}
+
+.seo-site-footer-legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.seo-site-footer-legal-links a {
+  color: #4b5563;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.seo-site-footer-legal-links a:hover {
+  color: #111111;
+}
+
+@media (max-width: 900px) {
+  .seo-site-nav {
+    display: none;
+  }
+
+  .seo-site-footer-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .seo-site-footer-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .seo-site-login {
+    display: none;
+  }
+}

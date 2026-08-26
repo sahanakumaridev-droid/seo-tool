@@ -1270,22 +1270,46 @@ export default function ContentPage() {
       )}
 
       {contentKind === 'page' && (
-      <div id="target-keywords-section" className={`card p-5 ${targetKeywords.length ? 'border-indigo-500/20' : 'border-amber-500/40'}`}>
+      <div
+        id="target-keywords-section"
+        className="card p-5"
+        style={targetKeywords.length
+          ? { borderColor: 'rgba(91,92,230,0.25)' }
+          : { borderColor: 'var(--amber)', boxShadow: '0 0 0 1px var(--amber-soft)' }}
+      >
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Tag size={15} className="text-indigo-400" />
-            <span className="text-sm font-semibold text-white">Target Keywords</span>
-            <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">Required</span>
-            <span className="text-xs text-slate-500">— woven into every generated page</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Tag size={15} style={{ color: 'var(--brand)' }} />
+            <span className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>Target Keywords</span>
+            <span
+              className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+              style={{ background: 'var(--amber-soft)', color: 'var(--amber)', border: '1px solid rgba(180,83,9,0.35)' }}
+            >
+              Required
+            </span>
+            <span className="text-xs" style={{ color: 'var(--text-4)' }}>— woven into every generated page</span>
           </div>
           {targetKeywords.length > 0 && (
-            <button onClick={() => setTargetKeywords([])} className="text-xs text-slate-500 hover:text-red-400 transition-colors">
+            <button
+              onClick={() => setTargetKeywords([])}
+              className="text-xs transition-colors"
+              style={{ color: 'var(--text-4)' }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--red)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-4)' }}
+            >
               Clear all
             </button>
           )}
         </div>
         {!targetKeywords.length && (
-          <div className="mb-3 text-xs text-amber-300/90">
+          <div
+            className="mb-3 text-xs font-semibold rounded-lg px-3 py-2.5"
+            style={{
+              color: '#92400e',
+              background: 'rgba(245, 158, 11, 0.12)',
+              border: '1px solid rgba(180, 83, 9, 0.35)',
+            }}
+          >
             Add at least one keyword (type and press Enter, or pick a suggestion) before generating.
           </div>
         )}
@@ -1296,24 +1320,35 @@ export default function ContentPage() {
             required={targetKeywords.length === 0}
             aria-required="true"
             placeholder="e.g. web design san diego — press Enter to add"
-            className={`flex-1 bg-white/4 border rounded-lg px-4 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50 ${targetKeywords.length ? 'border-white/8' : 'border-amber-500/40'}`} />
+            className="flex-1 rounded-lg px-4 py-2.5 text-sm"
+            style={{
+              background: '#fff',
+              border: `1px solid ${targetKeywords.length ? 'var(--border-bright)' : 'var(--amber)'}`,
+              color: 'var(--text-1)',
+            }}
+          />
           <button type="button" onClick={() => addKeyword()}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-indigo-600/20 border border-indigo-600/30 text-indigo-300 hover:bg-indigo-600/30 transition-colors text-sm font-medium">
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium"
+            style={{ background: 'var(--brand-soft)', color: 'var(--brand-dark)', border: '1px solid var(--border)' }}>
             <Plus size={14} /> Add
           </button>
         </div>
         {targetKeywords.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3">
             {targetKeywords.map(kw => (
-              <span key={kw} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-indigo-500/15 text-indigo-300 border border-indigo-500/25 font-medium">
+              <span
+                key={kw}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium"
+                style={{ background: 'var(--brand-soft)', color: 'var(--brand-dark)', border: '1px solid rgba(91,92,230,0.25)' }}
+              >
                 {kw}
-                <button onClick={() => removeKeyword(kw)} className="hover:text-white transition-colors"><X size={10} /></button>
+                <button onClick={() => removeKeyword(kw)} style={{ color: 'inherit' }}><X size={10} /></button>
               </span>
             ))}
           </div>
         )}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-slate-600">Suggestions (click to select — used in generation):</span>
+          <span className="text-xs" style={{ color: 'var(--text-4)' }}>Suggestions (click to select — used in generation):</span>
           {keywordSuggestions.map((s) => {
             const on = targetKeywords.includes(s)
             return (
@@ -1325,10 +1360,10 @@ export default function ContentPage() {
                 className="text-xs px-2.5 py-1 rounded-lg border transition-colors"
                 style={on
                   ? { background: 'var(--brand-soft)', borderColor: 'var(--brand)', color: 'var(--brand-dark)', fontWeight: 600 }
-                  : { background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)', color: '#94a3b8' }}
+                  : { background: '#fff', borderColor: 'var(--border)', color: 'var(--text-3)' }}
               >
                 {on ? '✓ ' : '+ '}{s}
-              </button>
+            </button>
             )
           })}
         </div>
@@ -1551,15 +1586,15 @@ export default function ContentPage() {
               <div>
                 <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-3)' }}>
                   Extra notes <span className="font-normal normal-case" style={{ color: 'var(--text-4)' }}>(optional)</span>
-                </label>
-                <textarea
-                  value={customRequirements}
-                  onChange={(e) => setCustomRequirements(e.target.value)}
+              </label>
+              <textarea
+                value={customRequirements}
+                onChange={(e) => setCustomRequirements(e.target.value)}
                   rows={3}
                   placeholder="Anything else the writer should know — competitors to avoid naming, must-include services, etc."
-                  className="w-full rounded-lg px-3 py-2 text-sm"
-                  style={{ background: '#fff', border: '1px solid var(--border-bright)', color: 'var(--text-1)', resize: 'vertical' }}
-                />
+                className="w-full rounded-lg px-3 py-2 text-sm"
+                style={{ background: '#fff', border: '1px solid var(--border-bright)', color: 'var(--text-1)', resize: 'vertical' }}
+              />
               </div>
             </div>
             <div id="business-niche-section">
@@ -1623,7 +1658,7 @@ export default function ContentPage() {
                     {form.num_cities}
                     {extraLocations.length > 0 ? ` · ${extraLocations.length} chips pinned` : ''}
                   </span>
-                </div>
+            </div>
                 <input
                   type="range"
                   min="1"
@@ -1647,8 +1682,8 @@ export default function ContentPage() {
                     Clear chips & use drag count only
                   </button>
                 )}
+                </div>
               </div>
-            </div>
             )}
             {error && (
               <div
@@ -1961,7 +1996,7 @@ export default function ContentPage() {
             )}
           </div>
           <p className="text-[10px] mt-2" style={{ color: 'var(--text-3)' }}>
-            Each chip is one {contentKind === 'post' ? 'blog post' : 'page'}. Type 2+ letters to search. Pick a city, then Cities / Local areas / Streets, then Add all. Max one place per chip.
+            Each chip is one {contentKind === 'post' ? 'blog post' : 'page'} with its own body copy and images. Type 2+ letters to search. Pick a city, then Cities / Local areas / Streets, then Add all. Max one place per chip.
           </p>
           <LocationMap places={extraLocations} city={form.base_location} />
         </div>

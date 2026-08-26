@@ -32,8 +32,24 @@ function hashIndex(value, mod) {
   return h % mod
 }
 
-function resolveImage(item, index) {
-  if (item?.featured_image_url) return item.featured_image_url
+function resolveImage(item, index, usedKeys) {
+  const raw = item?.featured_image_url || ''
+  const key = (() => {
+    const m = String(raw).match(/(photo-[a-zA-Z0-9_-]+)/i)
+    return (m ? m[1] : String(raw).split('?')[0]).toLowerCase()
+  })()
+  if (raw && key && !usedKeys.has(key)) {
+    usedKeys.add(key)
+    return raw
+  }
+  for (let i = 0; i < FALLBACK_IMAGES.length; i += 1) {
+    const cand = FALLBACK_IMAGES[(hashIndex(item?.id || item?.title || index, FALLBACK_IMAGES.length) + i) % FALLBACK_IMAGES.length]
+    const ck = cand
+    if (!usedKeys.has(ck)) {
+      usedKeys.add(ck)
+      return cand
+    }
+  }
   return FALLBACK_IMAGES[hashIndex(item?.id || item?.title || index, FALLBACK_IMAGES.length)]
 }
 
@@ -65,10 +81,10 @@ function PostImage({ src, alt }) {
   )
 }
 
-function PostCard({ item, index, featured = false }) {
+function PostCard({ item, index, featured = false, usedKeys }) {
   const href = toSiteBlogHref(item)
   const offsite = isOffsiteBlogHref(href)
-  const image = resolveImage(item, index)
+  const image = resolveImage(item, index, usedKeys || new Set())
   const dateLabel = formatDate(item.published_at) || (item.source === 'fallback' ? 'Guide' : 'Live')
   const place = [item.city, item.state].filter(Boolean).join(', ')
 
@@ -142,6 +158,7 @@ export default function InsightsFeed({
 
   const useFallback = !loading && posts.length === 0 && emptyUseFallback
   const items = useFallback ? FALLBACK_POSTS.slice(0, limit) : posts
+  const imageKeys = useMemo(() => new Set(), [items])
 
   const categories = useMemo(() => {
     const set = new Set()
@@ -175,7 +192,7 @@ export default function InsightsFeed({
 
         <div className="rv-insights-grid">
           {items.map((item, index) => (
-            <PostCard key={item.id || item.title} item={item} index={index} />
+            <PostCard key={item.id || item.title} item={item} index={index} usedKeys={imageKeys} />
           ))}
         </div>
 
@@ -232,12 +249,12 @@ export default function InsightsFeed({
             </div>
           ) : null}
 
-          {featured ? <PostCard item={featured} index={0} featured /> : null}
+          {featured ? <PostCard item={featured} index={0} featured usedKeys={imageKeys} /> : null}
 
           {rest.length > 0 ? (
             <div className="zo-blog-grid">
               {rest.map((item, index) => (
-                <PostCard key={item.id || item.title} item={item} index={index + 1} />
+                <PostCard key={item.id || item.title} item={item} index={index + 1} usedKeys={imageKeys} />
               ))}
             </div>
           ) : null}

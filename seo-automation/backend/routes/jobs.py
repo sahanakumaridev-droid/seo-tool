@@ -41,8 +41,10 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
             for row in rows:
                 block0 = row.seo_block if isinstance(row.seo_block, dict) else {}
                 fam = topic_image_family(f"{row.business_type or ''} {(block0 or {}).get('business_type') or ''}")
-                if niche and fam and niche != fam:
-                    continue
+                # Blog/posts reuse website stock across niches — seed every image
+                if req.content_kind != "post":
+                    if niche and fam and niche != fam:
+                        continue
                 if (block0 or {}).get("featured_image_url"):
                     used_featured.append(block0["featured_image_url"])
                 for im in (block0 or {}).get("in_content_images") or []:

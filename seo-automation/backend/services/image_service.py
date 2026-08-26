@@ -480,6 +480,29 @@ _WEB_DESIGN_IMAGES = [
     "https://images.unsplash.com/photo-1551288049-bebda4e38f71",
     "https://images.unsplash.com/photo-1557804506-669a67965ba0",
     "https://images.unsplash.com/photo-1556761175-b413da4baf72",
+    "https://images.unsplash.com/photo-1516321497487-e288fb19713f",
+    "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40",
+    "https://images.unsplash.com/photo-1522202176988-66273c2fd55f",
+    "https://images.unsplash.com/photo-1600880292203-757bb62b4baf",
+    "https://images.unsplash.com/photo-1552664730-d307ca884978",
+    "https://images.unsplash.com/photo-1542744173-8e7e53415bb0",
+    "https://images.unsplash.com/photo-1531482615713-2afd69097998",
+    "https://images.unsplash.com/photo-1556155092-490a1ba16284",
+    "https://images.unsplash.com/photo-1460925895917-afdab827c52f",
+    "https://images.unsplash.com/photo-1551288049-bebda4e38f71",
+    "https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3",
+    "https://images.unsplash.com/photo-1432888498266-38ffec3eaf0a",
+    "https://images.unsplash.com/photo-1559136555-9303baea8ebd",
+    "https://images.unsplash.com/photo-1504384308090-c894fdcc538d",
+    "https://images.unsplash.com/photo-1519389950473-47ba0277781c",
+    "https://images.unsplash.com/photo-1496171367470-9ed9a91ea931",
+    "https://images.unsplash.com/photo-1483058712412-4245e9b90334",
+    "https://images.unsplash.com/photo-1504639725590-34d0984388bd",
+    "https://images.unsplash.com/photo-1633356122544-f134324a6cee",
+    "https://images.unsplash.com/photo-1627398242454-45a1465c2479",
+    "https://images.unsplash.com/photo-1593720213428-28a5b9e94613",
+    "https://images.unsplash.com/photo-1571171637578-41bc2dd41cd2",
+    "https://images.unsplash.com/photo-1550439062-609e1531270e",
 ]
 
 # Dedupe while preserving order (replacements may repeat known-good IDs)
@@ -1011,22 +1034,26 @@ def _curated_image_url(
     seed: str,
     exclude: Optional[Iterable[str]] = None,
 ) -> str:
-    """Pick an on-topic curated Unsplash photo. Never returns random picsum placeholders."""
+    """Pick an on-topic curated Unsplash photo. Never returns random picsum placeholders.
+
+    Never reuses a URL already in `exclude` — returns "" so callers can fetch a fresh
+    Unsplash/Pexels hit instead of repeating the same photo across blog posts.
+    """
     exclude_keys = {normalize_image_key(u) for u in (exclude or []) if u}
 
-    def _pick(pool: List[str], honor_exclude: bool = True) -> str:
+    def _pick(pool: List[str]) -> str:
         if not pool:
             return ""
         candidates = []
         for u in pool:
             key = normalize_image_key(u)
-            if key in _DEAD_UNSPLASH_IDS:
+            if not key or key in _DEAD_UNSPLASH_IDS:
                 continue
-            if honor_exclude and key in exclude_keys:
+            if key in exclude_keys:
                 continue
             candidates.append(u)
         if not candidates:
-            candidates = [u for u in pool if normalize_image_key(u) not in _DEAD_UNSPLASH_IDS] or list(pool)
+            return ""
         candidates.sort(
             key=lambda u: hashlib.md5(f"{seed}|{normalize_image_key(u)}".encode("utf-8")).hexdigest()
         )
@@ -1039,15 +1066,15 @@ def _curated_image_url(
         w in (topic or "").lower() for w in ("website", "web design", "wordpress", "shopify", "laptop")
     ):
         topic_pool = list(_WEB_DESIGN_IMAGES)
-    url = _pick(topic_pool, honor_exclude=True)
+    url = _pick(topic_pool)
     if url:
         return url
-    # Stay on-topic: website pool only for web queries; otherwise topic then web as last resort
-    if topic_pool is _WEB_DESIGN_IMAGES or topic_pool == list(_WEB_DESIGN_IMAGES):
-        url = _pick(_WEB_DESIGN_IMAGES, honor_exclude=False)
-        return url or _with_unsplash_params(_WEB_DESIGN_IMAGES[0])
-    url = _pick(topic_pool or _WEB_DESIGN_IMAGES, honor_exclude=False)
-    return url or _with_unsplash_params(_WEB_DESIGN_IMAGES[0])
+    # Expand on-topic before giving up (still honor exclude — never silently reuse).
+    expanded = list(dict.fromkeys(list(topic_pool or []) + list(_WEB_DESIGN_IMAGES) + list(_SOFTWARE_IMAGES)))
+    url = _pick(expanded)
+    if url:
+        return url
+    return ""
 
 
 _OFFTOPIC_STOCK_MARKERS = (
@@ -1304,9 +1331,11 @@ async def generate_article_images(
         modifier = modifiers[i % len(modifiers)]
         # Vary query strongly per location index so 50 pages do not share one photo.
         query = f"{topic} {modifier}".strip()
+        # Location is required in the seed so Austin vs Driftwood never collide.
         seed = (
             f"{topic}|{location}|website-design|{i}|{angle_title}|"
-            f"{search_intent}|{keyword_index}|{image_concept_text[:80]}"
+            f"{search_intent}|{keyword_index}|{(image_concept_text or '')[:80]}|"
+            f"loc-{(location or '').strip().lower()}"
         )
         # Prefer curated website pool first (reliable on-topic). Hosted APIs are secondary.
         url = _curated_image_url("website design", seed=seed, exclude=used)
@@ -1372,9 +1401,25 @@ async def generate_article_images(
             description=meta["description"],
             is_featured=(len(assets) == 0),
         ))
-    # Guarantee at least one image
+    # Guarantee at least one image — still avoid excluded keys when possible
     if not assets:
-        url = _curated_image_url("website design", seed=f"{topic}|{location}|solo", exclude=set())
+        url = _curated_image_url("website design", seed=f"{topic}|{location}|solo", exclude=used)
+        if not url and (settings.UNSPLASH_ACCESS_KEY or settings.PEXELS_API_KEY):
+            url = await _hosted_image_url(
+                "website design laptop mockup",
+                seed=f"{topic}|{location}|solo-host",
+                exclude=used,
+                location="",
+            ) or ""
+        if not url:
+            # Absolute last resort: first unused web photo, else first pool photo
+            for u in _WEB_DESIGN_IMAGES:
+                uk = normalize_image_key(u)
+                if uk and uk not in used and uk not in _DEAD_UNSPLASH_IDS:
+                    url = _with_unsplash_params(u)
+                    break
+            if not url:
+                url = _with_unsplash_params(_WEB_DESIGN_IMAGES[0])
         meta = build_image_metadata("website design", location, business_name, 0, True, image_concept_text="", industry="")
         assets.append(ImageAsset(
             url=url, filename=meta["filename"], mime_type="image/webp",
@@ -1382,6 +1427,94 @@ async def generate_article_images(
             description=meta["description"], is_featured=True,
         ))
     return assets
+
+
+def collect_image_urls_from_seo_block(block: dict) -> List[str]:
+    """All image URLs stored on a page/blog SEO block."""
+    out: List[str] = []
+    if not isinstance(block, dict):
+        return out
+    for key in ("featured_image_url", "footer_image_url"):
+        u = block.get(key) or ""
+        if u:
+            out.append(u)
+    for im in block.get("in_content_images") or []:
+        if isinstance(im, dict) and im.get("url"):
+            out.append(im["url"])
+        elif hasattr(im, "url") and im.url:
+            out.append(im.url)
+    return out
+
+
+async def reassign_unique_featured_images(rows: Iterable, used: Optional[List[str]] = None) -> int:
+    """Re-pick featured (+ in-content) images so no two pages share the same photo key.
+
+    Mutates row.seo_block in place; caller commits the session. Returns update count.
+    """
+    used_list: List[str] = list(used or [])
+    used_keys: Set[str] = {normalize_image_key(u) for u in used_list if u}
+    updated = 0
+    # First pass: register unique featured keys already in use (keep first owner)
+    owners: dict = {}
+    ordered = list(rows)
+    for r in ordered:
+        b = r.seo_block if isinstance(r.seo_block, dict) else {}
+        feat = (b or {}).get("featured_image_url") or ""
+        key = normalize_image_key(feat)
+        if key and key not in owners:
+            owners[key] = r
+            used_keys.add(key)
+            used_list.append(feat)
+
+    for r in ordered:
+        b = r.seo_block if isinstance(r.seo_block, dict) else {}
+        if not isinstance(b, dict):
+            continue
+        feat = b.get("featured_image_url") or ""
+        key = normalize_image_key(feat)
+        # Keep the first page that claimed this photo; refresh duplicates + missing
+        if key and owners.get(key) is r and "picsum.photos" not in feat:
+            continue
+        exclude = list(used_list)
+        focus = b.get("focus_keyword") or r.business_type or "website design"
+        loc = f"{getattr(r, 'city', '') or ''}, {getattr(r, 'state', '') or ''}".strip(", ")
+        industry = b.get("industry") or ""
+        imgs = await generate_article_images(
+            "website design wordpress shopify" if topic_image_family(str(focus)) in ("web", "general", "software") else focus,
+            loc,
+            "ZeOrbit",
+            count=3,
+            exclude_urls=exclude,
+            industry=industry if (b.get("content_type") or "") not in ("blog", "post") else "",
+            niche=str(focus),
+            search_intent=b.get("search_intent") or "",
+            image_concept_text=b.get("image_concept") or "",
+            keyword_index=updated,
+        )
+        if not imgs:
+            continue
+        feat2, foot2, cleaned = assign_canonical_images(imgs)
+        if not feat2:
+            continue
+        payload = dict(b)
+        payload["featured_image_url"] = feat2
+        payload["footer_image_url"] = foot2
+        payload["in_content_images"] = [
+            im.model_dump() if hasattr(im, "model_dump") else im for im in cleaned
+        ]
+        r.seo_block = payload
+        try:
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(r, "seo_block")
+        except Exception:
+            pass
+        used_list.append(feat2)
+        used_keys.add(normalize_image_key(feat2))
+        for im in cleaned:
+            if getattr(im, "url", None):
+                used_list.append(im.url)
+        updated += 1
+    return updated
 
 
 def _content_type_for(filename: str) -> str:

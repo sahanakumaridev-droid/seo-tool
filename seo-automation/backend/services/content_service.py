@@ -1309,6 +1309,9 @@ async def generate_seo_block(
         is_too_similar,
         strip_banned_claims,
         ensure_location_body,
+        ensure_title_names_city,
+        scrub_foreign_places,
+        extract_foreign_places,
         MIN_PUBLISH_SCORE,
         MIN_KEYWORD_USE_SCORE,
         scores_meet_floor,
@@ -1430,8 +1433,9 @@ async def generate_seo_block(
     block.cta = strip_banned_claims(block.cta or "")
     block.meta_description = strip_banned_claims(block.meta_description or "")
 
-    # Force location-specific body (no "local visitors" / "this area" stubs).
+    # Force location-specific body + scrub places leaked from a shared Content Brief.
     if city:
+        brief_blob = custom_requirements or ""
         block.intro, block.content = ensure_location_body(
             intro=block.intro or "",
             content=block.content or "",
@@ -1440,12 +1444,38 @@ async def generate_seo_block(
             industry=industry or "",
             intent_id=block.search_intent or "",
             index=keyword_index,
+            brief=brief_blob,
         )
+        foreign = extract_foreign_places(
+            f"{brief_blob}\n{block.title or ''}\n{block.h1 or ''}\n{block.meta_description or ''}\n{block.cta or ''}",
+            city,
+        )
+        block.title = ensure_title_names_city(
+            scrub_foreign_places(block.title or "", city, foreign), city, state or ""
+        )
+        block.h1 = ensure_title_names_city(
+            scrub_foreign_places(block.h1 or block.title or "", city, foreign), city, state or ""
+        )
+        block.meta_description = scrub_foreign_places(block.meta_description or "", city, foreign)
+        block.cta = scrub_foreign_places(block.cta or "", city, foreign)
+        if block.faqs:
+            scrubbed_faqs = []
+            for faq in block.faqs:
+                q = scrub_foreign_places(getattr(faq, "question", None) or (faq.get("question") if isinstance(faq, dict) else "") or "", city, foreign)
+                a = scrub_foreign_places(getattr(faq, "answer", None) or (faq.get("answer") if isinstance(faq, dict) else "") or "", city, foreign)
+                if hasattr(faq, "question"):
+                    faq.question, faq.answer = q, a
+                    scrubbed_faqs.append(faq)
+                else:
+                    scrubbed_faqs.append({"question": q, "answer": a})
+            block.faqs = scrubbed_faqs
 
     try:
         from services.image_service import generate_article_images
         # ZeOrbit sells websites — photos must stay website/laptop accurate, not trade scenery.
         img_focus = "website design wordpress shopify"
+        # Hash city into index so Austin vs Driftwood never share the same image seed.
+        loc_offset = int(hashlib.md5(f"{city}|{state}".encode()).hexdigest(), 16) % 997
         images = await generate_article_images(
             img_focus, f"{city}, {state}".strip(", "), "ZeOrbit", count=3,
             exclude_urls=exclude_image_urls,
@@ -1455,7 +1485,7 @@ async def generate_seo_block(
             image_concept_text=block.image_concept or concept or (
                 f"website designer laptop mockup for {industry or 'small business'} in {city or 'local area'}"
             ),
-            keyword_index=keyword_index,
+            keyword_index=keyword_index + loc_offset,
         )
         block.in_content_images = images
         if images:
@@ -1524,7 +1554,20 @@ async def generate_seo_block(
                 industry=industry or "",
                 intent_id=block.search_intent or intent_obj.id,
                 index=keyword_index,
+                brief=custom_requirements or "",
             )
+            foreign = extract_foreign_places(
+                f"{custom_requirements or ''}\n{block.title or ''}\n{block.h1 or ''}",
+                city,
+            )
+            block.title = ensure_title_names_city(
+                scrub_foreign_places(block.title or "", city, foreign), city, state or ""
+            )
+            block.h1 = ensure_title_names_city(
+                scrub_foreign_places(block.h1 or block.title or "", city, foreign), city, state or ""
+            )
+            block.meta_description = scrub_foreign_places(block.meta_description or "", city, foreign)
+            block.cta = scrub_foreign_places(block.cta or "", city, foreign)
             quality = score_page_quality(
                 title=block.title or "",
                 intro=block.intro or "",
@@ -2312,6 +2355,19 @@ async def generate_articles(req: ArticleRequest, profile: WebsiteProfile) -> Lis
 
     blocks: List[SEOBlock] = []
     used_featured: List[str] = []
+    # Seed from already-published pages so new blogs don't reuse live featured photos
+    try:
+        from db import AsyncSessionLocal, PageRecord
+        from sqlalchemy import select
+        from services.image_service import collect_image_urls_from_seo_block
+        async with AsyncSessionLocal() as session:
+            rows = (await session.execute(select(PageRecord))).scalars().all()
+            for row in rows:
+                block0 = row.seo_block if isinstance(row.seo_block, dict) else {}
+                used_featured.extend(collect_image_urls_from_seo_block(block0 or {}))
+    except Exception as e:
+        print(f"[Articles] could not seed used images: {e}")
+
     for ci, city in enumerate(cities):
         for ai in range(per_city):
             angle = angles[(ci * per_city + ai) % len(angles)] if angles else {}

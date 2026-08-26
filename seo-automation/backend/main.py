@@ -270,8 +270,6 @@ _SITE_MENU_PATHS = (
 
 
 async def _sitemap_urlset(request, session, kind: str | None):
-    from sqlalchemy import select
-    from db import PageRecord
     from routes.pages import _public_base
     from datetime import date
 
@@ -279,28 +277,23 @@ async def _sitemap_urlset(request, session, kind: str | None):
     parts = []
     today = date.today().isoformat()
 
-    # Page sitemap always lists the live site menu first — never only tool test URLs.
+    # Page sitemap = live marketing menu ONLY.
+    # Do NOT auto-list SEO-tool drafts / location test pages — those duplicate
+    # thin URLs and pollute Google's crawl of zeorbit.com.
     if kind in (None, "page"):
         for path in _SITE_MENU_PATHS:
             loc = base if path == "/" else f"{base}{path}"
-            parts.append(f"<url><loc>{loc}</loc><lastmod>{today}</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>")
+            parts.append(
+                f"<url><loc>{loc}</loc><lastmod>{today}</lastmod>"
+                f"<changefreq>weekly</changefreq><priority>1.0</priority></url>"
+            )
 
-    rows = (await session.execute(select(PageRecord))).scalars().all()
-    for row in rows:
-        block = row.seo_block if isinstance(row.seo_block, dict) else {}
-        row_kind = _content_kind_of(block)
-        if kind and row_kind != kind:
-            continue
-        slug = (row.slug or "").strip().strip("/")
-        if not slug:
-            continue
-        # Never re-list marketing menu routes as tool pages.
-        if f"/{slug}" in _SITE_MENU_PATHS:
-            continue
-        updated = row.updated_at
-        loc = f"{base}/{slug}"
-        last = updated.date().isoformat() if updated else today
-        parts.append(f"<url><loc>{loc}</loc><lastmod>{last}</lastmod></url>")
+    # Post sitemap stays empty of tool-generated test blogs.
+    # Real editorial posts live on the marketing site (/blog) and are not
+    # mirrored as SEO-tool PageRecords (that caused duplicate content).
+    if kind in (None, "post"):
+        pass
+
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
