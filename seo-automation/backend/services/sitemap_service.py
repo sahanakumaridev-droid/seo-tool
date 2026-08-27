@@ -14,10 +14,20 @@ _TEST_LANDING = re.compile(
     r"local-service|website-redesign|education)[-/]",
     re.I,
 )
-_MENU = {
-    "", "/", "/blog", "/website-designing", "/mobile-apps", "/seo-ppc",
-    "/custom-software", "/portfolio", "/contact", "/areas", "/privacy-policy",
-}
+SITE_MENU_PATHS = (
+    "/",
+    "/website-designing",
+    "/mobile-apps",
+    "/seo-ppc",
+    "/custom-software",
+    "/portfolio",
+    "/contact",
+    "/blog",
+    "/areas",
+    "/privacy-policy",
+)
+
+_MENU = {p.rstrip("/") or "/" for p in SITE_MENU_PATHS} | {"", "/"}
 
 
 def _xml_esc(url: str) -> str:
@@ -105,6 +115,68 @@ async def editorial_post_urls(session, *, site_base: str, limit: int = 2000) -> 
         add(raw if "://" in raw else f"{base}{path}")
 
     return out
+
+
+async def sitemap_overview(session, *, site_base: str) -> dict:
+    """JSON for the SEO-tool Sitemap screen (not a public XML change)."""
+    from datetime import date
+
+    base = (site_base or "https://zeorbit.com").rstrip("/")
+    today = date.today().isoformat()
+
+    pages = []
+    for path in SITE_MENU_PATHS:
+        loc = base if path == "/" else f"{base}{path}"
+        pages.append({"loc": loc, "lastmod": today, "kind": "menu", "changefreq": "weekly"})
+
+    loc_pages = []
+    rows = (await session.execute(select(PageRecord).order_by(PageRecord.updated_at.desc()))).scalars().all()
+    for r in rows:
+        slug = (r.slug or "").strip("/")
+        if not slug:
+            continue
+        block = r.seo_block if isinstance(r.seo_block, dict) else {}
+        kind = (block.get("content_type") or "service").lower()
+        if kind in ("blog", "post"):
+            continue
+        lastmod = today
+        ts = r.updated_at or r.created_at
+        if ts:
+            try:
+                lastmod = ts.date().isoformat() if hasattr(ts, "date") else str(ts)[:10]
+            except Exception:
+                lastmod = today
+        loc_pages.append({
+            "loc": f"{base}/{slug}",
+            "lastmod": lastmod,
+            "kind": "location",
+            "city": r.city or "",
+            "title": (block.get("title") or "") if isinstance(block, dict) else "",
+            "changefreq": "weekly",
+        })
+
+    posts = []
+    for loc, lastmod in await editorial_post_urls(session, site_base=base):
+        posts.append({"loc": loc, "lastmod": lastmod, "kind": "post", "changefreq": "weekly"})
+
+    return {
+        "base": base,
+        "index_url": f"{base}/sitemap.xml",
+        "page_sitemap_url": f"{base}/page-sitemap.xml",
+        "post_sitemap_url": f"{base}/post-sitemap.xml",
+        "index": [
+            {"loc": f"{base}/page-sitemap.xml", "kind": "index"},
+            {"loc": f"{base}/post-sitemap.xml", "kind": "index"},
+        ],
+        "pages": pages,
+        "location_pages": loc_pages,
+        "posts": posts,
+        "counts": {
+            "pages": len(pages),
+            "location_pages": len(loc_pages),
+            "posts": len(posts),
+        },
+    }
 
 
 def urlset_xml(entries: list[tuple[str, str]], *, changefreq: str = "weekly", priority: str = "0.8") -> str:

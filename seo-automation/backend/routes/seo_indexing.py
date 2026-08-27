@@ -545,3 +545,13 @@ async def push_all_to_google(session: AsyncSession = Depends(get_session)):
             else "Run python3 scripts/setup_gsc.py, verify the property in Search Console, add the service account as Owner."
         ),
     }
+
+
+@router.get("/sitemaps")
+async def list_sitemaps(session: AsyncSession = Depends(get_session)):
+    """SEO-tool only: list sitemap index, page URLs, location pages, and posts."""
+    from routes.pages import _reader_base
+    from services.sitemap_service import sitemap_overview
+
+    base = _reader_base()
+    return await sitemap_overview(session, site_base=base)

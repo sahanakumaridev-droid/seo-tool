@@ -11,6 +11,7 @@ import OnboardingPage from './pages/OnboardingPage'
 import SiteAuditPage from './pages/SiteAuditPage'
 import GoogleAdsPage from './pages/GoogleAdsPage'
 import IndexingStatusPage from './pages/IndexingStatusPage'
+import SitemapsPage from './pages/SitemapsPage'
 import IntegrationsPage from './pages/IntegrationsPage'
 import ComingSoonPage from './pages/ComingSoonPage'
 import SimpleDashboard from './pages/SimpleDashboard'
@@ -205,6 +206,11 @@ export default function App() {
       <Route path="/indexing" element={
         <RequireAuth authed={authed}>
           <DashboardLayout onLogout={logout}><IndexingStatusPage /></DashboardLayout>
+        </RequireAuth>
+      } />
+      <Route path="/sitemaps" element={
+        <RequireAuth authed={authed}>
+          <DashboardLayout onLogout={logout}><SitemapsPage /></DashboardLayout>
         </RequireAuth>
       } />
       <Route path="/integrations" element={

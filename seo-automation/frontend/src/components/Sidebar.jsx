@@ -2,7 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Search, Newspaper, TrendingUp, BarChart2,
   HelpCircle, Share2, Users, Shield,
-  UserPlus, Target, ChevronDown, Megaphone, Activity, ScanSearch, Plug, Rocket,
+  UserPlus, Target, ChevronDown, Megaphone, Activity, ScanSearch, Plug, Rocket, Globe2,
 } from 'lucide-react'
 import Logo from './Logo'
 import useProjectInfo from '../hooks/useProjectInfo'
@@ -16,6 +16,7 @@ const SEO_NAV = [
   { to: '/content',    icon: LayoutDashboard, label: 'SEO Content' },
   { to: '/keywords',   icon: Search,          label: 'Keyword Research' },
   { to: '/site-audit', icon: Target,          label: 'Site Audit' },
+  { to: '/sitemaps',   icon: Globe2,          label: 'Sitemaps' },
   { to: '/rankings',   icon: TrendingUp,      label: 'Rankings' },
   { to: '/competitors',icon: Users,           label: 'Competitors' },
   { to: '/reports',    icon: BarChart2,       label: 'Reports' },

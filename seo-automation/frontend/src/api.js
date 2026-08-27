@@ -221,6 +221,9 @@ export const inspectSeoIndexingUrl = (data) =>
 export const notifyBingIndexing = () =>
   api.post('/seo-indexing/notify-bing', null, { timeout: 60000 })
 
+export const getSeoSitemaps = () =>
+  api.get('/seo-indexing/sitemaps')
+
 // ── Leads ────────────────────────────────────────────────────────
 export const getLeads = (params = {}) =>
   api.get('/leads/', { params })
