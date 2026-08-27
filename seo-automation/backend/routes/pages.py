@@ -8,6 +8,7 @@ from models.schemas import SEOBlock
 from config import settings
 from datetime import datetime, timezone
 from typing import List, Optional
+from pydantic import BaseModel
 from urllib.parse import urlparse
 import re
 
@@ -317,27 +318,114 @@ async def save_page(
     session: AsyncSession = Depends(get_session),
 ):
     block = await generate_seo_block(business_type, city, state)
-    slug = slugify(f"{business_type}-{city}")
+    return await _upsert_block(session, business_type, city, state, block)
 
-    # Upsert: update if slug exists, insert otherwise
+
+class SaveBlockRequest(BaseModel):
+    block: SEOBlock
+    apply_globally: bool = True
+    business_type: str = ""
+
+
+def _relocalize_text(text: str, src: SEOBlock, dest_city: str, dest_state: str, dest_zip: str) -> str:
+    if not text:
+        return text
+    out = text
+    src_zip = (src.zip or "").strip()
+    if src_zip and dest_zip and src_zip != dest_zip:
+        out = out.replace(src_zip, dest_zip)
+    src_city = (src.city or "").strip()
+    if src_city and dest_city and src_city.lower() != dest_city.lower():
+        out = re.sub(re.escape(src_city), dest_city, out, flags=re.I)
+    src_state = (src.state or "").strip()
+    if src_state and dest_state and src_state.upper() != dest_state.upper():
+        out = re.sub(rf"\b{re.escape(src_state)}\b", dest_state, out)
+    return out
+
+
+def _relocalize_block(src: SEOBlock, dest: dict, dest_city: str, dest_state: str, dest_zip: str) -> dict:
+    """Copy edited global copy onto a sibling location page, swapping place names."""
+    out = dict(dest or {})
+    text_fields = ("title", "h1", "intro", "content", "meta_description", "cta")
+    for field in text_fields:
+        src_val = getattr(src, field, None)
+        if src_val:
+            out[field] = _relocalize_text(src_val, src, dest_city, dest_state, dest_zip)
+    if src.h2s:
+        out["h2s"] = [_relocalize_text(h, src, dest_city, dest_state, dest_zip) for h in src.h2s]
+    if src.h3s:
+        out["h3s"] = [_relocalize_text(h, src, dest_city, dest_state, dest_zip) for h in src.h3s]
+    if src.faqs:
+        faqs = []
+        for faq in src.faqs:
+            q = faq.question if hasattr(faq, "question") else (faq or {}).get("question", "")
+            a = faq.answer if hasattr(faq, "answer") else (faq or {}).get("answer", "")
+            faqs.append({
+                "question": _relocalize_text(q, src, dest_city, dest_state, dest_zip),
+                "answer": _relocalize_text(a, src, dest_city, dest_state, dest_zip),
+            })
+        out["faqs"] = faqs
+    out["city"] = dest_city
+    out["state"] = dest_state
+    if dest_zip:
+        out["zip"] = dest_zip
+    return out
+
+
+async def _upsert_block(session, business_type: str, city: str, state: str, block: SEOBlock):
+    slug = (block.slug or "").strip() or slugify(f"{business_type}-{city}")
+    block.slug = slug
     result = await session.execute(select(PageRecord).where(PageRecord.slug == slug))
     existing = result.scalar_one_or_none()
-
+    payload = block.model_dump()
     if existing:
-        existing.seo_block = block.model_dump()
+        existing.seo_block = payload
         existing.updated_at = datetime.now(timezone.utc)
+        existing.business_type = business_type or existing.business_type
+        existing.city = city
+        existing.state = state
     else:
         session.add(PageRecord(
             business_type=business_type,
-            base_location=f"{city}, {state}",
+            base_location=f"{city}, {state}".strip(", "),
             city=city,
             state=state,
             slug=slug,
-            seo_block=block.model_dump(),
+            seo_block=payload,
         ))
-
     await session.commit()
     return {"slug": slug, "saved": True}
+
+
+@router.post("/save-block", response_model=dict)
+async def save_block(req: SaveBlockRequest, session: AsyncSession = Depends(get_session)):
+    """Persist the edited SEO block. Optionally apply the same copy to sibling location pages."""
+    block = req.block
+    bt = (req.business_type or block.business_type or "").strip()
+    saved = await _upsert_block(session, bt, block.city, block.state or "CA", block)
+    updated = 1
+    if req.apply_globally and bt:
+        kind = (block.content_type or "service").lower()
+        rows = (await session.execute(select(PageRecord).where(PageRecord.business_type == bt))).scalars().all()
+        for row in rows:
+            if (row.slug or "") == saved["slug"]:
+                continue
+            dest = row.seo_block if isinstance(row.seo_block, dict) else {}
+            dest_kind = (dest.get("content_type") or "service").lower()
+            if dest_kind != kind:
+                continue
+            dest_city = row.city or dest.get("city") or ""
+            dest_state = row.state or dest.get("state") or ""
+            dest_zip = dest.get("zip") or ""
+            if not dest_city:
+                continue
+            row.seo_block = _relocalize_block(block, dest, dest_city, dest_state, dest_zip)
+            row.updated_at = datetime.now(timezone.utc)
+            updated += 1
+        await session.commit()
+    saved["updated_count"] = updated
+    saved["applied_globally"] = bool(req.apply_globally)
+    return saved
 
 @router.get("/blog", response_model=dict)
 async def list_blog_posts(
@@ -376,7 +464,14 @@ async def list_blog_posts(
         ).strip()
         if len(excerpt) > 220:
             excerpt = excerpt[:217].rstrip() + "…"
-        category = (block.get("industry") or r.business_type or "SEO").strip()
+        # Prefer niche; never surface catch-all "Professional Services" as the blog category
+        raw_ind = (block.get("industry") or "").strip()
+        if raw_ind.lower() in {
+            "", "professional services", "other", "services", "local services", "digital services",
+        }:
+            category = (r.business_type or block.get("business_type") or "SEO").strip()
+        else:
+            category = raw_ind
         posts.append({
             "id": f"page-{r.id}",
             "source": "web",

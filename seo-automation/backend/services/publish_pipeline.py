@@ -15,6 +15,7 @@ from config import settings
 from db import PublishedUrlRecord
 from models.schemas import GoogleAdsCampaignRequest, SEOBlock
 from services import crawl_check_service, search_console_service
+from services import indexnow_service
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,9 @@ async def track_public_publish(
             return out
 
         sitemaps = _sitemap_urls()
+        post_sm = (getattr(settings, "WP_POST_SITEMAP_URL", "") or "").strip()
+        kind = (getattr(block, "content_type", "") or "service").lower()
+        is_blog = kind in ("blog", "post")
         if sitemaps and settings.GSC_SITE_URL and settings.GOOGLE_INDEXING_KEY_FILE:
             for sm in sitemaps:
                 search_console_service.submit_sitemap(sm)
@@ -102,6 +106,15 @@ async def track_public_publish(
         else:
             out["indexing"] = "no_public_base"
             out["detail"] = "Set PUBLIC_BASE_URL so /sitemap.xml can be submitted."
+
+        if getattr(settings, "INDEXNOW_ENABLED", True) and indexnow_service.is_configured() and is_blog:
+            ping = indexnow_service.submit_urls([url])
+            out["indexnow"] = ping
+        pinged = set()
+        for sm in ([post_sm] if post_sm else []) + sitemaps:
+            if sm and sm not in pinged:
+                pinged.add(sm)
+                indexnow_service.ping_bing_sitemap(sm)
 
         await session.commit()
     except Exception as e:

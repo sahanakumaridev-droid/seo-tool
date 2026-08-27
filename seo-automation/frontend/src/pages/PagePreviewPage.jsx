@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { ArrowLeft, RefreshCw, Save, CheckCircle, Upload, Globe, ExternalLink, Megaphone, AlertTriangle, Wand2 } from 'lucide-react'
-import { generateSingle, savePage, publishToWordPress, publishToWeb, zeorbitBlogUrl, zeorbitArticleUrl, boostPageScores } from '../api'
+import { generateSingle, saveEditedBlock, publishToWordPress, publishToWeb, zeorbitBlogUrl, zeorbitArticleUrl, boostPageScores } from '../api'
 
 const MIN_SCORE = 90
 
@@ -179,7 +179,7 @@ export default function PagePreviewPage() {
   }
 
   const handleSave = async () => {
-    await savePage(businessType, block.city, block.state)
+    await saveEditedBlock(block, { businessType, applyGlobally: true })
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
   }

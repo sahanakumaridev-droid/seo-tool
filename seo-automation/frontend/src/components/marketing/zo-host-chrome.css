@@ -1,0 +1,686 @@
+/* Hostinger-inspired sticky chrome — ZeOrbit brand tokens */
+
+.zo-host-header.zo-site-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 80;
+  background: #ffffff;
+  border: 0;
+  box-shadow: none;
+  transition:
+    background-color 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.32s ease,
+    backdrop-filter 0.32s ease;
+}
+
+.zo-host-header .zo-topbar {
+  background: #000000 !important;
+  color: #ffffff;
+  border-bottom: 0;
+}
+
+.zo-host-header .zo-topbar-inner {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  box-sizing: border-box;
+  min-height: 34px;
+  padding: 8px max(24px, env(safe-area-inset-right)) 4px max(24px, env(safe-area-inset-left));
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.zo-host-header .zo-topbar-email {
+  margin: 0;
+  margin-right: auto;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #ffffff !important;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+  transition: color 0.16s ease;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.zo-host-header .zo-topbar-spacer {
+  display: none;
+}
+
+.zo-host-header .zo-topbar-email:hover {
+  color: #ffffff !important;
+  opacity: 0.92;
+}
+
+/* White chrome over the dark hero — logo + nav stay readable */
+.zo-host-header.is-top {
+  background: #ffffff;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.zo-host-header.is-top .zo-host-bar {
+  background: #ffffff;
+  border-bottom: 0;
+}
+
+.zo-host-header.is-scrolled,
+.zo-host-header.is-mega-open,
+.zo-host-header.is-menu-open {
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.zo-host-header.is-scrolled .zo-host-bar,
+.zo-host-header.is-mega-open .zo-host-bar,
+.zo-host-header.is-menu-open .zo-host-bar {
+  background: transparent;
+  border-bottom: 0;
+}
+
+/* Email strip stays black with white text for contrast */
+.zo-host-header.is-scrolled .zo-topbar,
+.zo-host-header.is-mega-open .zo-topbar,
+.zo-host-header.is-menu-open .zo-topbar,
+.zo-host-header.is-top .zo-topbar {
+  background: #000000 !important;
+  border-bottom: 0;
+}
+
+.zo-host-header.is-scrolled .zo-topbar-email,
+.zo-host-header.is-mega-open .zo-topbar-email,
+.zo-host-header.is-menu-open .zo-topbar-email,
+.zo-host-header.is-top .zo-topbar-email {
+  color: #ffffff !important;
+}
+
+.zo-host-header .zo-nav a,
+.zo-host-header .zo-nav-trigger,
+.zo-host-header .zo-host-email,
+.zo-host-header .zo-ask-btn,
+.zo-host-header .zo-util-trigger,
+.zo-host-header .zo-nav-icon-btn,
+.zo-host-header .zo-mobile-toggle {
+  transition:
+    color 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.16s ease;
+}
+
+.zo-host-bar-inner {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  box-sizing: border-box;
+  height: 64px;
+  min-height: 64px;
+  padding: 0 max(24px, env(safe-area-inset-right)) 0 max(24px, env(safe-area-inset-left));
+  /* Flex: nav owns the gap between logo and Chat, then centers inside it */
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.zo-host-header .zo-brand {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 14px;
+  height: 100%;
+  width: auto;
+  margin: 0;
+}
+
+.zo-host-header .zo-logo {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  line-height: 0;
+}
+
+.zo-host-header .zo-logo img {
+  display: block;
+  height: 34px !important;
+  width: auto !important;
+  max-width: 180px;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.zo-host-email {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.88);
+  transition: color 0.16s ease;
+}
+
+.zo-host-header.is-scrolled .zo-host-email,
+.zo-host-header.is-mega-open .zo-host-email,
+.zo-host-header.is-menu-open .zo-host-email {
+  color: #374151;
+}
+
+.zo-host-email:hover {
+  color: #ffffff;
+}
+
+.zo-host-header.is-scrolled .zo-host-email:hover,
+.zo-host-header.is-mega-open .zo-host-email:hover {
+  color: #111111;
+}
+
+.zo-host-header .zo-nav {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center;
+  gap: 4px;
+  flex: 1 1 auto;
+  width: auto;
+  max-width: none;
+  min-width: 0;
+  align-self: stretch !important;
+  height: auto;
+  margin: 0;
+  padding: 0;
+}
+
+.zo-host-header .zo-nav-item {
+  position: relative;
+  display: flex !important;
+  align-items: center !important;
+  align-self: center !important;
+  height: 40px;
+  margin: 0;
+}
+
+.zo-host-header.is-top .zo-nav a,
+.zo-host-header.is-top .zo-nav-trigger,
+.zo-host-header.is-top .zo-nav a span,
+.zo-host-header.is-top .zo-nav-trigger span,
+.zo-host-header:not(.is-scrolled):not(.is-mega-open):not(.is-menu-open) .zo-nav a,
+.zo-host-header:not(.is-scrolled):not(.is-mega-open):not(.is-menu-open) .zo-nav-trigger {
+  font-family: 'Manrope', 'Outfit', system-ui, sans-serif !important;
+  font-size: 14px;
+  font-weight: 800 !important;
+  letter-spacing: 0.005em;
+  text-transform: none;
+  color: #0a0a0a !important;
+  -webkit-text-fill-color: #0a0a0a !important;
+  height: 40px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+.zo-host-header.is-top .zo-nav-caret,
+.zo-host-header:not(.is-scrolled):not(.is-mega-open):not(.is-menu-open) .zo-nav-caret {
+  color: #0b1220 !important;
+}
+
+.zo-host-header .zo-nav a,
+.zo-host-header .zo-nav-trigger {
+  font-family: 'Manrope', 'Outfit', system-ui, sans-serif !important;
+  font-size: 14px;
+  font-weight: 800 !important;
+  letter-spacing: 0.005em;
+  text-transform: none;
+  color: #0a0a0a !important;
+  -webkit-text-fill-color: #0a0a0a !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  max-height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: transparent;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center;
+  line-height: 1 !important;
+  margin: 0;
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+}
+
+.zo-host-header .zo-nav a span,
+.zo-host-header .zo-nav-trigger span {
+  font-weight: 700 !important;
+  color: inherit !important;
+}
+
+.zo-host-header.is-scrolled .zo-nav a,
+.zo-host-header.is-scrolled .zo-nav-trigger,
+.zo-host-header.is-mega-open .zo-nav a,
+.zo-host-header.is-mega-open .zo-nav-trigger,
+.zo-host-header.is-menu-open .zo-nav a,
+.zo-host-header.is-menu-open .zo-nav-trigger {
+  color: #0b1220 !important;
+  font-weight: 700 !important;
+}
+
+.zo-host-header.is-scrolled .zo-nav-caret,
+.zo-host-header.is-mega-open .zo-nav-caret,
+.zo-host-header.is-menu-open .zo-nav-caret {
+  color: #111111;
+}
+
+.zo-host-header .zo-nav a:hover,
+.zo-host-header .zo-nav a.active,
+.zo-host-header .zo-nav-trigger:hover,
+.zo-host-header .zo-nav-trigger.active,
+.zo-host-header .zo-nav-item.is-open .zo-nav-trigger {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.zo-host-header.is-scrolled .zo-nav a:hover,
+.zo-host-header.is-scrolled .zo-nav a.active,
+.zo-host-header.is-scrolled .zo-nav-trigger:hover,
+.zo-host-header.is-scrolled .zo-nav-trigger.active,
+.zo-host-header.is-scrolled .zo-nav-item.is-open .zo-nav-trigger,
+.zo-host-header.is-mega-open .zo-nav a:hover,
+.zo-host-header.is-mega-open .zo-nav-trigger:hover,
+.zo-host-header.is-mega-open .zo-nav-item.is-open .zo-nav-trigger {
+  background: rgba(15, 23, 42, 0.06);
+  color: #000000;
+}
+
+.zo-host-actions {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 8px;
+  margin: 0;
+  position: relative;
+  height: 100%;
+  min-width: 0;
+  overflow: visible;
+}
+
+.zo-ask-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  background: transparent;
+  color: #111111 !important;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  line-height: 1;
+  transition: background-color 0.14s ease, border-color 0.14s ease, transform 0.14s ease, color 0.32s ease;
+}
+
+.zo-ask-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.zo-ask-btn:active {
+  transform: scale(0.97);
+}
+
+.zo-host-header.is-scrolled .zo-ask-btn,
+.zo-host-header.is-mega-open .zo-ask-btn,
+.zo-host-header.is-menu-open .zo-ask-btn {
+  border-color: rgba(15, 23, 42, 0.18);
+  color: #111111 !important;
+}
+
+.zo-host-header.is-scrolled .zo-ask-btn:hover,
+.zo-host-header.is-mega-open .zo-ask-btn:hover {
+  background: rgba(15, 23, 42, 0.05);
+}
+
+.zo-host-header .zo-util-trigger {
+  color: #111111 !important;
+  border-color: transparent;
+  height: 36px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.zo-host-header.is-scrolled .zo-util-trigger,
+.zo-host-header.is-mega-open .zo-util-trigger,
+.zo-host-header.is-menu-open .zo-util-trigger {
+  color: #111111 !important;
+}
+
+.zo-host-header .zo-nav-icon-btn {
+  border-color: rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+  color: #111111 !important;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.zo-host-header.is-scrolled .zo-nav-icon-btn,
+.zo-host-header.is-mega-open .zo-nav-icon-btn,
+.zo-host-header.is-menu-open .zo-nav-icon-btn {
+  border-color: rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+  color: #111111 !important;
+}
+
+.zo-host-header .zo-mobile-toggle {
+  border-color: rgba(15, 23, 42, 0.14);
+  background: rgba(15, 23, 42, 0.04);
+  color: #0b1220;
+}
+
+.zo-host-header.is-scrolled .zo-mobile-toggle,
+.zo-host-header.is-mega-open .zo-mobile-toggle,
+.zo-host-header.is-menu-open .zo-mobile-toggle {
+  border-color: rgba(15, 23, 42, 0.14);
+  background: rgba(15, 23, 42, 0.04);
+  color: #0b1220;
+}
+
+.zo-host-mega.zo-mega {
+  width: auto;
+  margin: 0 24px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #f5f5f6;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+}
+
+.zo-host-header .zo-util-item {
+  position: relative;
+  z-index: 70;
+  overflow: visible;
+}
+
+.zo-host-header .zo-contact-dropdown {
+  right: 0;
+  top: calc(100% + 10px);
+}
+
+.zo-host-header .zo-country-dropdown {
+  right: 0;
+  top: calc(100% + 10px);
+  z-index: 90;
+}
+
+.zo-host-header .zo-mobile-nav {
+  margin: 0;
+  border-radius: 0;
+  border: 0;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: none;
+  background: #ffffff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zo-host-header.zo-site-header,
+  .zo-host-header .zo-nav a,
+  .zo-host-header .zo-nav-trigger,
+  .zo-host-header .zo-host-email,
+  .zo-host-header .zo-ask-btn,
+  .zo-host-header .zo-util-trigger,
+  .zo-host-header .zo-nav-icon-btn,
+  .zo-host-header .zo-mobile-toggle {
+    transition: none !important;
+  }
+}
+
+@media (max-width: 1100px) {
+  .zo-host-header .zo-topbar-inner,
+  .zo-host-bar-inner {
+    width: 100%;
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+
+  .zo-host-bar-inner {
+    display: flex;
+    grid-template-columns: none;
+    justify-content: space-between;
+    column-gap: 0;
+    gap: 12px;
+  }
+
+  .zo-host-header .zo-brand {
+    width: auto;
+  }
+
+  .zo-host-header .zo-nav {
+    display: none;
+  }
+
+  .zo-ask-btn span {
+    display: none;
+  }
+
+  .zo-ask-btn {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 720px) {
+  .zo-host-bar-inner {
+    width: 100%;
+    min-height: 60px;
+    height: 60px;
+    gap: 16px;
+  }
+
+  .zo-host-header .zo-nav-icon-btn {
+    display: none;
+  }
+
+  .zo-util-label {
+    display: none;
+  }
+}
+
+/* ── Footer (Hostinger-style columns) ── */
+.zo-host-footer.zo-site-footer {
+  background: #ffffff;
+  color: #111111;
+  margin-top: 0;
+}
+
+.zo-host-footer-accent {
+  height: 10px;
+  width: 100%;
+  /* ZeOrbit logo blues: light mark cyan → wordmark navy → deep navy */
+  background: linear-gradient(90deg, #58b0e8 0%, #2a6db0 38%, #184078 72%, #0f2d5c 100%);
+}
+
+.zo-host-footer-main {
+  padding: 48px 0 36px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.zo-host-footer-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 28px 20px;
+}
+
+.zo-host-footer-col h4 {
+  margin: 0 0 14px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #111111;
+}
+
+.zo-host-footer-col ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.zo-host-footer-col a {
+  color: #4b5563;
+  text-decoration: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  transition: color 0.14s ease;
+}
+
+.zo-host-footer-col a:hover {
+  color: #111111;
+}
+
+.zo-host-footer-mid {
+  padding: 22px 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.zo-host-footer-mid-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.zo-host-footer-social {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.zo-host-social {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #111111;
+  background: #ffffff;
+  transition: transform 0.14s ease, border-color 0.14s ease;
+}
+
+.zo-host-social:hover {
+  transform: translateY(-1px);
+  border-color: rgba(15, 23, 42, 0.28);
+}
+
+.zo-host-social svg {
+  width: 15px;
+  height: 15px;
+}
+
+.zo-host-footer-legal {
+  padding: 18px 0 28px;
+}
+
+.zo-host-footer-legal-inner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px 24px;
+  flex-wrap: wrap;
+}
+
+.zo-host-footer-legal p {
+  margin: 0;
+  max-width: 520px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #6b7280;
+  font-family: var(--font-sans);
+}
+
+.zo-host-footer-legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.zo-host-footer-legal-links a {
+  color: #4b5563;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font-sans);
+}
+
+.zo-host-footer-legal-links a:hover {
+  color: #111111;
+}
+
+@media (max-width: 1100px) {
+  .zo-host-footer-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .zo-host-footer-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px 16px;
+  }
+
+  .zo-host-footer-main {
+    padding: 36px 0 28px;
+  }
+}
+
+@media (max-width: 480px) {
+  .zo-host-footer-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Social brand fills — match zeorbit.com footer */
+.zo-host-social.is-facebook { color: #1877f2; }
+.zo-host-social.is-linkedin { color: #0a66c2; }
+.zo-host-social.is-instagram { color: #dd2a7b; }
+.zo-host-social.is-youtube { color: #ff0000; }
+.zo-host-social.is-x { color: #111111; }
+.zo-host-social.is-pinterest { color: #e60023; }
+.zo-host-social.is-apple-maps { color: #111111; }
+.zo-host-social.is-google-maps { color: #4285f4; }
+.zo-host-social.is-yelp { color: #d32323; }

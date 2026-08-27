@@ -6,7 +6,7 @@ from datetime import datetime
 class GenerateRequest(BaseModel):
     business_type: str = Field(default="", example="Web Design", description="Business niche (required for pages)")
     base_location: str = Field(default="", example="San Diego, CA")
-    num_cities: int = Field(default=10, ge=1, le=100)
+    num_cities: int = Field(default=10, ge=1, le=250)
     extra_locations: List[str] = Field(
         default_factory=list,
         description="Extra cities typed or picked in the UI, e.g. ['Coronado, CA']",
@@ -47,9 +47,11 @@ class GenerateRequest(BaseModel):
                 missing.append("at least one Target Keyword")
             if not (self.base_location or "").strip() and not (self.extra_locations or []):
                 missing.append("Base city")
-            # Industry / pricing / full brief are optional — backend autofills from master instruction
-            if not (self.industry or "").strip():
-                self.industry = "Professional Services"
+            # Industry / Audience optional — never invent "Professional Services"
+            if not (self.industry or "").strip() or (self.industry or "").strip().lower() in {
+                "professional services", "other", "services", "local services", "digital services",
+            }:
+                self.industry = ""
             if not (self.audience or "").strip():
                 self.audience = "Small business owners"
             if missing:
@@ -109,6 +111,7 @@ class ImageAsset(BaseModel):
 class SEOBlock(BaseModel):
     city: str
     state: str
+    zip: str = ""
     business_type: str
     industry: str = ""
     title: str
@@ -248,7 +251,8 @@ class CityInfo(BaseModel):
     latitude: float
     longitude: float
     population: Optional[int] = None
-    kind: str = "city"  # city | state | county
+    kind: str = "city"  # city | state | county | zip
+    zip: str = ""
 
 # WordPress integration models
 class WordPressConfig(BaseModel):

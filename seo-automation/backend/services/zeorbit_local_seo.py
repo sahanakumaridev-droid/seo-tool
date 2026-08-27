@@ -1,5 +1,5 @@
 """
-ZeOrbit AI Search Visibility & Local SEO — master implementation helpers.
+ZeOrbit AI Search Visibility & Local SEO, master implementation helpers.
 
 Intent selection, factual copy rails, title/FAQ variation, image concepts,
 duplicate detection, and publish quality scoring.
@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 # ── Verified ZeOrbit facts only (never invent beyond these) ──────────────────
 ZEORBIT_FACTS = {
-    "pricing_range": "$500–$3,000",
+    "pricing_range": "$500-$3,000",
     "experience": "20+ years",
     "reviews": "1,000+ client reviews",
     "services": [
@@ -70,6 +70,71 @@ INDUSTRY_POOL = (
     "local startups",
     "home-service businesses",
 )
+
+# Catch-all labels that must never be prepended to keywords / slugs.
+GENERIC_INDUSTRY_LABELS = frozenset({
+    "",
+    "professional services",
+    "other",
+    "services",
+    "local services",
+    "digital services",
+    "business",
+    "small business",
+    "general",
+    "seo",
+})
+
+_NICHE_INDUSTRY_RULES = (
+    (re.compile(r"\b(remodel(?:ing|ling)?|contractors?|plumb(?:er|ing)?|hvac|roof(?:er|ing)?|electric(?:ian|al)?|landscap(?:e|er|ing)?|paint(?:er|ing)?|pest|clean(?:ing|er)?|home[\s-]?service|construction)\b", re.I), "Contractors"),
+    (re.compile(r"\b(restaurants?|cafe|catering|dining|food service|bistro)\b", re.I), "Restaurants"),
+    (re.compile(r"\b(health(?:care)?|dental|clinic|medical|doctors?|dentists?)\b", re.I), "Healthcare"),
+    (re.compile(r"\b(real estate|realtors?|property)\b", re.I), "Real Estate"),
+    (re.compile(r"\b(legal|law|attorneys?|lawyers?)\b", re.I), "Legal"),
+    (re.compile(r"\b(financ(?:e|ial)?|account(?:ing|ant)?|bank(?:ing)?|invest(?:ment|ing)?|wealth|bookkeep(?:ing|er)?)\b", re.I), "Finance"),
+    (re.compile(r"\b(educat(?:ion|ional)?|tutors?|tutoring|schools?|courses?|university|college|learning)\b", re.I), "Education"),
+    (re.compile(r"\b(retail(?:ers?)?|stores?|shops?|ecommerce|e-commerce)\b", re.I), "Retail"),
+)
+
+
+def is_generic_industry(industry: str) -> bool:
+    return (industry or "").strip().lower() in GENERIC_INDUSTRY_LABELS
+
+
+def resolve_industry_label(
+    industry: str = "",
+    business_type: str = "",
+    keywords: Optional[Sequence[str]] = None,
+) -> str:
+    """Keep a real buyer vertical; never invent 'Professional Services'.
+
+    Prefer an explicit non-generic industry. Otherwise infer from niche / keywords.
+    Returns '' when nothing useful is known — keyword + niche already drive the page.
+    """
+    ind = (industry or "").strip()
+    if ind and not is_generic_industry(ind):
+        return ind
+    blob = " ".join(
+        [business_type or ""]
+        + [str(k).strip() for k in (keywords or [])[:4] if k and str(k).strip()]
+    )
+    for rx, label in _NICHE_INDUSTRY_RULES:
+        if rx.search(blob):
+            return label
+    return ""
+
+
+def strip_generic_industry_prefix(text: str) -> str:
+    """Remove a leading catch-all industry from a keyword / slug seed."""
+    raw = (text or "").strip()
+    if not raw:
+        return raw
+    return re.sub(
+        r"^(professional[\s-]+services|digital[\s-]+services|local[\s-]+services|other)\s+",
+        "",
+        raw,
+        flags=re.I,
+    ).strip() or raw
 
 
 @dataclass(frozen=True)
@@ -301,34 +366,70 @@ def _stable_int(*parts: str) -> int:
 
 
 def pick_industry(explicit: str, city: str, index: int) -> str:
-    """Use explicit industry when set; otherwise rotate a fitting pool by location."""
-    if (explicit or "").strip():
+    """Use explicit non-generic industry when set; otherwise rotate a fitting pool.
+
+    Generic placeholders like 'Professional Services' are treated as unset so they
+    are not stamped onto every keyword/slug.
+    """
+    if (explicit or "").strip() and not is_generic_industry(explicit):
         return explicit.strip()
     return INDUSTRY_POOL[_stable_int(city, str(index)) % len(INDUSTRY_POOL)]
 
 
 def detect_intent_from_brief(brief: str, keywords: Sequence[str]) -> Optional[str]:
-    """Only force intent from the editor brief — not from generic target keywords.
+    """Force intent from the editor brief, or from strongly explicit keywords.
 
-    Target keyword lists often include “wordpress website” for every page; using
-    them here collapsed all 50 locations into one intent.
+    Soft website keywords (e.g. “website design”) do NOT force a single intent —
+    those still rotate for variety — but they DO block mobile_app unless the
+    brief/keywords explicitly ask for apps.
     """
     blob = (brief or "").lower()
-    if not blob.strip():
-        return None
-    rules = (
-        ("shopify", ("shopify", "ecommerce", "e-commerce", "online store")),
-        ("wordpress", ("wordpress site", "wordpress website", "wordpress design", "wordpress developer")),
-        ("affordable", ("affordable", "cheap", "cost", "pricing", "budget", "reasonably priced", "how much")),
-        ("redesign", ("redesign", "rebuild", "outdated", "refresh")),
-        ("leads", ("lead generation", "more leads", "conversion", "get more customers", "more calls")),
-        ("mobile_app", ("mobile app", "ios app", "android app", "website or app", "app vs website")),
-        ("new_business", ("new business", "startup", "starting a business", "first website")),
-    )
-    for intent_id, needles in rules:
-        if any(n in blob for n in needles):
-            return intent_id
+    kw_blob = " ".join(str(k).lower() for k in (keywords or []) if k)
+    # Brief wins when present
+    if blob.strip():
+        rules = (
+            ("shopify", ("shopify", "ecommerce", "e-commerce", "online store")),
+            ("wordpress", ("wordpress site", "wordpress website", "wordpress design", "wordpress developer")),
+            ("affordable", ("affordable", "cheap", "cost", "pricing", "budget", "reasonably priced", "how much")),
+            ("redesign", ("redesign", "rebuild", "outdated", "refresh")),
+            ("leads", ("lead generation", "more leads", "conversion", "get more customers", "more calls")),
+            ("mobile_app", ("mobile app", "ios app", "android app", "website or app", "app vs website")),
+            ("new_business", ("new business", "startup", "starting a business", "first website")),
+        )
+        for intent_id, needles in rules:
+            if any(n in blob for n in needles):
+                return intent_id
+    # Explicit keyword signals (strong only)
+    if kw_blob.strip():
+        if any(n in kw_blob for n in ("mobile app", "ios app", "android app", "app development", "app vs website")):
+            return "mobile_app"
+        if any(n in kw_blob for n in ("shopify", "ecommerce", "e-commerce", "online store")):
+            return "shopify"
+        if "wordpress" in kw_blob:
+            return "wordpress"
+        if any(n in kw_blob for n in ("affordable web", "affordable website", "cheap website", "website cost")):
+            return "affordable"
+        if "redesign" in kw_blob:
+            return "redesign"
     return None
+
+
+def keywords_imply_website_not_app(keywords: Optional[Sequence[str]], brief: str = "") -> bool:
+    """True when the editor's keywords are clearly about websites, not mobile apps."""
+    blob = " ".join(
+        [str(k).lower() for k in (keywords or []) if k] + [((brief or "").lower())]
+    )
+    if not blob.strip():
+        return False
+    if any(n in blob for n in ("mobile app", "ios app", "android app", "app development")):
+        return False
+    return any(
+        n in blob
+        for n in (
+            "website", "web design", "web designer", "wordpress", "shopify",
+            "landing page", "website design", "custom website", "small business website",
+        )
+    )
 
 
 def pick_search_intent(
@@ -343,11 +444,16 @@ def pick_search_intent(
         for intent in SEARCH_INTENTS:
             if intent.id == forced:
                 return intent
-    # Rotate intents so 50 locations are not the same article shape.
+    # Rotate intents so many locations are not the same article shape.
     # Prefer industry_local every 3rd page when an industry is set.
     if industry and index % 3 == 2:
         return next(i for i in SEARCH_INTENTS if i.id == "industry_local")
     pool = [i for i in SEARCH_INTENTS if i.id != "industry_local"]
+    # Never stamp a Mobile App title onto website-design keyword campaigns.
+    if keywords_imply_website_not_app(keywords, brief):
+        pool = [i for i in pool if i.id != "mobile_app"]
+    if not pool:
+        pool = [i for i in SEARCH_INTENTS if i.id == "discovery"]
     return pool[_stable_int(city, industry, str(index)) % len(pool)]
 
 
@@ -362,6 +468,65 @@ def format_title(intent: SearchIntent, city: str, industry: str, index: int) -> 
         pricing=ZEORBIT_FACTS["pricing_range"],
     )
     return title[:78]
+
+
+def title_from_primary_keyword(
+    primary_keyword: str,
+    city: str,
+    industry: str,
+    intent: SearchIntent,
+    index: int = 0,
+) -> str:
+    """Prefer SEO title from the editor's primary keyword + city.
+
+    Intent templates are a fallback when the keyword is empty or already too long.
+    Never let a rotated mobile_app template override a website-design keyword.
+    """
+    raw = re.sub(r"\s+", " ", (primary_keyword or "").strip())
+    city_l = (city or "").strip()
+    city_low = city_l.lower()
+
+    # Drop trailing location fragments already in the keyword (full city or last token)
+    if city_low and raw.lower().endswith(city_low):
+        raw = raw[: -len(city_l)].strip(" ,-")
+    elif city_low:
+        # e.g. keyword ends with "san diego" while city is a neighborhood — keep as-is
+        # but avoid "… National City in National City"
+        pass
+
+    if not raw:
+        return format_title(intent, city, industry, index)
+
+    small = {"in", "for", "of", "and", "a", "the", "to", "on", "vs"}
+    parts = []
+    for i, w in enumerate(raw.split(" ")):
+        low = w.lower()
+        if low == "wordpress":
+            parts.append("WordPress")
+        elif low == "seo":
+            parts.append("SEO")
+        elif i and low in small:
+            parts.append(low)
+        else:
+            parts.append(w[:1].upper() + w[1:] if w else w)
+    pretty = " ".join(parts)
+
+    pretty_low = pretty.lower()
+    if city_l and city_low not in pretty_low:
+        # Also skip append when every significant city token is already present
+        city_tokens = [t for t in re.split(r"[^a-z0-9]+", city_low) if len(t) > 2]
+        if not city_tokens or not all(t in pretty_low for t in city_tokens):
+            candidate = f"{pretty} in {city_l}"
+        else:
+            candidate = pretty
+    else:
+        candidate = pretty
+
+    if len(candidate) > 78:
+        candidate = candidate[:75].rstrip(" -,") + "…"
+    if intent.id == "mobile_app" and keywords_imply_website_not_app([primary_keyword]):
+        return candidate[:78]
+    return candidate[:78]
 
 
 def intent_h2_set(
@@ -454,9 +619,9 @@ def intent_h2_set(
     if layout == "qa":
         return [
             h if h.endswith("?") else (h.rstrip(".") + "?")
-            for h in base[:4]
-        ] + base[4:]
-    return list(base)
+            for h in base[:3]
+        ]
+    return list(base)[:3]
 
 
 def intent_faqs(
@@ -477,7 +642,7 @@ def intent_faqs(
     answers = {
         "discovery": [
             f"ZeOrbit builds custom WordPress and Shopify websites for small businesses, including businesses in {city}. Website projects typically range from {pricing}.",
-            "Look for clear communication, mobile-friendly design, SEO-friendly structure, realistic pricing, and experience with businesses like yours — not vague “best in town” claims.",
+            "Look for clear communication, mobile-friendly design, SEO-friendly structure, realistic pricing, and experience with businesses like yours, not vague “best in town” claims.",
             "Most small-business sites need clear services, contact options, mobile layouts, proof, and pages that match how people search locally.",
             "Straightforward builds often take a few weeks after content and goals are clear. ZeOrbit shares a timeline before work starts.",
         ],
@@ -485,61 +650,54 @@ def intent_faqs(
             f"ZeOrbit website projects typically range from {pricing}. The right fit depends on pages, features, and whether you need WordPress, Shopify, or a redesign.",
             f"In the {pricing} range you can usually cover a professional multi-page site with mobile-friendly layouts and a clear path for customers to contact you.",
             "A lower price still needs to cover useful pages, mobile usability, and a clear offer. Extremely cheap sites often skip the parts that get leads.",
-            "Budget for domain, hosting, photos, and ongoing updates — not only the initial design.",
+            "Budget for domain, hosting, photos, and ongoing updates, not only the initial design.",
         ],
         "wordpress": [
             "WordPress is a strong fit when you need flexible pages, blogs, and room to grow without rebuilding from scratch.",
-            "Yes — after training, many owners update text and photos themselves. ZeOrbit can also handle ongoing changes if you prefer.",
+            "Yes, after training, many owners update text and photos themselves. ZeOrbit can also handle ongoing changes if you prefer.",
             "Most small WordPress projects land in a few weeks once services, photos, and goals are ready.",
             "Yes. Clear headings, local service pages, and useful FAQs help search engines and AI systems understand the business.",
         ],
         "shopify": [
             "Shopify is usually better when selling products online is the main job of the site.",
-            f"Choose Shopify when checkout and inventory matter most. Choose WordPress when you need a broader marketing site — ZeOrbit builds both for {city} businesses.",
+            f"Choose Shopify when checkout and inventory matter most. Choose WordPress when you need a broader marketing site, ZeOrbit builds both for {city} businesses.",
             "A basic store typically includes products, payments, mobile shopping, and clear shipping/contact details.",
             "Yes. ZeOrbit can set up the storefront structure and help you get products and payments ready for launch.",
         ],
         "redesign": [
             "Yes. An outdated site can be redesigned or rebuilt so it works on phones, loads faster, and explains your services clearly.",
-            "Often yes — useful pages and URLs can be kept or redirected carefully so you do not throw away what already works.",
+            "Often yes, useful pages and URLs can be kept or redirected carefully so you do not throw away what already works.",
             "If customers leave on mobile, cannot find contact info, or the site looks years behind your competitors, a redesign is worth discussing.",
             "Yes. Mobile-friendly layouts are a core part of modern redesigns.",
         ],
         "leads": [
             "A clear offer, fast pages, strong contact paths, and landing pages matched to your ads or services help turn visits into calls and forms.",
-            "It should explain what you do, who you help, where you work, and how to contact you — without making people hunt.",
+            "It should explain what you do, who you help, where you work, and how to contact you, without making people hunt.",
             "Yes. Every important page should make the next step obvious: call, form, or book.",
             "Yes. Dedicated landing pages keep campaign visitors focused on one offer.",
         ],
         "new_business": [
-            "Start with who you help, what you offer, how to contact you, and proof you are real — even a simple site beats no site.",
+            "Start with who you help, what you offer, how to contact you, and proof you are real, even a simple site beats no site.",
             "A simple professional site helps people trust you before they call. You can expand pages as you grow.",
             "Yes. A focused first site with a few clear pages is often better than a large unfinished one.",
             "Add Shopify when you are ready to sell online regularly; add an app when customers need repeat actions on their phones.",
         ],
         "mobile_app": [
             "Consider an app when customers need frequent logins, bookings, or account tools. Many businesses should start with a strong mobile-friendly website.",
-            "Usually yes — a website is how people find and evaluate you. An app can come later if the workflow needs it.",
+            "Usually yes, a website is how people find and evaluate you. An app can come later if the workflow needs it.",
             "Yes. ZeOrbit provides website development and mobile application development based on what the business actually needs.",
             "Yes. If your site is hard to use on a phone, customers may leave before contacting you.",
         ],
         "industry_local": [
             f"A {industry_l} site should explain services clearly, show how to contact you, work on phones, and answer common customer questions for {city}.",
-            f"Yes. Many {industry_l} customers search and call from phones — if the site is awkward on mobile, you can lose the lead.",
+            f"Yes. Many {industry_l} customers search and call from phones, if the site is awkward on mobile, you can lose the lead.",
             f"Clear service pages and easy contact options help {industry_l} get found and contacted by local customers.",
             f"WordPress fits most service sites; Shopify fits product sellers. ZeOrbit helps {industry_l} choose based on the real need.",
         ],
     }
     ans = answers.get(intent.id) or answers["discovery"]
-    # Trust FAQ appended with factual experience/reviews wording (varied).
-    trust_q = f"Does ZeOrbit have experience building websites for businesses like those in {city}?"
-    trust_a = (
-        f"ZeOrbit brings {exp} of experience and {reviews}. "
-        f"Website projects typically range from {pricing}. "
-        f"Services include custom WordPress, Shopify, redesigns, and mobile apps when needed."
-    )
     out: List[Dict[str, str]] = []
-    for i, q_tpl in enumerate(seeds[:5]):
+    for i, q_tpl in enumerate(seeds[:3]):
         q = q_tpl.format(
             city=city or "your area",
             industry=industry_l,
@@ -547,7 +705,6 @@ def intent_faqs(
         )
         a = ans[i % len(ans)]
         out.append({"question": q, "answer": a})
-    out.append({"question": trust_q, "answer": trust_a})
     return out
 
 
@@ -569,7 +726,7 @@ def image_concept(
 
 
 def stock_query_from_concept(intent: SearchIntent, industry: str, index: int) -> Tuple[str, List[str]]:
-    """On-topic stock queries — always website/laptop accurate, never trade/tourism/classroom scenery.
+    """On-topic stock queries, always website/laptop accurate, never trade/tourism/classroom scenery.
 
     Industry may tint modifiers lightly, but the PRIMARY query stays website design so
     Unsplash does not return cameras, classrooms, or plumbing for “Education/Plumbing + website”.
@@ -588,7 +745,7 @@ def stock_query_from_concept(intent: SearchIntent, industry: str, index: int) ->
         "new_business": ("startup website laptop desk", ["new business website laptop", "entrepreneur laptop website", "website planning meeting laptop", "first website mockup"]),
     }
     topic, mods = topics.get(emphasis, topics["general"])
-    # Keep industry out of the primary Unsplash query — it pulls off-topic stock
+    # Keep industry out of the primary Unsplash query, it pulls off-topic stock
     # (e.g. Education → classroom, Photography → camera). Website visuals only.
     _ = (industry or "").strip()
     rot = index % len(mods)
@@ -612,19 +769,33 @@ def facts_blurb(variant: int = 0) -> str:
     return variants[variant % len(variants)]
 
 
+def scrub_ceo_dashes(text: str) -> str:
+    """Reduce em/en dashes in published copy (CEO preference). Keep simple $500-$3,000 hyphens."""
+    if not text:
+        return text
+    t = str(text)
+    t = t.replace("$500-$3,000", "$500-$3,000").replace("$500—$3,000", "$500-$3,000")
+    t = re.sub(r"\s*[—–]\s*", ", ", t)
+    t = re.sub(r",\s*,+", ",", t)
+    t = re.sub(r"[ \t]{2,}", " ", t)
+    return t
+
+
 def master_voice_rules() -> str:
     from services.master_custom_instruction import master_instruction_for_prompt
 
     return f"""
-VOICE — helpful small-business English (ZeOrbit local SEO):
+VOICE (helpful small-business English, ZeOrbit local SEO):
 - Write as if explaining to a real {ZEORBIT_FACTS['experience']} shop owner sitting across from you.
 - Prefer concrete lines like: "If your website is difficult to use on a phone, customers may leave before contacting you."
 - FORBIDDEN fluff: {", ".join(AI_FLUFF)}.
 - NEVER claim #1, cheapest, best in [city], fake reviews, fake clients, fake offices, fake awards, or fake case studies.
 - FACTS YOU MAY USE (only these): pricing {ZEORBIT_FACTS['pricing_range']}; experience {ZEORBIT_FACTS['experience']}; {ZEORBIT_FACTS['reviews']}; services: {", ".join(ZEORBIT_FACTS['services'])}.
-- Pricing language: affordable / reasonably priced / small-business friendly — never "cheapest".
+- Pricing language: affordable / reasonably priced / small-business friendly. Never say "cheapest".
+- Punctuation: avoid em dashes (—) and en dashes (–). Prefer commas, periods, or short sentences. Do not stack dashes in body copy.
+- Pricing ranges may use a simple hyphen only when needed (e.g. $500-$3,000), not an em dash.
 - Make entity relationships explicit: ZeOrbit → website design → WordPress/Shopify/mobile apps → small businesses → this location → industry → customer problem.
-- Every location page must feel unique: different intro, problem, industry examples, FAQs, and CTA — not city-name swap.
+- Every location page must feel unique: different intro, problem, industry examples, FAQs, and CTA. Do not only swap the city name.
 - NEVER paste writing briefs or Custom Content Requirements into published fields.
 
 MASTER CUSTOM INSTRUCTION (keyword + niche + location drive the article; follow this for intent, problem, service focus, FAQs, CTA, tone):
@@ -664,7 +835,7 @@ MUST COVER IN NATURAL LANGUAGE:
 - Practical advice for choosing a provider
 - FAQs aligned to this intent (suggested questions):\n{faq_lines}
 
-DEPTH: 700+ words. Useful local resource — not "ZeOrbit provides website design in {city}. Contact us today."
+DEPTH: 320–480 words. Tight and useful — 3 H2s, short paragraphs, no filler. Not a 700-word essay.
 """
 
 
@@ -812,9 +983,11 @@ def ensure_location_body(
     intent_id: str = "",
     index: int = 0,
     brief: str = "",
+    zip: str = "",
 ) -> Tuple[str, str]:
     """Guarantee city-specific body — scrub foreign places + vague 'local / this area' stubs."""
-    place = f"{city}, {state}".strip(", ") if state else (city or "").strip()
+    zip_bit = f" {zip}" if (zip or "").strip() else ""
+    place = f"{city}, {state}{zip_bit}".strip(", ") if state else (f"{city}{zip_bit}".strip() or "").strip()
     if not place:
         return intro or "", content or ""
     ind = industry or "small business"
@@ -883,8 +1056,15 @@ def score_page_quality(
     image_concept_text: str,
     meta: str,
     existing_bodies: Optional[Sequence[str]] = None,
+    content_type: str = "service",
+    focus_keyword: str = "",
 ) -> QualityResult:
-    """Master-rule weighted score. Fail factual / image / local gates → not publishable."""
+    """Master-rule weighted score. Fail factual / image / local gates → not publishable.
+
+    For blogs (content_type=blog), local relevance is replaced by topic/query relevance
+    so national how-to posts are not penalized for missing a city.
+    """
+    is_blog = (content_type or "").lower() in ("blog", "post")
     body = f"{intro or ''}\n{content or ''}"
     body_l = body.lower()
     reasons: List[str] = []
@@ -921,50 +1101,96 @@ def score_page_quality(
             factual -= 20
             reasons.append("Suspicious unverifiable claim")
     pricing_ok = "500" in body or "$500" in body or "3,000" in body or "3000" in body
-    if not pricing_ok and intent_id in ("affordable", "discovery", "wordpress", "shopify", "redesign", "industry_local", "leads", "new_business", "general", ""):
+    # Location pages: soft price context. Blogs: only when the query is about cost/pricing.
+    topic_l = (focus_keyword or title or "").lower()
+    needs_pricing = (not is_blog) and intent_id in (
+        "affordable", "discovery", "wordpress", "shopify", "redesign",
+        "industry_local", "leads", "new_business", "general", "",
+    )
+    if is_blog:
+        needs_pricing = bool(re.search(r"\b(cost|price|pricing|affordable|cheap)\b", topic_l))
+    if needs_pricing and not pricing_ok:
         factual -= 5
         reasons.append("Missing pricing context")
-    if ZEORBIT_FACTS["experience"].split("+")[0] not in body and "two decades" not in body_l and "20+" not in body:
+    if (
+        not is_blog
+        and ZEORBIT_FACTS["experience"].split("+")[0] not in body
+        and "two decades" not in body_l
+        and "20+" not in body
+    ):
         # soft — not always required on every page
         factual -= 2
     factual = max(0.0, factual)
 
-    # Local relevance 20%
-    local = 0.0
-    city_hits = _body_mentions_city(body, city)
-    if city_hits >= 3:
-        local += 14
-    elif city_hits >= 1:
-        local += 10
+    # Local relevance 20%  — OR topic/query relevance for blogs
     title_l = (title or "").lower()
-    if city and any(t in title_l for t in _location_tokens(city)):
-        local += 4
-    if intent_id:
-        local += 2
-    local = min(20.0, local)
-    if local < 12:
-        reasons.append("Weak local relevance")
+    if is_blog:
+        local = 0.0
+        focus = (focus_keyword or "").lower().strip()
+        focus_tokens = [t for t in re.findall(r"[a-z0-9]+", focus) if len(t) > 2]
+        if focus and focus in body_l:
+            local += 10
+        elif focus_tokens:
+            hits = sum(1 for t in focus_tokens if t in body_l)
+            local += min(10.0, 2.5 * hits)
+        if focus and (focus in title_l or all(t in title_l for t in focus_tokens[:3])):
+            local += 6
+        elif focus_tokens and sum(1 for t in focus_tokens if t in title_l) >= max(1, len(focus_tokens) // 2):
+            local += 4
+        # Practical how-to signals
+        if re.search(r"\b(step|check|fix|guide|how to|mistake|test)\b", body_l):
+            local += 4
+        local = min(20.0, local)
+        if local < 12:
+            reasons.append("Weak topic / query relevance")
+    else:
+        local = 0.0
+        city_hits = _body_mentions_city(body, city)
+        if city_hits >= 3:
+            local += 14
+        elif city_hits >= 1:
+            local += 10
+        if city and any(t in title_l for t in _location_tokens(city)):
+            local += 4
+        if intent_id:
+            local += 2
+        local = min(20.0, local)
+        if local < 12:
+            reasons.append("Weak local relevance")
 
     # Customer usefulness 20%
     useful = 0.0
-    markers = ("wordpress", "shopify", "mobile", "redesign", "lead", "cost", "price", "faq", "contact")
+    markers = (
+        "wordpress", "shopify", "mobile", "redesign", "lead", "cost", "price", "faq", "contact",
+        "step", "fix", "check", "plugin", "hosting", "ssl", "dns", "browser", "backup",
+    )
     useful += min(12.0, 2.0 * sum(1 for m in markers if m in body_l))
-    useful += 4 if len(faqs or []) >= 4 else 2 if faqs else 0
-    useful += 4 if len(body.split()) >= 500 else 2 if len(body.split()) >= 300 else 0
+    useful += 4 if len(faqs or []) >= 3 else 2 if faqs else 0
+    words = len(body.split())
+    if 280 <= words <= 650:
+        useful += 4
+    elif words >= 220:
+        useful += 2
+    elif words > 900:
+        useful += 1  # long pages are not a quality bonus
     useful = min(20.0, useful)
     if useful < 10:
         reasons.append("Insufficient customer usefulness / depth")
 
-    # Uniqueness 15% — batch location pages share structure; only hard-penalize near-clones.
+    # Uniqueness 15% — batch pages/posts share structure; only hard-penalize near-clones.
     unique = 15.0
+    city_hits = _body_mentions_city(body, city) if city else 0
     if existing_bodies and is_too_similar(body, existing_bodies, threshold=0.88):
-        if city_hits >= 3 and len(body.split()) >= 350:
-            unique = 11.0  # still room for 90+ when the rest of the page is strong
-            reasons.append("Overlaps another page — kept (strong local specificity)")
+        long_enough = len(body.split()) >= 220
+        local_ok = (not is_blog) and city_hits >= 2 and long_enough
+        blog_ok = is_blog and long_enough
+        if local_ok or blog_ok:
+            unique = 12.0  # bulk set — still 90+ when specific enough
+            reasons.append("Overlaps another page — kept (distinct enough copy)")
         else:
             unique = 7.0
             reasons.append("Too similar to another location page")
-    elif len(body.split()) < 250:
+    elif len(body.split()) < 180:
         unique = 8.0
 
     # Image relevance 10%
@@ -998,7 +1224,9 @@ def score_page_quality(
         seo += 1.5
     if len(faqs or []) >= 3:
         seo += 1
-    if city and any(t in title_l for t in _location_tokens(city)):
+    if is_blog and focus_keyword and focus_keyword.lower() in title_l:
+        seo += 1
+    elif city and any(t in title_l for t in _location_tokens(city)):
         seo += 1
     seo = min(5.0, seo)
 
@@ -1041,7 +1269,7 @@ def build_template_page_copy(
     pricing = ZEORBIT_FACTS["pricing_range"]
     facts = facts_blurb(index)
     problem = intent.customer_problem
-    title = format_title(intent, city, ind, index)
+    title = title_from_primary_keyword(pretty_keyword, city, ind, intent, index)
     h2s = intent_h2_set(intent, city, ind, "cards")
     faqs = intent_faqs(intent, city, ind, index)
     concept = image_concept(intent, city, ind, index)
@@ -1158,28 +1386,12 @@ def build_template_page_copy(
         f"A business that {problem} usually needs more than a one-paragraph homepage. "
         f"In {place}, people compare options quickly — especially on phones — so your site should explain services, show how to contact you, and answer obvious questions.\n\n"
         f"{angle_paras[angle]}\n\n"
-        f"For {ind}, useful page elements include service menus, service-area clarity, proof you are a real business, and a form or phone number that is easy to tap.\n\n"
         f"## {h2s[1]}\n\n"
         f"{platform_para}"
         f"## {h2s[2]}\n\n"
-        f"Technology should follow the job: WordPress for flexible marketing sites, Shopify for stores, redesign when the current site is losing people, "
-        f"and mobile apps when the workflow needs them. ZeOrbit does not push one tool for every {ind}.\n\n"
-        f"Ask what customers must do on the site. If the answer is “call us about a service,” prioritize clear service pages and CTAs. "
-        f"If the answer is “buy a product,” prioritize Shopify.\n\n"
-        f"Also decide what you will maintain after launch. A simple site you can update beats a complex site that goes stale.\n\n"
-        f"## {h2s[3]}\n\n"
-        f"{facts}\n\n"
-        f"Use “affordable” and “reasonably priced” in the everyday sense: a professional website within a practical budget — not “cheapest in {city}.”\n\n"
-        f"With {ZEORBIT_FACTS['experience']} and {ZEORBIT_FACTS['reviews']}, ZeOrbit can help you scope pages, platforms, and timeline without inventing fake local offices or unverifiable awards.\n\n"
-        f"## {h2s[4]}\n\n"
-        f"Before you hire anyone, check that they explain process, timeline, and what you own after launch. "
-        f"Avoid providers who invent local offices, fake reviews, or guaranteed rankings.\n\n"
-        f"Prefer plain language, mobile-friendly design, and a plan for content you can maintain. "
-        f"Ask how they handle WordPress vs Shopify, redesigns, and whether a mobile app is actually needed for your {ind}.\n\n"
-        f"## {h2s[5]}\n\n"
-        f"If ZeOrbit is a fit for your {ind} in {place}, start with a short conversation about goals, pages, and budget. "
-        f"Not sure where to start? ZeOrbit can help you choose WordPress, Shopify, a redesign, or an app path.\n\n"
-        f"Bring examples of sites you like, a list of services, and any must-have pages. That keeps the project clear and within a practical {pricing} website budget when that range fits your scope.\n\n"
+        f"Technology should follow the job: WordPress for flexible marketing sites, Shopify for stores, redesign when the current site is losing people. "
+        f"ZeOrbit maps that choice for {ind} in {city} before building. "
+        f"Projects typically range from {pricing}.\n\n"
     )
 
     meta = (

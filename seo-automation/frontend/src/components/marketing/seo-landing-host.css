@@ -1,5 +1,10 @@
 /* Hostinger-inspired SEO landing body (header/footer stay ZeOrbit chrome) */
 
+.mkt.has-site-chrome {
+  /* Fixed zo-host-header: email strip (~34px) + main bar (64px) */
+  padding-top: 98px;
+}
+
 .hl {
   --hl-purple: #673de6;
   --hl-purple-dark: #5025d1;

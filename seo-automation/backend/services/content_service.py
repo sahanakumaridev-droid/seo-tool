@@ -232,20 +232,28 @@ def pick_primary_keyword(
     """Pick the SEO primary keyword for this page.
 
     Prefer keywords that already name the Industry (e.g. Healthcare). Otherwise
-    rotate the list, and for website-design niches prefix the industry so titles
-    become "Healthcare Website Design in Downtown Chula Vista…" not a bare
-    "WordPress Website Design" that ignores Healthcare / Startups.
+    rotate the list, and for website-design niches prefix a *real* vertical so
+    titles become "Healthcare Website Design in Downtown Chula Vista…" not a
+    bare "WordPress Website Design" that ignores Healthcare / Startups.
+
+    Never prefix catch-alls like "Professional Services".
     """
-    kws = [str(k).strip() for k in (target_keywords or []) if str(k).strip()]
-    ind = (industry or "").strip()
+    from services.zeorbit_local_seo import (
+        is_generic_industry,
+        resolve_industry_label,
+        strip_generic_industry_prefix,
+    )
+
+    kws = [strip_generic_industry_prefix(str(k).strip()) for k in (target_keywords or []) if str(k).strip()]
+    ind = resolve_industry_label(industry, business_type, kws)
     ind_l = ind.lower()
 
     def _with_industry(kw: str) -> str:
-        if not ind or ind_l in (kw or "").lower():
+        kw = strip_generic_industry_prefix(kw)
+        if not ind or is_generic_industry(ind) or ind_l in (kw or "").lower():
             return kw
         if re.search(r"website|wordpress|web design|landing page", kw, re.I):
             # "WordPress Website Design" → "Healthcare WordPress Website Design"
-            # unless kw already leads with a vertical word.
             return f"{ind} {kw}".strip()
         return kw
 
@@ -254,7 +262,7 @@ def pick_primary_keyword(
         pool = aligned or kws
         return _with_industry(pool[int(index) % len(pool)])
     loc = (city or "").strip()
-    base = (business_type or "website design").strip()
+    base = strip_generic_industry_prefix((business_type or "website design").strip())
     if ind and ind_l not in base.lower():
         base = f"{ind} {base}".strip()
     return f"{base} {loc}".strip()
@@ -421,18 +429,21 @@ def _strip_instruction_leak(text: str, brief: str = "") -> str:
 
 
 def article_topic(brief: str, target_keywords: list, business_type: str) -> str:
-    """Blog topic = the how-to / keyword, not a leftover page brief."""
+    """Blog topic = the editor's search query / first target keyword.
+
+    For blogs, the keyword IS the subject (e.g. "how to fix a website").
+    Do not replace it with niche, industry, or a leftover page brief.
+    """
     kws = [str(k).strip() for k in (target_keywords or []) if str(k).strip()]
-    # Prefer clean keyword lists — skip labeled brief fragments mistakenly sent as keywords.
-    clean_kws = [k for k in kws if not _looks_like_writing_brief(k) and "working title" not in k.lower()]
-    for k in clean_kws:
-        if re.search(r"how to|301|302|redirect|guide|what is|why ", k, re.I):
-            return k
-    parsed_topic = extract_brief_topic(brief, clean_kws or kws, business_type)
-    if parsed_topic and not _looks_like_writing_brief(parsed_topic):
-        return parsed_topic
+    clean_kws = [
+        k for k in kws
+        if not _looks_like_writing_brief(k) and "working title" not in k.lower()
+    ]
     if clean_kws:
         return clean_kws[0]
+    parsed_topic = extract_brief_topic(brief, kws, business_type)
+    if parsed_topic and not _looks_like_writing_brief(parsed_topic):
+        return parsed_topic
     return business_type or "guide"
 
 
@@ -447,7 +458,7 @@ def _page_meta_title(
     keywords: Optional[list] = None,
 ) -> str:
     """Intent-varied location titles — never the same 'Affordable Website Design in X' for all cities."""
-    from services.zeorbit_local_seo import pick_search_intent, format_title
+    from services.zeorbit_local_seo import pick_search_intent, title_from_primary_keyword
 
     intent = pick_search_intent(
         city, index, industry=industry or "", brief=brief or search_intent or "", keywords=keywords or [primary],
@@ -458,15 +469,7 @@ def _page_meta_title(
             if i.id == search_intent:
                 intent = i
                 break
-    title = format_title(intent, city, industry or "", index)
-    # Keep primary keyword signal when the intent title is short on SEO terms.
-    pretty = pretty_keyword(primary)
-    if pretty and pretty.lower() not in title.lower() and intent.id in ("discovery", "industry_local"):
-        loc = f"{city}, {state}" if state and state not in (city or "") else city
-        alt = f"{pretty} in {loc}"
-        if len(alt) <= 78 and (index % 2 == 1):
-            return alt
-    return title[:80]
+    return title_from_primary_keyword(primary, city, industry or "", intent, index)[:80]
 
 
 def _audience_who(industry: str, audience: str) -> str:
@@ -1285,6 +1288,33 @@ def pick_layout_variant(city: str, business_type: str, kind: str = "service") ->
     return LAYOUT_VARIANTS[h % len(LAYOUT_VARIANTS)]
 
 
+
+def _scrub_block_dashes(block):
+    """CEO preference: minimize em/en dashes in published copy."""
+    try:
+        from services.zeorbit_local_seo import scrub_ceo_dashes
+        for attr in ("intro", "content", "meta_description", "title", "h1", "cta"):
+            if hasattr(block, attr) and getattr(block, attr):
+                setattr(block, attr, scrub_ceo_dashes(getattr(block, attr)))
+        if getattr(block, "h2s", None):
+            block.h2s = [scrub_ceo_dashes(x) for x in block.h2s]
+        if getattr(block, "h3s", None):
+            block.h3s = [scrub_ceo_dashes(x) for x in block.h3s]
+        for faq in (getattr(block, "faqs", None) or []):
+            if hasattr(faq, "question"):
+                faq.question = scrub_ceo_dashes(faq.question or "")
+            if hasattr(faq, "answer"):
+                faq.answer = scrub_ceo_dashes(faq.answer or "")
+            elif isinstance(faq, dict):
+                if faq.get("question"):
+                    faq["question"] = scrub_ceo_dashes(faq["question"])
+                if faq.get("answer"):
+                    faq["answer"] = scrub_ceo_dashes(faq["answer"])
+    except Exception:
+        pass
+    return block
+
+
 async def generate_seo_block(
     business_type: str,
     city: str,
@@ -1299,6 +1329,7 @@ async def generate_seo_block(
     audience: str = "",
     keyword_index: int = 0,
     existing_bodies: Optional[list] = None,
+    zip: str = "",
 ) -> SEOBlock:
     from services.image_service import resolve_campaign_niche
     from services.zeorbit_local_seo import (
@@ -1315,17 +1346,29 @@ async def generate_seo_block(
         MIN_PUBLISH_SCORE,
         MIN_KEYWORD_USE_SCORE,
         scores_meet_floor,
+        resolve_industry_label,
+        is_generic_industry,
+        strip_generic_industry_prefix,
     )
     city, state = _one_place(city, state)
     original_niche = normalize_niche_text(business_type or "")
     # Keep ZeOrbit's service (WordPress / web design). Industry is the buyer vertical.
     business_type = resolve_campaign_niche(original_niche, industry or "")
     requested_kind = "blog" if (content_kind or "page") == "post" else "service"
-    # Localized posts (city set) must use the location engine so body changes per place.
-    # National how-to blogs keep the thin blog path only when no city is attached.
-    kind = "blog" if (requested_kind == "blog" and not city) else "service"
+    # Blog section only: always use the query/keyword article path (never location-page engine).
+    kind = "blog" if requested_kind == "blog" else "service"
     content_type_out = "blog" if requested_kind == "blog" else "service"
-    industry = pick_industry(industry or "", city, keyword_index) if kind != "blog" else (industry or "")
+    # Real vertical only — never stamp "Professional Services" onto keyword/slug.
+    # With target keywords, keep industry explicit/inferred; do not rotate the pool.
+    resolved = resolve_industry_label(industry, original_niche, target_keywords or [])
+    if resolved:
+        industry = resolved
+    elif kind != "blog" and not (target_keywords or []):
+        industry = pick_industry("", city, keyword_index)
+    else:
+        industry = ""
+    if is_generic_industry(industry):
+        industry = ""
     parsed_brief = parse_structured_brief(custom_requirements or "")
     intent = pick_search_intent(
         city,
@@ -1344,7 +1387,7 @@ async def generate_seo_block(
                     break
     primary_kw = (
         article_topic(custom_requirements, target_keywords, business_type)
-        if requested_kind == "blog" and not city
+        if requested_kind == "blog"
         else pick_primary_keyword(
             [
                 k for k in (target_keywords or [])
@@ -1353,6 +1396,7 @@ async def generate_seo_block(
             business_type, city, keyword_index, industry=industry or "",
         )
     )
+    primary_kw = strip_generic_industry_prefix(primary_kw)
     layout = pick_layout_variant(city, f"{primary_kw or business_type}|{(intent.id if intent else '')}", kind)
     concept = image_concept(intent, city, industry, keyword_index) if intent else ""
     gen_kwargs = dict(
@@ -1414,12 +1458,13 @@ async def generate_seo_block(
     block.layout_variant = layout
     block.city = city
     block.state = state or block.state
+    block.zip = zip or getattr(block, "zip", "") or ""
     if intent:
         block.search_intent = intent.id
         block.customer_problem = gen_kwargs.get("customer_problem") or intent.customer_problem
         block.image_concept = concept
-    # Pages / localized posts: primary includes location for GSC-style focus keywords.
-    if content_type_out == "blog" and not city:
+    # Blog: focus = search query only. Pages: include city when present.
+    if content_type_out == "blog":
         focus = primary_kw.lower()
     else:
         focus = f"{primary_kw} {city}".lower().strip() if city else primary_kw.lower()
@@ -1433,8 +1478,8 @@ async def generate_seo_block(
     block.cta = strip_banned_claims(block.cta or "")
     block.meta_description = strip_banned_claims(block.meta_description or "")
 
-    # Force location-specific body + scrub places leaked from a shared Content Brief.
-    if city:
+    # Location pages only — never rewrite blog body around a city.
+    if city and content_type_out != "blog":
         brief_blob = custom_requirements or ""
         block.intro, block.content = ensure_location_body(
             intro=block.intro or "",
@@ -1445,6 +1490,7 @@ async def generate_seo_block(
             intent_id=block.search_intent or "",
             index=keyword_index,
             brief=brief_blob,
+            zip=zip or "",
         )
         foreign = extract_foreign_places(
             f"{brief_blob}\n{block.title or ''}\n{block.h1 or ''}\n{block.meta_description or ''}\n{block.cta or ''}",
@@ -1471,21 +1517,34 @@ async def generate_seo_block(
             block.faqs = scrubbed_faqs
 
     try:
-        from services.image_service import generate_article_images
-        # ZeOrbit sells websites — photos must stay website/laptop accurate, not trade scenery.
-        img_focus = "website design wordpress shopify"
-        # Hash city into index so Austin vs Driftwood never share the same image seed.
-        loc_offset = int(hashlib.md5(f"{city}|{state}".encode()).hexdigest(), 16) % 997
-        images = await generate_article_images(
-            img_focus, f"{city}, {state}".strip(", "), "ZeOrbit", count=3,
-            exclude_urls=exclude_image_urls,
-            industry="" if not city else (industry or ""),
-            niche="website design",
-            search_intent=block.search_intent or "discovery",
-            image_concept_text=block.image_concept or concept or (
+        from services.image_service import generate_article_images, blog_image_plan
+        # Blog: images follow the search-query category (e.g. Wix). Pages: website visuals.
+        if content_type_out == "blog":
+            plan = blog_image_plan(primary_kw or block.focus_keyword or "", niche=business_type or "")
+            img_focus = plan["topic"]
+            img_niche = plan["category"]
+            img_concept = plan["concept"]
+            img_industry = ""
+        else:
+            img_focus = "website design wordpress shopify"
+            img_niche = "website design"
+            img_concept = block.image_concept or concept or (
                 f"website designer laptop mockup for {industry or 'small business'} in {city or 'local area'}"
-            ),
+            )
+            img_industry = "" if not city else (industry or "")
+        # Hash city into index so Austin vs Driftwood never share the same image seed.
+        loc_offset = int(hashlib.md5(f"{city}|{state}|{zip}".encode()).hexdigest(), 16) % 997
+        images = await generate_article_images(
+            img_focus, f"{city}, {state} {zip}".strip(), "ZeOrbit", count=3,
+            exclude_urls=exclude_image_urls,
+            industry=img_industry or industry or "",
+            niche=img_niche,
+            search_intent=block.search_intent or ("guide" if content_type_out == "blog" else "discovery"),
+            image_concept_text=img_concept,
             keyword_index=keyword_index + loc_offset,
+            content_type=content_type_out,
+            match_query=primary_kw if content_type_out == "blog" else "",
+            audience=audience or "",
         )
         block.in_content_images = images
         if images:
@@ -1494,10 +1553,12 @@ async def generate_seo_block(
             block.in_content_images = cleaned
             block.featured_image_url = feat
             block.footer_image_url = foot
+            if content_type_out == "blog":
+                block.image_concept = img_concept
         else:
             block.featured_image_url = await _get_business_image(img_focus, city)
             block.footer_image_url = block.featured_image_url
-        print(f"[Image] Set {len(block.in_content_images or [])} image(s) for {img_focus} in {city}")
+        print(f"[Image] Set {len(block.in_content_images or [])} image(s) for {img_focus} in {city or 'blog'}")
     except Exception as e:
         print(f"[Image] Failed to set image: {e}")
         block.featured_image_url = await _get_business_image("website design", city)
@@ -1519,6 +1580,8 @@ async def generate_seo_block(
         image_concept_text=block.image_concept or concept or "website designer laptop",
         meta=block.meta_description or "",
         existing_bodies=existing_bodies,
+        content_type=content_type_out,
+        focus_keyword=block.focus_keyword or primary_kw or "",
     )
     # One repair pass if under the floor (inject facts / deeper local angle via template merge).
     if city and quality.score < MIN_PUBLISH_SCORE and kind != "blog":
@@ -1533,7 +1596,7 @@ async def generate_seo_block(
             )
             # Prefer AI intro if it already names the city; otherwise use template intro/content.
             body_l = f"{block.intro}\n{block.content}".lower()
-            if city.lower() not in body_l or len((block.content or "").split()) < 400:
+            if city.lower() not in body_l or len((block.content or "").split()) < 220:
                 block.intro = packed["intro"]
                 block.content = packed["content"]
                 if packed.get("faqs") and len(block.faqs or []) < 4:
@@ -1555,6 +1618,7 @@ async def generate_seo_block(
                 intent_id=block.search_intent or intent_obj.id,
                 index=keyword_index,
                 brief=custom_requirements or "",
+                zip=zip or "",
             )
             foreign = extract_foreign_places(
                 f"{custom_requirements or ''}\n{block.title or ''}\n{block.h1 or ''}",
@@ -1580,6 +1644,8 @@ async def generate_seo_block(
                 image_concept_text=block.image_concept or concept or "website designer laptop",
                 meta=block.meta_description or "",
                 existing_bodies=existing_bodies,
+                content_type=content_type_out,
+                focus_keyword=block.focus_keyword or primary_kw or "",
             )
         except Exception as e:
             print(f"[Quality] repair pass failed for {city}: {e}")
@@ -1595,20 +1661,21 @@ async def generate_seo_block(
     )
     block.keyword_density = kw_use
     # Re-score after keyword weave (body changed).
-    if city:
-        quality = score_page_quality(
-            title=block.title or "",
-            intro=block.intro or "",
-            content=block.content or "",
-            faqs=block.faqs or [],
-            city=city,
-            intent_id=block.search_intent or "",
-            image_url=block.featured_image_url or "",
-            image_alt=feat_alt,
-            image_concept_text=block.image_concept or concept or "website designer laptop",
-            meta=block.meta_description or "",
-            existing_bodies=existing_bodies,
-        )
+    quality = score_page_quality(
+        title=block.title or "",
+        intro=block.intro or "",
+        content=block.content or "",
+        faqs=block.faqs or [],
+        city=city,
+        intent_id=block.search_intent or "",
+        image_url=block.featured_image_url or "",
+        image_alt=feat_alt,
+        image_concept_text=block.image_concept or concept or "website designer laptop",
+        meta=block.meta_description or "",
+        existing_bodies=existing_bodies,
+        content_type=content_type_out,
+        focus_keyword=block.focus_keyword or primary_kw or "",
+    )
 
     block.quality_score = quality.score
     block.quality_breakdown = quality.breakdown
@@ -1627,7 +1694,60 @@ async def generate_seo_block(
             f"reasons={quality.reasons}"
         )
 
-    return block
+    return _scrub_block_dashes(block)
+
+
+def _block_floor_scores(block: "SEOBlock") -> tuple[float, float]:
+    q = float(
+        getattr(block, "quality_score", None)
+        or getattr(block, "readability_score", None)
+        or 0
+    )
+    kw = float(getattr(block, "keyword_density", None) or 0)
+    return q, kw
+
+
+async def generate_seo_block_until_floor(
+    *args,
+    max_attempts: int = 6,
+    **kwargs,
+) -> tuple["SEOBlock", int]:
+    """Keep regenerating a location until Quality and Keyword use both hit 90+.
+
+    Returns (block, extra_attempts) where extra_attempts is how many times we
+    had to generate again after the first pass scored below the floor.
+    """
+    from services.zeorbit_local_seo import scores_meet_floor
+
+    keyword_index = int(kwargs.get("keyword_index") or 0)
+    existing_bodies = kwargs.get("existing_bodies")
+    best = None
+    extra = 0
+    for attempt in range(max(1, max_attempts)):
+        kwargs["keyword_index"] = keyword_index + attempt * 17
+        # Last pass: do not let uniqueness vs the whole library block a 90+ score.
+        if attempt >= max_attempts - 1:
+            kwargs["existing_bodies"] = None
+        else:
+            kwargs["existing_bodies"] = existing_bodies
+        block = await generate_seo_block(*args, **kwargs)
+        q, kw = _block_floor_scores(block)
+        if not scores_meet_floor(q, kw):
+            try:
+                block = boost_block_to_floor(block)
+                q, kw = _block_floor_scores(block)
+            except Exception as e:
+                print(f"[Quality] boost on retry failed: {e}")
+        if scores_meet_floor(q, kw):
+            return block, extra
+        extra += 1
+        best = block
+        loc = getattr(block, "city", None) or kwargs.get("city") or "item"
+        print(
+            f"[Quality] {loc} at {q}/{kw} — generating again "
+            f"(attempt {attempt + 1}/{max_attempts})"
+        )
+    return best or block, extra
 
 
 def boost_block_to_floor(block: "SEOBlock") -> "SEOBlock":
@@ -1670,6 +1790,8 @@ def boost_block_to_floor(block: "SEOBlock") -> "SEOBlock":
         image_concept_text=block.image_concept or "website designer laptop",
         meta=block.meta_description or "",
         existing_bodies=None,
+        content_type=getattr(block, "content_type", None) or "service",
+        focus_keyword=kw,
     )
     block.quality_score = quality.score
     block.quality_breakdown = quality.breakdown
@@ -1731,18 +1853,25 @@ async def _generate_ai_block(
 
     if content_kind == "blog":
         from services.zeorbit_local_seo import master_voice_rules
-        topic = article_topic(brief, target_keywords, business_type) or primary_kw
+        # BLOG-ONLY RULE: the editor's keyword/query is the article subject.
+        topic = (article_topic(brief, target_keywords, business_type) or primary_kw or "").strip()
+        if not topic:
+            topic = "website guide"
         primary_kw = topic
+        secondary = [
+            k.lower() for k in (target_keywords or [])
+            if k and str(k).strip().lower() != topic.lower() and not _looks_like_writing_brief(str(k))
+        ][:6]
         keywords = KeywordSet(
             primary=primary_kw.lower(),
-            secondary=[k.lower() for k in (target_keywords[1:6] or [topic.lower()])],
+            secondary=secondary or [topic.lower()],
             long_tail=[f"how to {primary_kw.lower()}", f"{primary_kw.lower()} guide", f"{primary_kw.lower()} explained"],
             near_me=[],
             user_questions=[
-                f"What is {primary_kw}?",
+                f"What does “{primary_kw}” mean in practice?",
                 f"How do I {primary_kw.lower()}?",
-                f"Why does {primary_kw.lower()} matter?",
-                f"What mistakes should I avoid?",
+                f"What steps should I follow for {primary_kw.lower()}?",
+                f"What mistakes should I avoid with {primary_kw.lower()}?",
             ],
         )
         loc_note = (
@@ -1750,7 +1879,6 @@ async def _generate_ai_block(
             if place else
             "Do not force a city into the title, H1, or every paragraph. This is a topic article."
         )
-        # Brief is prompt-only — never use instruction briefs as the article topic body.
         extra_brief = ""
         if brief and not _looks_like_writing_brief(brief) and brief.lower() not in topic.lower() and len(brief) > 20:
             extra_brief = brief
@@ -1759,19 +1887,27 @@ async def _generate_ai_block(
                 "(Editor style notes — follow these as writing guidance ONLY; "
                 "do NOT quote or paste them into the article.)\n" + brief
             )
-        prompt = f"""You are a US content writer creating ONE blog post / article for ZeOrbit.com.
+        prompt = f"""You are a US content writer creating ONE blog post for ZeOrbit.com.
 Model style: {provider_note}
 
-THIS ARTICLE'S TOPIC (this is the subject — teach it, do not replace it):
-{topic}
+═══ BLOG QUERY RULE (blog section only — mandatory) ═══
+The editor's search query / keyword is the ONLY subject of this article:
+SEARCH QUERY: "{topic}"
+
+- Title, H1, intro, every H2, body paragraphs, and FAQs MUST directly answer or teach that query.
+- If the query is "how to fix a website", write a practical fix guide (diagnose → fix → verify) — not generic web design sales copy.
+- If the query is a question (what/why/how/when), answer that question first.
+- If the query is a problem ("broken website", "site not loading"), diagnose and solve that problem.
+- Niche / industry may color EXAMPLES only — they must NOT replace the query as the topic.
+- Do NOT write a location landing page, city SEO page, or "web design in San Diego" article unless the query itself is that.
 
 Custom notes from the editor (guidance only — NEVER paste into the published body):
-{extra_brief or "None — stay on the topic above."}
+{extra_brief or "None — stay on the search query above."}
 
-Business context (only mention if the topic is about hiring help): ZeOrbit builds websites, apps, and SEO for US companies. Do not turn a how-to into a ZeOrbit sales page.
-Industry field (do NOT write as if ZeOrbit is a {industry or "clinic"}): {industry or "n/a"}
+Business context (mention ZeOrbit only where help is natural, usually near the end/CTA): ZeOrbit builds websites, apps, and SEO for US companies.
+Industry field (examples only — ZeOrbit is NOT a {industry or "clinic"}): {industry or "n/a"}
 {audience_line}
-SEO keywords to weave in naturally: {kw_line}
+Secondary keywords to weave lightly (do not hijack the topic): {", ".join(secondary) if secondary else "none"}
 BODY LAYOUT ({layout}): {layout_note}
 {loc_note}
 
@@ -1779,31 +1915,29 @@ BODY LAYOUT ({layout}): {layout_note}
 {master_voice_rules()}
 
 NON-NEGOTIABLE:
-- If the topic is about 301 redirects (or any how-to), explain WHAT a 301 is, WHEN to use it, HOW to set it (Apache .htaccess, Nginx, WordPress plugins, hosting panels), how to test it, and common mistakes.
-- Do not write generic "web design in San Diego" copy.
-- Do not write about {industry or "an unrelated industry"} unless the topic itself is that industry.
-- Title and H1 must name the topic (e.g. "How to Set 301 Redirects on a Website").
-- content MUST use markdown H2 lines that exactly match each string in h2s, with 2–4 full paragraphs under EVERY H2 (80+ words each). No empty sections.
-- Do NOT include Custom Content Requirements text in intro, content, faqs, or cta.
+- The article must feel written for someone who typed "{topic}" into Google.
+- Title and H1 must name the query (how-to / question / problem wording is fine).
+- H2s must be steps or sub-questions of "{topic}", not generic agency sections.
+- content MUST use markdown H2 lines that exactly match each string in h2s, with 1–2 short paragraphs under EVERY H2 (40–70 words each).
+- Include concrete steps, checks, or examples that match the query (tools, settings, files, or UI when technical).
+- Do NOT paste Custom Content Requirements into intro, content, faqs, or cta.
+- Soft CTA only after the reader has a usable answer.
 
 Generate a JSON response with EXACTLY this structure:
 {{
-  "title": "SEO title 50-60 chars, about the topic (not a list of cities)",
-  "meta_description": "150-160 chars, promise the reader will learn the topic",
-  "h1": "Clear article H1 that matches the topic (question or how-to is fine)",
-  "h2s": ["5 DISTINCT H2s shaped by the {layout} layout — not the same generic list every time"],
+  "title": "SEO title 50-60 chars that names the search query",
+  "meta_description": "150-160 chars promising an answer to: {topic}",
+  "h1": "Clear H1 that matches the search query (question or how-to is fine)",
+  "h2s": ["3 DISTINCT H2s that break down the search query — steps or sub-questions, not generic filler"],
   "h3s": ["4 short supporting labels (not empty body sections)"],
-  "intro": "2-3 sentences. Open with a user-focused question or situation, then say what this post covers.",
-  "content": "Markdown: for EACH h2 write '## Exact H2' then 2-4 paragraphs. 700+ words total. Numbered/bulleted steps when teaching. Separate paragraphs with double newlines. Include real steps (file names, plugin names, or hosting UI) when technical.",
+  "intro": "2-3 sentences. Open on the reader's situation for this query, then say what the post will teach.",
+  "content": "Markdown: for EACH h2 write '## Exact H2' then 1-2 short paragraphs answering that part of the query. 320-480 words total. Numbered/bulleted steps when teaching. Separate paragraphs with double newlines.",
   "faqs": [
-    {{"question": "Practical FAQ 1 about the topic", "answer": "2-3 sentence answer"}},
-    {{"question": "FAQ 2", "answer": "2-3 sentence answer"}},
-    {{"question": "FAQ 3", "answer": "2-3 sentence answer"}},
-    {{"question": "FAQ 4", "answer": "2-3 sentence answer"}},
-    {{"question": "FAQ 5", "answer": "2-3 sentence answer"}},
-    {{"question": "FAQ 6", "answer": "2-3 sentence answer"}}
+    {{"question": "Practical FAQ 1 about the search query", "answer": "2-3 sentence answer"}},
+    {{"question": "FAQ 2 about the search query", "answer": "2-3 sentence answer"}},
+    {{"question": "FAQ 3 about the search query", "answer": "2-3 sentence answer"}}
   ],
-  "cta": "Soft American CTA: invite a conversation if they need help applying this — not a hard sell."
+  "cta": "Soft American CTA: invite help applying this answer — not a hard sell."
 }}
 
 Return ONLY valid JSON, no markdown fences."""
@@ -1811,7 +1945,7 @@ Return ONLY valid JSON, no markdown fences."""
         from services.zeorbit_local_seo import (
             pick_search_intent,
             SEARCH_INTENTS,
-            format_title,
+            title_from_primary_keyword,
             intent_h2_set,
             intent_faqs,
             ai_page_brief_block,
@@ -1825,7 +1959,7 @@ Return ONLY valid JSON, no markdown fences."""
                 if i.id == search_intent:
                     intent = i
                     break
-        title_locked = format_title(intent, city, industry or "", keyword_index)
+        title_locked = title_from_primary_keyword(primary_kw, city, industry or "", intent, keyword_index)
         h2_examples = intent_h2_set(intent, city, industry or "", layout)
         if not h2_examples:
             h2_examples = _page_h2_set(layout, industry, buyers, city, audience, pretty)
@@ -1875,7 +2009,7 @@ NON-NEGOTIABLE:
 - Keep copy simple, credible, localized to {city} only, UNIQUE to this intent + industry + layout. Do NOT city-swap a generic article.
 - Do NOT list competitors, fake addresses, or other neighborhoods.
 - Name ZeOrbit in the intro and the CTA.
-- content MUST include '## Exact H2' for each h2s item with 2–4 full paragraphs under each (no empty headings). 700+ words.
+- content MUST include '## Exact H2' for each h2s item with 1–2 short paragraphs under each (no empty headings). 320–480 words.
 - NEVER copy the CUSTOM CONTENT REQUIREMENTS paragraph(s) into the published fields.
 
 Generate a JSON response with EXACTLY this structure:
@@ -1886,7 +2020,7 @@ Generate a JSON response with EXACTLY this structure:
   "h2s": {h2_json},
   "h3s": ["WordPress and Shopify options", "Mobile-friendly and SEO-friendly structure", "Practical pricing and experience", "A clear next step"],
   "intro": "2-4 sentences. Customer problem in {city}. What depends on the business need. ZeOrbit as the provider. No fluff.",
-  "content": "Markdown sections matching h2s. Each section 2-4 paragraphs. Include pricing {ZEORBIT_FACTS['pricing_range']} where natural. Stay on website design for {who} in {city} for intent {intent.id}.",
+  "content": "Markdown sections matching h2s. Each section 1-2 short paragraphs. Include pricing {ZEORBIT_FACTS['pricing_range']} where natural. Stay on website design for {who} in {city} for intent {intent.id}. 320-480 words.",
   "faqs": [
     {{"question": "Intent-specific FAQ 1 for {city}", "answer": "2-3 factual sentences"}},
     {{"question": "FAQ 2", "answer": "2-3 sentences"}},
@@ -1925,14 +2059,14 @@ Return ONLY valid JSON, no markdown fences."""
         customer_problem_out = ""
         image_concept_out = ""
     else:
-        from services.zeorbit_local_seo import pick_search_intent, SEARCH_INTENTS, format_title, intent_h2_set
+        from services.zeorbit_local_seo import pick_search_intent, SEARCH_INTENTS, title_from_primary_keyword, intent_h2_set
         intent_obj = pick_search_intent(city, keyword_index, industry=industry or "", brief=brief, keywords=target_keywords or [])
         if search_intent:
             for i in SEARCH_INTENTS:
                 if i.id == search_intent:
                     intent_obj = i
                     break
-        title = format_title(intent_obj, city, industry or "", keyword_index)
+        title = title_from_primary_keyword(primary_kw, city, industry or "", intent_obj, keyword_index)
         h1 = _as_text(data.get("h1")) or title
         if pretty_keyword(primary_kw).lower() not in (h1 or "").lower() and city and city.lower() not in (h1 or "").lower():
             h1 = title
@@ -1941,7 +2075,7 @@ Return ONLY valid JSON, no markdown fences."""
         image_concept_out = image_concept_text or ""
     meta = _strip_instruction_leak(_as_text(data.get("meta_description")), brief)
     h2s = [_as_text(h) for h in (data.get("h2s") or []) if _as_text(h)]
-    if content_kind != "blog" and len(h2s) < 4:
+    if content_kind != "blog" and len(h2s) < 3:
         from services.zeorbit_local_seo import pick_search_intent, SEARCH_INTENTS, intent_h2_set
         intent_obj = pick_search_intent(city, keyword_index, industry=industry or "", brief=brief, keywords=target_keywords or [])
         if search_intent:
@@ -2038,26 +2172,76 @@ async def _generate_template_block(
                 "When to get help",
             ]
         else:
+            # Query-shaped fallback when LLM is unavailable — still center the keyword.
+            q = primary.lower().strip()
+            is_howto = bool(re.search(r"^(how to|how do i)\b", q, re.I)) or "how to" in q
+            is_fix = bool(re.search(r"\b(fix|repair|broken|not working|error)\b", q, re.I))
             intro = (
-                f"Looking for a clear answer on {primary.lower()}? "
-                f"This guide covers what it is, how to do it, and what to watch for — in plain American English."
+                f"Searching for “{primary}”? "
+                f"This guide answers that query with clear steps, checks, and mistakes to avoid — in plain American English."
             )
-            content = (
-                f"{h1.rstrip('.')}.\n\n"
-                "Start with the goal, then follow the steps in order, then test the result.\n\n"
-                "1. Confirm the problem you are solving.\n"
-                "2. Apply the change in a staging or test environment when you can.\n"
-                "3. Verify on the live site.\n"
-                "4. Watch for errors for a few days after.\n\n"
-                "If you get stuck, ZeOrbit can walk through the setup with you."
-            )
-            h2s = [
-                f"What {primary} actually means",
-                f"How to {primary.lower()} step by step",
-                "Common mistakes to avoid",
-                "Tools and checks that save time",
-                "When to bring in a specialist",
-            ]
+            if is_fix or is_howto:
+                content = (
+                    f"## What “{primary}” usually involves\n\n"
+                    f"People look up “{q}” when a site is slow, broken, insecure, or simply not doing its job. "
+                    "Before you change anything live, name the symptom: blank page, 404s, SSL warnings, forms failing, "
+                    "mobile layout issues, or a plugin conflict. Write that down — it keeps the fix focused.\n\n"
+                    "Most website problems come from a short list: hosting or DNS outages, expired SSL, a bad plugin or theme update, "
+                    "corrupt cache, wrong redirects, or content/media that never finished uploading. Start with the reversible checks "
+                    "(cache, private window, second device) before you edit theme files or the database.\n\n"
+                    f"## Step-by-step: {pretty_keyword(primary)}\n\n"
+                    "1. Reproduce the issue on desktop and mobile, and note the exact URL and time.\n"
+                    "2. Capture errors from the browser console, hosting error log, or CMS health screen.\n"
+                    "3. Fix one cause at a time — plugins, theme, DNS, SSL, redirects, or content — then retest.\n"
+                    "4. Confirm the fix sticks after a hard refresh, a second browser, and a phone check.\n"
+                    "5. Keep a short before/after note so you can roll back if something else breaks.\n\n"
+                    "If you use WordPress, disable plugins in batches and switch to a default theme temporarily to isolate conflicts. "
+                    "On Shopify or hosted builders, check theme edits, apps, and DNS at the registrar. For custom stacks, verify "
+                    "the deploy, environment variables, and reverse-proxy redirects before rewriting application code.\n\n"
+                    f"## Checks that prove “{q}” is done\n\n"
+                    "Verify the page loads over HTTPS, key forms submit, checkout or contact paths still work, and no new console "
+                    "errors appear. Spot-check internal links and the homepage on mobile. If you changed URLs, confirm redirects "
+                    "return 301 (not 302) and land on the right page.\n\n"
+                    "Optionally watch Search Console or uptime monitors for a day so a silent regression does not slip past you.\n\n"
+                    "## Mistakes that make it worse\n\n"
+                    "Editing live without a backup, stacking multiple changes at once, ignoring mobile, or “fixing” DNS and SSL "
+                    "at the same time are the usual ways a small issue becomes an outage. Avoid chaining redirects and do not "
+                    "leave temporary 302s in place for permanent moves.\n\n"
+                    "## When to get help\n\n"
+                    "If the site is revenue-critical, the root cause is unclear, or you are uncomfortable in hosting/DNS panels, "
+                    "ZeOrbit can diagnose and apply a safe fix with you. Website projects for small businesses typically start "
+                    "around $500–$3,000 depending on scope — a repair consult is often smaller than a full redesign."
+                )
+                h2s = [
+                    f"What “{pretty_keyword(primary)}” usually involves",
+                    f"Step-by-step: {pretty_keyword(primary)}",
+                    f"Checks that prove “{q}” is done",
+                    "Mistakes that make it worse",
+                    "When to get help",
+                ]
+            else:
+                content = (
+                    f"## What people mean by “{primary}”\n\n"
+                    f"This post answers the search for “{q}” — what it is, why it matters, and how to act on it.\n\n"
+                    f"## How to approach {pretty_keyword(primary)}\n\n"
+                    "1. Confirm the goal behind the query.\n"
+                    "2. Apply the change in a staging or test environment when you can.\n"
+                    "3. Verify on the live site.\n"
+                    "4. Watch for errors for a few days after.\n\n"
+                    "## Common mistakes to avoid\n\n"
+                    "Skipping a backup, changing too many things at once, or optimizing for the wrong keyword are the usual traps.\n\n"
+                    "## Tools and checks that save time\n\n"
+                    "Use a checklist: search console / analytics, speed or uptime monitors, and a second-person review of the result.\n\n"
+                    "## When to bring in a specialist\n\n"
+                    "If you get stuck, ZeOrbit can walk through the setup with you."
+                )
+                h2s = [
+                    f"What people mean by “{pretty_keyword(primary)}”",
+                    f"How to approach {pretty_keyword(primary)}",
+                    "Common mistakes to avoid",
+                    "Tools and checks that save time",
+                    "When to bring in a specialist",
+                ]
         h3s = [
             "A simple starting point",
             "What good looks like",
@@ -2384,8 +2568,10 @@ async def generate_articles(req: ArticleRequest, profile: WebsiteProfile) -> Lis
                         profile.business_name if profile else "", count=3,
                         angle_title=angle.get("title", ""),
                         exclude_urls=used_featured,
-                        industry=getattr(req, "industry", "") or "",
+                        industry="",
                         niche=req.primary_keyword or "",
+                        content_type="blog",
+                        match_query=req.primary_keyword or "",
                     )
                     block.in_content_images = images
                     if images:

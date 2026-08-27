@@ -247,6 +247,18 @@ async def google_site_verification_file(token: str):
     return PlainTextResponse(body, media_type="text/html")
 
 
+_INDEXNOW_KEY = (getattr(settings, "INDEXNOW_KEY", "") or "").strip()
+if _INDEXNOW_KEY:
+    @app.api_route(
+        f"/{_INDEXNOW_KEY}.txt",
+        methods=["GET", "HEAD"],
+        response_class=PlainTextResponse,
+        tags=["Public Pages"],
+    )
+    async def indexnow_key_file():
+        return _INDEXNOW_KEY
+
+
 def _content_kind_of(block) -> str:
     if isinstance(block, dict):
         ct = (block.get("content_type") or "service").lower()
@@ -266,40 +278,74 @@ _SITE_MENU_PATHS = (
     "/portfolio",
     "/contact",
     "/blog",
+    "/areas",
+    "/privacy-policy",
 )
+
+# Slugs that must never be treated as SEO articles / sitemap entries.
+_RESERVED_ARTICLE_SLUGS = {
+    "docs", "redoc", "openapi.json", "health", "metrics", "static",
+    "robots.txt", "sitemap.xml", "page-sitemap.xml", "post-sitemap.xml", "favicon.ico", "api",
+    "blog", "contact", "portfolio", "areas", "privacy-policy",
+    f"{_INDEXNOW_KEY}.txt" if _INDEXNOW_KEY else "indexnow.txt",
+    "website-designing", "mobile-apps", "seo-ppc", "custom-software",
+    "us-only", "revamp-preview",
+}
+
+
+def _slug_from_public_url(url: str) -> str:
+    raw = (url or "").strip()
+    if not raw:
+        return ""
+    try:
+        from urllib.parse import urlparse
+        path = urlparse(raw).path or ""
+    except Exception:
+        path = raw
+    return path.strip("/").split("/")[0].strip().lower()
 
 
 async def _sitemap_urlset(request, session, kind: str | None):
-    from routes.pages import _public_base
+    """Build page/post sitemaps.
+
+    Page sitemap = ZeOrbit marketing menu only.
+    Post sitemap = published blog/post URLs (not bulk location/test pages).
+    """
     from datetime import date
+    from routes.pages import _public_base
+    from services.sitemap_service import editorial_post_urls, urlset_xml
 
     base = _public_base(request).rstrip("/")
     parts = []
     today = date.today().isoformat()
+    seen: set[str] = set()
 
-    # Page sitemap = live marketing menu ONLY.
-    # Do NOT auto-list SEO-tool drafts / location test pages — those duplicate
-    # thin URLs and pollute Google's crawl of zeorbit.com.
+    def _add(loc: str, lastmod: str = today, changefreq: str = "weekly", priority: str = "1.0"):
+        loc = (loc or "").rstrip("/") or base
+        if loc in seen:
+            return
+        seen.add(loc)
+        parts.append(
+            f"<url><loc>{loc}</loc><lastmod>{lastmod}</lastmod>"
+            f"<changefreq>{changefreq}</changefreq><priority>{priority}</priority></url>"
+        )
+
     if kind in (None, "page"):
         for path in _SITE_MENU_PATHS:
             loc = base if path == "/" else f"{base}{path}"
-            parts.append(
-                f"<url><loc>{loc}</loc><lastmod>{today}</lastmod>"
-                f"<changefreq>weekly</changefreq><priority>1.0</priority></url>"
-            )
+            _add(loc, today, "weekly", "1.0")
 
-    # Post sitemap stays empty of tool-generated test blogs.
-    # Real editorial posts live on the marketing site (/blog) and are not
-    # mirrored as SEO-tool PageRecords (that caused duplicate content).
-    if kind in (None, "post"):
-        pass
-
-    xml = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-        + "".join(parts)
-        + "</urlset>"
-    )
+    xml = ""
+    if kind == "post":
+        entries = await editorial_post_urls(session, site_base=base)
+        xml = urlset_xml(entries)
+    else:
+        xml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            + "".join(parts)
+            + "</urlset>"
+        )
     return Response(
         content=xml,
         media_type="application/xml",
@@ -343,11 +389,6 @@ async def post_sitemap_xml(request: Request, session=Depends(get_session)):
 
 
 # ── Public published articles at /{slug} (never /p/ in the address bar) ──
-_RESERVED_ARTICLE_SLUGS = {
-    "docs", "redoc", "openapi.json", "health", "metrics", "static",
-    "robots.txt", "sitemap.xml", "page-sitemap.xml", "post-sitemap.xml", "favicon.ico", "api",
-}
-
 
 async def _render_public_article(slug: str, request: Request, session):
     from sqlalchemy import select

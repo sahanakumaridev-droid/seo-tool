@@ -98,7 +98,9 @@ The AI should dynamically determine:
 
 **Keyword → Intent → Problem → Audience → Industry → Solution → Relevant ZeOrbit Service → CTA**
 
-The resulting article should feel like it was specifically written for that search query and customer—not like a template with different keywords inserted.
+The resulting article should feel like it was specifically written for that search query and customer, not like a template with different keywords inserted.
+
+PUNCTUATION: Do not use em dashes (—) or en dashes (–) in body copy. Prefer commas or short sentences. Simple hyphens only in prices like $500-$3,000.
 
 ### Accuracy and trust rule
 

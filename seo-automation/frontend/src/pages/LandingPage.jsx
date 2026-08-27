@@ -7,7 +7,9 @@ import {
 } from 'lucide-react'
 import MarketingHeader from '../components/marketing/MarketingHeader'
 import MarketingFooter from '../components/marketing/MarketingFooter'
-import '../components/marketing/seo-site-chrome.css'
+import '../components/marketing/zo-header-base.css'
+import '../components/marketing/zo-host-chrome.css'
+import '../components/marketing/zo-chrome-overrides.css'
 import '../components/marketing/seo-landing-host.css'
 
 const TRUST = ['US search focus', '7-day free trial', 'No credit card', 'Cancel anytime', '24/7 email support']

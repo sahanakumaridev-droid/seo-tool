@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronUp, RefreshCw, Save, MapPin, CheckCircle } from 'lucide-react'
-import { generateSingle, savePage } from '../api'
+import { generateSingle, saveEditedBlock } from '../api'
 
 function ScoreRing({ score }) {
   const r = 22
@@ -58,7 +58,7 @@ export default function SEOCard({ block, businessType, index, onRegenerate }) {
   }
 
   const handleSave = async () => {
-    await savePage(businessType, block.city, block.state)
+    await saveEditedBlock(block, { businessType, applyGlobally: true })
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
   }

@@ -169,6 +169,25 @@ export default function IntegrationsPage() {
         </div>
       )}
 
+      <div className="card p-5" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>Reddit presence for ZeOrbit</h3>
+        <p style={{ fontSize: 12.5, color: 'var(--text-3)', margin: 0, lineHeight: 1.55 }}>
+          Reddit threads often rank in Google. Do not spam or use unofficial automation — Reddit bans that.
+          Build mentions by being useful in communities that already talk about websites, WordPress, Shopify, and local business.
+        </p>
+        <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.6 }}>
+          <li>Create a company account that names ZeOrbit, with a short bio, website, and what you actually build (WordPress / Shopify / redesigns).</li>
+          <li>Start in relevant subs: r/webdev, r/WordPress, r/shopify, r/smallbusiness, r/Entrepreneur, and city subs for your target markets. Read rules first; many ban self-promo.</li>
+          <li>Spend 2–4 weeks answering questions with specifics (process, pricing ranges, mobile/SEO pitfalls). Mention ZeOrbit only when it is a natural next step.</li>
+          <li>Publish one genuine case or how-to as a text post when the sub allows it. Link zeorbit.com in comments, not as the entire post.</li>
+          <li>Search Reddit + Google for “website designer [city]”, “WordPress agency”, “Shopify help” and reply to existing threads with a real answer — those URLs are what Google surfaces.</li>
+          <li>Track branded + service queries in Search Console. A useful Reddit thread that names ZeOrbit is more durable than a directory listing.</li>
+        </ol>
+        <a href="https://www.reddit.com/search/?q=website%20design%20small%20business" target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ fontSize: 12.5, width: 'fit-content' }}>
+          Search Reddit discussions <ExternalLink size={12} />
+        </a>
+      </div>
+
       <div className="card p-5" style={{ fontSize: 12.5, color: 'var(--text-3)', lineHeight: 1.6 }}>
         <strong style={{ color: 'var(--text-1)' }}>Credentials stay in backend/.env only.</strong>
         {' '}Never paste passwords or API keys into chat. After updating .env, restart the API and click Refresh.

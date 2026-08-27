@@ -89,15 +89,15 @@ def topic_image_family(text: str) -> str:
     if any(k in t for k in ("financ", "bank", "fintech", "invest", "account")):
         return "finance"
     if any(k in t for k in ("market", "seo", "advertis", "agency")) and not any(
-        k in t for k in ("web", "website", "wordpress", "designer")
+        k in t for k in ("web", "website", "wordpress", "designer", "wix", "shopify")
     ):
         return "marketing"
     # Software/SaaS separate from web-design so large location batches don't collide
     if any(k in t for k in ("software", "saas", "coding", "engineer", "sotware")) and not any(
-        k in t for k in ("web design", "website", "wordpress", "web designer")
+        k in t for k in ("web design", "website", "wordpress", "web designer", "wix", "shopify")
     ):
         return "software"
-    if any(k in t for k in ("web", "website", "wordpress", "designer", "developer")):
+    if any(k in t for k in ("web", "website", "wordpress", "designer", "developer", "wix", "shopify", "squarespace", "webflow")):
         return "web"
     if any(k in t for k in ("clean",)):
         return "cleaning"
@@ -111,6 +111,238 @@ def topic_image_family(text: str) -> str:
     if any(k in t for k in ("photographer", "photography", "photo studio")):
         return "photography"
     return "general"
+
+
+# Blog-only: map the editor's search query to a visual category (platform / topic).
+# Example: "how to fix the wix website" → category "wix" → Wix-themed stock photos.
+_BLOG_PLATFORM_VISUALS = (
+    ("wix", {
+        "category": "wix",
+        "topic": "wix website builder editor",
+        "modifiers": [
+            "wix editor laptop screen",
+            "website builder dashboard",
+            "drag and drop website editor",
+            "small business website on laptop",
+        ],
+        "concept": "Wix website editor open on a laptop",
+        "label": "Wix",
+    }),
+    ("shopify", {
+        "category": "shopify",
+        "topic": "shopify store dashboard laptop",
+        "modifiers": [
+            "shopify admin dashboard",
+            "ecommerce store laptop",
+            "online store checkout",
+            "product page website",
+        ],
+        "concept": "Shopify store dashboard on a laptop",
+        "label": "Shopify",
+    }),
+    ("squarespace", {
+        "category": "squarespace",
+        "topic": "squarespace website builder",
+        "modifiers": [
+            "website template editor",
+            "designer laptop mockup",
+            "portfolio website screen",
+            "website builder dashboard",
+        ],
+        "concept": "Squarespace-style website builder on a laptop",
+        "label": "Squarespace",
+    }),
+    ("webflow", {
+        "category": "webflow",
+        "topic": "webflow designer interface",
+        "modifiers": [
+            "web design tool screen",
+            "ui designer laptop",
+            "website cms dashboard",
+            "responsive website mockup",
+        ],
+        "concept": "Webflow-style design tool on a laptop",
+        "label": "Webflow",
+    }),
+    ("wordpress", {
+        "category": "wordpress",
+        "topic": "wordpress dashboard laptop",
+        "modifiers": [
+            "wordpress admin screen",
+            "wordpress theme editor",
+            "cms dashboard laptop",
+            "blog website on screen",
+        ],
+        "concept": "WordPress dashboard on a laptop",
+        "label": "WordPress",
+    }),
+    (r"\bwp\b", {
+        "category": "wordpress",
+        "topic": "wordpress dashboard laptop",
+        "modifiers": [
+            "wordpress admin screen",
+            "cms dashboard laptop",
+            "blog website on screen",
+            "website editor laptop",
+        ],
+        "concept": "WordPress dashboard on a laptop",
+        "label": "WordPress",
+    }),
+    ("weebly", {
+        "category": "weebly",
+        "topic": "website builder editor laptop",
+        "modifiers": [
+            "website builder dashboard",
+            "drag drop website",
+            "small business website",
+            "laptop website design",
+        ],
+        "concept": "Website builder editor on a laptop",
+        "label": "Weebly",
+    }),
+    ("godaddy", {
+        "category": "godaddy",
+        "topic": "website builder hosting dashboard",
+        "modifiers": [
+            "domain hosting laptop",
+            "website builder screen",
+            "small business website",
+            "web hosting dashboard",
+        ],
+        "concept": "Website builder and hosting dashboard on a laptop",
+        "label": "GoDaddy",
+    }),
+    ("framer", {
+        "category": "framer",
+        "topic": "framer website design tool",
+        "modifiers": [
+            "ui design laptop",
+            "website prototype screen",
+            "designer workspace",
+            "modern website mockup",
+        ],
+        "concept": "Framer-style website design tool on a laptop",
+        "label": "Framer",
+    }),
+    ("magento", {
+        "category": "magento",
+        "topic": "ecommerce admin dashboard",
+        "modifiers": [
+            "online store laptop",
+            "ecommerce dashboard",
+            "product catalog screen",
+            "shopping website",
+        ],
+        "concept": "Ecommerce admin dashboard on a laptop",
+        "label": "Magento",
+    }),
+    ("bigcommerce", {
+        "category": "bigcommerce",
+        "topic": "ecommerce store dashboard",
+        "modifiers": [
+            "online store laptop",
+            "ecommerce admin",
+            "product page website",
+            "shopping cart website",
+        ],
+        "concept": "Ecommerce store dashboard on a laptop",
+        "label": "BigCommerce",
+    }),
+    (r"\b(301|302|redirect|htaccess)\b", {
+        "category": "redirect",
+        "topic": "website url redirect browser",
+        "modifiers": [
+            "browser address bar",
+            "developer laptop code",
+            "server configuration",
+            "http status screen",
+        ],
+        "concept": "Browser showing a website URL redirect",
+        "label": "URL redirects",
+    }),
+    (r"\b(seo|search console|ranking)\b", {
+        "category": "seo",
+        "topic": "seo analytics dashboard laptop",
+        "modifiers": [
+            "search analytics chart",
+            "keyword research screen",
+            "google analytics laptop",
+            "seo dashboard",
+        ],
+        "concept": "SEO analytics dashboard on a laptop",
+        "label": "SEO",
+    }),
+    (r"\b(mobile app|ios app|android app)\b", {
+        "category": "mobile_app",
+        "topic": "mobile app development phone",
+        "modifiers": [
+            "app ui on phone",
+            "developer phone laptop",
+            "mobile app mockup",
+            "smartphone app screen",
+        ],
+        "concept": "Mobile app UI on a phone next to a laptop",
+        "label": "Mobile apps",
+    }),
+)
+
+
+def blog_image_plan(query: str, niche: str = "") -> dict:
+    """Blog-only: pick image category from the search query (e.g. Wix from 'fix wix website').
+
+    Returns topic + Unsplash modifiers so featured photos match what the reader searched.
+    When multiple platforms appear (e.g. 'wordpress vs squarespace'), use the first one
+    mentioned in the query — not the order of the platform list.
+    """
+    blob = f"{query or ''} {niche or ''}".strip().lower()
+    if not blob:
+        return {
+            "category": "website",
+            "topic": "website design laptop",
+            "modifiers": [
+                "web designer office laptop",
+                "website mockup screen",
+                "ui design desk",
+                "laptop website",
+            ],
+            "concept": "Website design on a laptop",
+            "label": "Website",
+            "focus": "website design",
+        }
+    # Prefer earliest match in the query text (left-to-right).
+    best = None  # (start_index, plan)
+    for pattern, plan in _BLOG_PLATFORM_VISUALS:
+        rx = pattern if pattern.startswith(r"\b") or "\\" in pattern else rf"\b{re.escape(pattern)}\b"
+        m = re.search(rx, blob, re.I)
+        if m and (best is None or m.start() < best[0]):
+            best = (m.start(), plan)
+    if best:
+        out = dict(best[1])
+        out["focus"] = best[1]["category"]
+        return out
+    # No named platform — use significant words from the query (drop how/to/a/the/fix).
+    stop = {
+        "how", "to", "a", "an", "the", "my", "your", "for", "and", "or", "of", "in", "on",
+        "fix", "repair", "broken", "guide", "what", "is", "why", "when", "do", "i", "with",
+        "website", "site", "page", "pages",
+    }
+    tokens = [t for t in re.findall(r"[a-z0-9]+", blob) if t not in stop and len(t) > 2]
+    label = " ".join(tokens[:3]).title() if tokens else "Website"
+    topic_bits = tokens[:3] or ["website", "design"]
+    topic = " ".join(topic_bits) + " website laptop"
+    return {
+        "category": tokens[0] if tokens else "website",
+        "topic": topic,
+        "modifiers": [
+            f"{topic_bits[0]} website screen" if topic_bits else "website screen",
+            "designer laptop mockup",
+            "website on laptop",
+            "web design desk",
+        ],
+        "concept": f"{label} website topic on a laptop screen",
+        "label": label,
+        "focus": " ".join(topic_bits) if topic_bits else "website design",
+    }
 
 def _stable_index(seed: str, modulo: int) -> int:
     if modulo <= 0:
@@ -329,6 +561,7 @@ def build_image_metadata(
     is_featured: bool,
     image_concept_text: str = "",
     industry: str = "",
+    photo_alt: str = "",
 ) -> dict:
     """Generate SEO-friendly filename + alt/title/caption/description for an image.
 
@@ -348,7 +581,14 @@ def build_image_metadata(
     city = (loc.split(",")[0] if loc else "").strip()
     biz = business_name.strip()
     filename = f"{_slug(kw_short)}-{_slug(loc) or 'local'}-{idx + 1}.webp"
-    concept = (image_concept_text or "").strip()
+    real_alt = re.sub(r"\s+", " ", (photo_alt or "").strip())
+    if real_alt and not re.search(r"(?i)netflix|facebook|messenger|instagram|tiktok", real_alt):
+        phrase = real_alt[:125]
+        if city and city.lower() not in phrase.lower():
+            phrase = f"{phrase.rstrip('.')} for {city}"
+        concept = phrase
+    else:
+        concept = (image_concept_text or "").strip()
     if concept and not re.search(r"(?i)working title|search intent:", concept):
         # Shorten concept into natural alt text
         alt = re.sub(r"\s+", " ", concept)
@@ -430,7 +670,28 @@ _DEAD_UNSPLASH_IDS = frozenset({
     "photo-1600132806608-235180695415",
     "photo-1587440871875-191322eeaf42",
     "photo-1504384764586-bb4cdc3d78c0",
+    # 3D app logos (Netflix / Facebook / Messenger / Instagram) — never use on web pages
+    "photo-1611162617474-5b21e879e113",
+    "photo-1611162618071-b39a2ec055fb",
+    "photo-1611162616475-46b635cb6868",
+    "photo-1611162617213-7d7a39e9b1d7",
+    "photo-1611162618475-46b635cb6868",
+    "photo-1611944212129-2995ae3b5ca3",
+    "photo-1618761714954-0b8cd0026356",
 })
+
+
+def _is_banned_stock_key(key: str) -> bool:
+    """Block dead IDs and 3D social-app logo photos (Alexander Shatov series)."""
+    k = (key or "").lower()
+    if not k:
+        return True
+    if k in _DEAD_UNSPLASH_IDS:
+        return True
+    # Whole Unsplash 3D-logo series: photo-161116261…
+    if k.startswith("photo-161116261"):
+        return True
+    return False
 
 _WEB_DESIGN_IMAGES = [
     "https://images.unsplash.com/photo-1467232004584-a241de8bcf5d",
@@ -465,9 +726,6 @@ _WEB_DESIGN_IMAGES = [
     "https://images.unsplash.com/photo-1504639725590-34d0984388bd",
     "https://images.unsplash.com/photo-1483058712412-4245e9b90334",
     "https://images.unsplash.com/photo-1496171367470-9ed9a91ea931",
-    "https://images.unsplash.com/photo-1611162617474-5b21e879e113",
-    "https://images.unsplash.com/photo-1611162618071-b39a2ec055fb",
-    "https://images.unsplash.com/photo-1618761714954-0b8cd0026356",
     "https://images.unsplash.com/photo-1555421689-491a97ff2040",
     "https://images.unsplash.com/photo-1516321318423-f06f85e504b3",
     "https://images.unsplash.com/photo-1499951360447-b19be8fe80f5",
@@ -508,8 +766,11 @@ _WEB_DESIGN_IMAGES = [
     "https://images.unsplash.com/photo-1550439062-609e1531270e",
 ]
 
-# Dedupe while preserving order (replacements may repeat known-good IDs)
-_WEB_DESIGN_IMAGES = list(dict.fromkeys(_WEB_DESIGN_IMAGES))
+# Dedupe while preserving order; drop logo / dead IDs.
+_WEB_DESIGN_IMAGES = [
+    u for u in dict.fromkeys(_WEB_DESIGN_IMAGES)
+    if not _is_banned_stock_key(normalize_image_key(u))
+]
 
 _SOFTWARE_IMAGES = [
     "https://images.unsplash.com/photo-1498050108023-c5249f4df085",
@@ -563,6 +824,17 @@ _CURATED_TOPIC_IMAGES = {
     "website designer": list(_WEB_DESIGN_IMAGES),
     "web development": list(_WEB_DESIGN_IMAGES),
     "wordpress": list(_WEB_DESIGN_IMAGES),
+    "wix": list(_WEB_DESIGN_IMAGES),
+    "shopify": list(_WEB_DESIGN_IMAGES),
+    "squarespace": list(_WEB_DESIGN_IMAGES),
+    "webflow": list(_WEB_DESIGN_IMAGES),
+    "weebly": list(_WEB_DESIGN_IMAGES),
+    "godaddy": list(_WEB_DESIGN_IMAGES),
+    "framer": list(_WEB_DESIGN_IMAGES),
+    "redirect": list(_WEB_DESIGN_IMAGES),
+    "seo": list(_WEB_DESIGN_IMAGES),
+    "mobile_app": list(_WEB_DESIGN_IMAGES),
+    "mobile app": list(_WEB_DESIGN_IMAGES),
     "software": list(_SOFTWARE_IMAGES),
     "finance": list(_FINANCE_IMAGES),
     "banking": list(_FINANCE_IMAGES),
@@ -732,6 +1004,11 @@ _TOPIC_MODIFIERS = {
     "web design": ["ui mockup", "designer laptop", "website wireframe", "creative desk"],
     "website": ["ui mockup", "designer laptop", "website wireframe", "creative desk"],
     "web development": ["coding laptop", "developer desk", "html css", "app interface"],
+    "wix": ["wix editor screen", "website builder dashboard", "drag drop website", "laptop website design"],
+    "shopify": ["shopify dashboard", "ecommerce store laptop", "online store screen", "product page website"],
+    "squarespace": ["website template editor", "portfolio website", "designer laptop", "website builder"],
+    "webflow": ["web design tool", "ui designer laptop", "cms dashboard", "website mockup"],
+    "wordpress": ["wordpress dashboard", "cms admin screen", "theme editor", "blog website"],
     "software": ["coding screen", "developer team", "laptop code", "tech workspace"],
     "finance": ["stock charts", "banking desk", "investment meeting", "financial dashboard"],
     "banking": ["bank office", "mobile banking", "financial advisor", "wealth planning"],
@@ -1050,7 +1327,7 @@ def _curated_image_url(
         candidates = []
         for u in pool:
             key = normalize_image_key(u)
-            if not key or key in _DEAD_UNSPLASH_IDS:
+            if not key or _is_banned_stock_key(key):
                 continue
             if key in exclude_keys:
                 continue
@@ -1066,7 +1343,7 @@ def _curated_image_url(
     # For website-design topics, never fall through to photography/education pools.
     fam = topic_image_family(topic)
     if fam in ("web", "software", "general") or any(
-        w in (topic or "").lower() for w in ("website", "web design", "wordpress", "shopify", "laptop")
+        w in (topic or "").lower() for w in ("website", "web design", "wordpress", "shopify", "wix", "squarespace", "webflow", "laptop")
     ):
         topic_pool = list(_WEB_DESIGN_IMAGES)
     url = _pick(topic_pool)
@@ -1090,6 +1367,9 @@ _OFFTOPIC_STOCK_MARKERS = (
     "camera", "dslr", "canon eos", "photo studio", "softbox", "tripod", "photographer",
     "classroom", "students at desk", "lecture hall", "chalkboard", "blackboard",
     "pipe wrench", "plumbing pipe", "restaurant kitchen food", "chef plating",
+    "netflix", "facebook messenger", "messenger logo", "instagram logo",
+    "tiktok logo", "whatsapp", "youtube logo", "social media icon",
+    "app icon 3d", "3d logo",
 )
 
 
@@ -1107,6 +1387,12 @@ def _stock_result_score(result: dict, query: str) -> int:
         query,
     ]).lower()
     q = (query or "").lower()
+    # Never pick consumer-app logos for web-design / local-business pages.
+    if any(m in blob for m in (
+        "netflix", "facebook", "messenger", "instagram", "tiktok", "whatsapp",
+        "snapchat", "youtube logo", "social media icon",
+    )) and not any(x in q for x in ("facebook ads", "instagram marketing", "social media marketing")):
+        return 0
     wants_photo = any(x in q for x in ("photograph", "photographer", "camera"))
     wants_edu = any(x in q for x in ("school", "classroom", "tutor", "university"))
     # Hard reject camera / classroom stock unless the query explicitly asks for it.
@@ -1126,8 +1412,14 @@ def _stock_result_score(result: dict, query: str) -> int:
             "responsive", "browser",
         )):
             return 0
-    # Prefer website-related hits
-    web_bonus = 2 if any(k in blob for k in ("website", "web design", "laptop", "ui", "mockup", "wordpress")) else 0
+    # Prefer website-related hits; for website queries, require a visual match.
+    web_ok = any(k in blob for k in (
+        "website", "web design", "laptop", "computer", "code", "ui", "ux",
+        "mockup", "wordpress", "shopify", "browser", "developer", "designer",
+    ))
+    if any(k in q for k in ("website", "web design", "wordpress", "shopify", "laptop")) and not web_ok:
+        return 0
+    web_bonus = 2 if web_ok else 0
     words = [w for w in re.findall(r"[a-zA-Z]+", (query or "").lower()) if len(w) > 3]
     if not words:
         return 1 + web_bonus
@@ -1153,11 +1445,9 @@ async def _hosted_image_url(
     seed: str,
     exclude: Optional[Iterable[str]] = None,
     location: str = "",
-) -> str:
-    """Return an on-topic hosted image URL unique to this seed/location."""
+) -> Tuple[str, str]:
+    """Return (url, photographer_alt) from Unsplash/Pexels, or curated URL + empty alt."""
     exclude_keys = {normalize_image_key(u) for u in (exclude or []) if u}
-    # Stock libraries almost never tag small US cities; appending them dilutes
-    # relatedness (e.g. "medical website Coronado" → random travel photos).
     search = query
     page = (_stable_index(seed, 20) + 1)
     if settings.UNSPLASH_ACCESS_KEY:
@@ -1180,15 +1470,18 @@ async def _hosted_image_url(
                         url = (r.get("urls") or {}).get("regular") or (r.get("urls") or {}).get("full") or ""
                         if not url or normalize_image_key(url) in exclude_keys:
                             continue
+                        if _is_banned_stock_key(normalize_image_key(url)):
+                            continue
                         score = _stock_result_score(r, search)
                         if score <= 0:
                             continue
-                        scored.append((score, url))
+                        alt = (r.get("alt_description") or r.get("description") or "") or ""
+                        scored.append((score, url, alt))
                     if scored:
                         scored.sort(key=lambda x: (-x[0], x[1]))
-                        # Prefer higher relevance; break ties with seed
-                        top = [u for s, u in scored if s == scored[0][0]]
-                        return top[_stable_index(seed, len(top))]
+                        top = [t for t in scored if t[0] == scored[0][0]]
+                        pick = top[_stable_index(seed, len(top))]
+                        return pick[1], pick[2]
         except Exception as e:
             print(f"[Image] Unsplash search error: {e}")
     if settings.PEXELS_API_KEY:
@@ -1212,25 +1505,25 @@ async def _hosted_image_url(
                         cand = src.get("original") or src.get("large2x") or src.get("large") or ""
                         if not cand or normalize_image_key(cand) in exclude_keys:
                             continue
-                        # Pexels: use alt/photographer as weak relevance signal
+                        if _is_banned_stock_key(normalize_image_key(cand)):
+                            continue
+                        alt = p.get("alt") or ""
                         score = _stock_result_score(
-                            {"alt_description": p.get("alt") or "", "description": ""},
+                            {"alt_description": alt, "description": ""},
                             search,
                         )
-                        if score <= 0 and not any(
-                            w in (p.get("alt") or "").lower()
-                            for w in re.findall(r"[a-zA-Z]{4,}", search.lower())
-                        ):
+                        if score <= 0:
                             continue
-                        scored.append((max(score, 1), cand))
+                        scored.append((score, cand, alt))
                     if scored:
                         scored.sort(key=lambda x: (-x[0], x[1]))
-                        top = [u for s, u in scored if s == scored[0][0]]
-                        return top[_stable_index(seed, len(top))]
+                        top = [t for t in scored if t[0] == scored[0][0]]
+                        pick = top[_stable_index(seed, len(top))]
+                        return pick[1], pick[2]
         except Exception as e:
             print(f"[Image] Pexels search error: {e}")
 
-    return _curated_image_url(query, seed, exclude=exclude_keys)
+    return _curated_image_url(query, seed, exclude=exclude_keys), ""
 
 
 # Default modifiers — topic-specific only (never generic office/meeting).
@@ -1280,11 +1573,17 @@ async def generate_article_images(
     search_intent: str = "",
     image_concept_text: str = "",
     keyword_index: int = 0,
+    content_type: str = "service",
+    match_query: str = "",
+    audience: str = "",
 ) -> List[ImageAsset]:
     """Generate 1 featured + (count-1) in-content images with full SEO metadata.
 
     Photos must match LOCATION + INDUSTRY + SERVICE + PROBLEM + INTENT — never
     tourism/hotel/beach scenery just because a city name appears.
+
+    Blog posts (`content_type=blog`): visuals follow the search query category
+    (e.g. Wix for "how to fix the wix website"), not generic WordPress/Shopify.
 
     `exclude_urls` prevents reusing photos already assigned in the same batch.
     """
@@ -1293,92 +1592,113 @@ async def generate_article_images(
     location_words = {
         w for w in re.findall(r"[a-zA-Z]+", (location or "").lower()) if len(w) > 2
     }
+    is_blog = (content_type or "").lower() in ("blog", "post")
 
-    # Prefer intent-driven stock plan when available (master rule image formula).
-    # Always bias toward website/laptop visuals — ZeOrbit sells sites, not trade services.
-    topic = ""
-    modifiers: List[str] = []
-    fallback_topic = "website design"
-    if search_intent or industry or image_concept_text:
-        try:
-            from services.zeorbit_local_seo import pick_search_intent, stock_query_from_concept, SEARCH_INTENTS
-            intent = None
-            if search_intent:
-                for i in SEARCH_INTENTS:
-                    if i.id == search_intent:
-                        intent = i
-                        break
-            if intent is None:
-                intent = pick_search_intent(location.split(",")[0] if location else "", keyword_index, industry=industry)
-            topic, modifiers = stock_query_from_concept(intent, industry, keyword_index)
-            fallback_topic = "website design"
-        except Exception as e:
-            print(f"[Image] intent plan fallback: {e}")
-    if not topic:
-        topic, modifiers, fallback_topic = _related_stock_plan(
-            "website design", industry, location_words, niche="website design",
+    # ── Blog: images follow the query category (Wix / Shopify / …) ──
+    if is_blog:
+        plan = blog_image_plan(match_query or focus_keyword or niche, niche=niche)
+        topic = plan["topic"]
+        modifiers = list(plan["modifiers"] or [])
+        fallback_topic = plan["category"]
+        if image_concept_text and "working title" not in image_concept_text.lower():
+            concept_for_meta = image_concept_text
+        else:
+            concept_for_meta = plan["concept"]
+        clean_focus = plan.get("focus") or plan["category"] or "website design"
+        print(
+            f"[Image] blog category={plan['category']} label={plan.get('label')} "
+            f"query={(match_query or focus_keyword or '')[:60]!r}"
         )
+    else:
+        clean_focus = "website design"
+        # Location pages sell websites — never search "restaurant kitchen" / trade work.
+        # Query must describe the photo: industry + website on a laptop.
+        ind = (industry or "small business").strip()
+        topic = f"{ind} website on laptop"
+        modifiers = [
+            "website mockup on laptop screen",
+            "small business website on computer",
+            "web designer working on laptop",
+        ]
         fallback_topic = "website design"
-    # Always force website-visual queries for ZeOrbit SEO pages (ignore trade niches).
-    topic = topic if any(w in topic.lower() for w in ("website", "web design", "wordpress", "shopify", "laptop", "mockup")) else "website design laptop mockup"
-    if not modifiers:
-        modifiers = ["web designer office laptop", "wordpress dashboard screen", "shopify store laptop", "mobile website phone"]
-    fallback_topic = "website design"
+        concept_for_meta = f"{ind} business website open on a laptop"
+        print(f"[Image] page query topic={topic!r}")
 
     used: Set[str] = {normalize_image_key(u) for u in (exclude_urls or []) if u}
     # Only website-design curated URLs when we need uniqueness — never photography/classroom pools.
     web_only_pool = list(_WEB_DESIGN_IMAGES)
+    prefer_hosted = bool(settings.UNSPLASH_ACCESS_KEY or settings.PEXELS_API_KEY)
 
     for i in range(count):
         is_featured = i == 0
         modifier = modifiers[i % len(modifiers)]
-        # Vary query strongly per location index so 50 pages do not share one photo.
         query = f"{topic} {modifier}".strip()
         # Location is required in the seed so Austin vs Driftwood never collide.
         seed = (
-            f"{topic}|{location}|website-design|{i}|{angle_title}|"
-            f"{search_intent}|{keyword_index}|{(image_concept_text or '')[:80]}|"
-            f"loc-{(location or '').strip().lower()}"
+            f"{topic}|{location}|{'blog-' + (match_query or focus_keyword or '')[:40] if is_blog else 'website-design'}|{i}|{angle_title}|"
+            f"{search_intent}|{keyword_index}|{(concept_for_meta or '')[:80]}|"
+            f"loc-{(location or '').strip().lower()}|{(audience or '')[:40]}|{(industry or '')[:40]}"
         )
-        # Prefer curated website pool first (reliable on-topic). Hosted APIs are secondary.
-        url = _curated_image_url("website design", seed=seed, exclude=used)
-        key = normalize_image_key(url)
-        if (not url or key in used) and (settings.UNSPLASH_ACCESS_KEY or settings.PEXELS_API_KEY):
-            hosted = await _hosted_image_url(query, seed=seed, exclude=used, location="")
+        url = ""
+        key = ""
+        photo_alt = ""
+        if prefer_hosted:
+            hosted, hosted_alt = await _hosted_image_url(query, seed=seed, exclude=used, location="")
             hkey = normalize_image_key(hosted)
-            if hosted and hkey and hkey not in used:
-                url, key = hosted, hkey
+            if hosted and hkey and hkey not in used and not _is_banned_stock_key(hkey):
+                url, key, photo_alt = hosted, hkey, hosted_alt
+        if not url:
+            url = _curated_image_url(
+                fallback_topic if is_blog else "website design",
+                seed=seed,
+                exclude=used,
+            )
+            key = normalize_image_key(url)
+            photo_alt = ""
+        if (not url or key in used) and (settings.UNSPLASH_ACCESS_KEY or settings.PEXELS_API_KEY):
+            hosted, hosted_alt = await _hosted_image_url(query, seed=seed, exclude=used, location="")
+            hkey = normalize_image_key(hosted)
+            if hosted and hkey and hkey not in used and not _is_banned_stock_key(hkey):
+                url, key, photo_alt = hosted, hkey, hosted_alt
         if key and key in used:
             for attempt in range(16):
                 alt_seed = f"{seed}|retry|{attempt}|{keyword_index}"
-                alt = _curated_image_url("website design", seed=alt_seed, exclude=used)
+                alt = _curated_image_url(
+                    fallback_topic if is_blog else "website design",
+                    seed=alt_seed,
+                    exclude=used,
+                )
                 alt_key = normalize_image_key(alt)
                 if alt_key and alt_key not in used:
                     url, key = alt, alt_key
+                    photo_alt = ""
                     break
                 if settings.UNSPLASH_ACCESS_KEY or settings.PEXELS_API_KEY:
-                    hosted = await _hosted_image_url(
+                    hosted, hosted_alt = await _hosted_image_url(
                         f"{topic} {modifiers[(i + attempt) % len(modifiers)]}",
                         seed=alt_seed,
                         exclude=used,
                         location="",
                     )
                     hkey = normalize_image_key(hosted)
-                    if hosted and hkey and hkey not in used:
-                        url, key = hosted, hkey
+                    if hosted and hkey and hkey not in used and not _is_banned_stock_key(hkey):
+                        url, key, photo_alt = hosted, hkey, hosted_alt
                         break
         # Still colliding — rotate unused website pool first
         if (not url) or (key and key in used):
             picked = False
             for u in web_only_pool:
                 uk = normalize_image_key(u)
-                if uk and uk not in used:
+                if uk and uk not in used and not _is_banned_stock_key(uk):
                     url, key = _with_unsplash_params(u), uk
                     picked = True
                     break
             if not picked:
                 # Prefer unique, but NEVER leave a page with 0 images — reuse with rotation
-                pool = [u for u in web_only_pool if normalize_image_key(u) not in _DEAD_UNSPLASH_IDS] or list(_WEB_DESIGN_IMAGES)
+                pool = [
+                    u for u in web_only_pool
+                    if not _is_banned_stock_key(normalize_image_key(u))
+                ] or list(_WEB_DESIGN_IMAGES)
                 pick = pool[(keyword_index + i) % len(pool)]
                 url = _with_unsplash_params(pick)
                 key = normalize_image_key(url)
@@ -1400,12 +1720,11 @@ async def generate_article_images(
             key = normalize_image_key(url)
             if key:
                 used.add(key)
-        # Clean focus for captions — never pass brief blobs.
-        clean_focus = "website design"
         meta = build_image_metadata(
             clean_focus, location, business_name, len(assets), is_featured=(len(assets) == 0),
-            image_concept_text=image_concept_text if image_concept_text and "working title" not in image_concept_text.lower() else "",
-            industry="",
+            image_concept_text=concept_for_meta if concept_for_meta and "working title" not in (concept_for_meta or "").lower() else "",
+            industry="" if is_blog else "",
+            photo_alt=photo_alt,
         )
         assets.append(ImageAsset(
             url=url,

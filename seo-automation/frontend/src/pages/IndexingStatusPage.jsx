@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { ScanSearch, RefreshCw, ExternalLink, CheckCircle2, AlertTriangle, Clock, XCircle, HelpCircle, Rocket } from 'lucide-react'
-import { getSeoIndexingStatus, getSeoIndexingSetup, pushAllSeoIndexing, refreshSeoIndexing, inspectSeoIndexingUrl } from '../api'
+import { getSeoIndexingStatus, getSeoIndexingSetup, pushAllSeoIndexing, refreshSeoIndexing, inspectSeoIndexingUrl, notifyBingIndexing } from '../api'
 
 const STATUS_META = {
   published:              { label: 'Submitted',     color: 'var(--text-3)',  bg: 'var(--bg-raised)',   icon: Clock },
@@ -34,6 +34,9 @@ export default function IndexingStatusPage() {
   const [mode, setMode] = useState('crawl')
   const [demo, setDemo] = useState(false)
   const [setup, setSetup] = useState(null)
+  const [bing, setBing] = useState(null)
+  const [bingNote, setBingNote] = useState('')
+  const [notifyingBing, setNotifyingBing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [pushing, setPushing] = useState(false)
@@ -56,6 +59,7 @@ export default function IndexingStatusPage() {
       setDemo(!!res.data.demo)
       setMode(res.data.mode || (res.data.demo ? 'demo' : res.data.gsc_configured ? 'gsc' : 'crawl'))
       if (setupRes?.data) setSetup(setupRes.data)
+      setBing(setupRes?.data?.bing || res.data.bing || null)
     } catch (e) {
       setError(e.response?.data?.detail || e.message || 'Could not load indexing status. Is the API running?')
     } finally {
@@ -99,6 +103,8 @@ export default function IndexingStatusPage() {
       )
       const setupRes = await getSeoIndexingSetup().catch(() => null)
       if (setupRes?.data) setSetup(setupRes.data)
+      if (res.data.bing) setBing(res.data.bing)
+      else if (setupRes?.data?.bing) setBing(setupRes.data.bing)
     } catch (e) {
       setPushNote(e.response?.data?.detail || 'Push failed.')
     } finally {
@@ -131,15 +137,37 @@ export default function IndexingStatusPage() {
     <div className="space-y-6 fade-in">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="font-display" style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-1)' }}>Google Search</h1>
+          <h1 className="font-display" style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-1)' }}>Search Indexing</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--text-3)' }}>
-            Get published URLs into Google on <strong>www.zeorbit.com</strong> — sitemap ping, then track Submitted / Crawled / Indexed.
-            Refresh checks 12 URLs at a time so the page does not time out.
+            Get published blogs into <strong>Google</strong>, <strong>Bing</strong>, and Yahoo (Yahoo uses Bing). Safari / iPhone search mostly uses Google + Bing.
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button onClick={handlePushAll} disabled={pushing} className="btn btn-primary flex items-center gap-2">
             <Rocket size={14} /> {pushing ? 'Pushing…' : 'Push all to Google'}
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              setNotifyingBing(true)
+              setBingNote('')
+              try {
+                const res = await notifyBingIndexing()
+                setBingNote(
+                  res.data.ok
+                    ? `IndexNow accepted ${res.data.count} blog URLs for Bing / Yahoo.`
+                    : (res.data.detail || 'IndexNow ping did not succeed.')
+                )
+              } catch (e) {
+                setBingNote(e.response?.data?.detail || 'Bing notify failed.')
+              } finally {
+                setNotifyingBing(false)
+              }
+            }}
+            disabled={notifyingBing}
+            className="btn btn-secondary flex items-center gap-2"
+          >
+            {notifyingBing ? 'Notifying…' : 'Notify Bing / Yahoo'}
           </button>
           <button onClick={handleRefresh} disabled={refreshing}
             className="btn btn-secondary flex items-center gap-2" style={{ opacity: refreshing ? 0.6 : 1 }}>
@@ -173,6 +201,50 @@ export default function IndexingStatusPage() {
         </div>
       )}
 
+      {bingNote && (
+        <div className="alert alert-success">
+          <CheckCircle2 size={15} />
+          <div>{bingNote}</div>
+        </div>
+      )}
+
+      {bing && (
+        <div className="card p-5">
+          <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 6px', color: 'var(--text-1)' }}>
+            Bing, Yahoo & other search — findings
+          </h2>
+          <p style={{ fontSize: 12.5, color: 'var(--text-3)', margin: '0 0 14px' }}>
+            {bing.post_count || 0} blogs in the live post sitemap. {bing.yahoo_note} {bing.safari_note}
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {(bing.steps || []).map(step => (
+              <div key={step.id} style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10,
+                padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)',
+              }}>
+                <span style={{
+                  width: 22, height: 22, borderRadius: 999, flexShrink: 0, marginTop: 1,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  background: step.done ? 'var(--green-soft)' : 'var(--bg-raised)',
+                  color: step.done ? 'var(--green)' : 'var(--text-4)', fontSize: 12, fontWeight: 700,
+                }}>
+                  {step.done ? '✓' : '·'}
+                </span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>{step.label}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2, wordBreak: 'break-all' }}>
+                    {step.href ? (
+                      <a href={step.href} target="_blank" rel="noreferrer" style={{ color: 'var(--brand)' }}>
+                        {step.detail} <ExternalLink size={10} style={{ display: 'inline' }} />
+                      </a>
+                    ) : step.detail}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {setup && (
         <div className="card p-5">
           <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 6px', color: 'var(--text-1)' }}>

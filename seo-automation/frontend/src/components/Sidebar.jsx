@@ -23,7 +23,7 @@ const SEO_NAV = [
 
 const CONTENT_AUTOMATION_NAV = [
   { to: '/articles',    icon: Newspaper,       label: 'Articles' },
-  { to: '/indexing',    icon: ScanSearch,      label: 'Google Indexing' },
+  { to: '/indexing',    icon: ScanSearch,      label: 'Search Indexing' },
   { to: '/social',      icon: Share2,          label: 'Social Media' },
   { to: '/google-ads',  icon: Megaphone,       label: 'Google Ads' },
   { to: '/lead-engine', icon: Rocket,          label: 'Lead Engine' },

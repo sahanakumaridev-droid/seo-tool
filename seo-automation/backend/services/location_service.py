@@ -196,6 +196,13 @@ def _geocode_from_dataset(base_location: str) -> Optional[dict]:
 
 
 async def _geocode_opencage(base_location: str) -> Optional[Tuple[float, float]]:
+    place = await _geocode_opencage_place(base_location)
+    if not place:
+        return None
+    return place["lat"], place["lon"]
+
+
+async def _geocode_opencage_place(base_location: str) -> Optional[dict]:
     if not settings.OPENCAGE_API_KEY:
         return None
     try:
@@ -206,21 +213,41 @@ async def _geocode_opencage(base_location: str) -> Optional[Tuple[float, float]]
             )
             data = resp.json()
             if data.get("results"):
-                geo = data["results"][0]["geometry"]
-                return geo["lat"], geo["lng"]
+                r = data["results"][0]
+                geo = r.get("geometry") or {}
+                comps = r.get("components") or {}
+                city = (
+                    comps.get("city")
+                    or comps.get("town")
+                    or comps.get("village")
+                    or comps.get("county")
+                    or ""
+                )
+                state = (comps.get("state_code") or "").upper()
+                postcode = (comps.get("postcode") or "").split()[0] if comps.get("postcode") else ""
+                return {
+                    "lat": geo.get("lat") or 0.0,
+                    "lon": geo.get("lng") or 0.0,
+                    "city": city,
+                    "state": state,
+                    "zip": re.sub(r"\D", "", postcode)[:5],
+                }
     except Exception:
         pass
     return None
 
 
-def _city_info(name: str, state: str, lat: float, lon: float, kind: str = "city") -> CityInfo:
+def _city_info(name: str, state: str, lat: float, lon: float, kind: str = "city", zip: str = "") -> CityInfo:
     return CityInfo(
         name=name, state=state, country="USA",
-        latitude=lat, longitude=lon, kind=kind,
+        latitude=lat, longitude=lon, kind=kind, zip=zip or "",
     )
 
 
 _STATE_ABBR = re.compile(r"^[A-Za-z]{2}$")
+_ZIP_RE = re.compile(r"^\d{5}(?:-\d{4})?$")
+_STATE_ZIP = re.compile(r"^([A-Za-z]{2})\s+(\d{5})(?:-\d{4})?$")
+_ZIP_IN_TEXT = re.compile(r"\b(\d{5})(?:-\d{4})?\b")
 
 
 def split_location_labels(raw: str) -> List[str]:
@@ -240,9 +267,21 @@ def split_location_labels(raw: str) -> List[str]:
         i = 0
         while i < len(tokens):
             name = tokens[i]
-            if i + 1 < len(tokens) and _STATE_ABBR.fullmatch(tokens[i + 1]):
-                out.append(f"{name}, {tokens[i + 1].upper()}")
+            nxt = tokens[i + 1] if i + 1 < len(tokens) else ""
+            nxt2 = tokens[i + 2] if i + 2 < len(tokens) else ""
+            sz = _STATE_ZIP.fullmatch(nxt) if nxt else None
+            if nxt and _STATE_ABBR.fullmatch(nxt) and nxt2 and _ZIP_RE.fullmatch(nxt2):
+                out.append(f"{name}, {nxt.upper()} {nxt2[:5]}")
+                i += 3
+            elif sz:
+                out.append(f"{name}, {sz.group(1).upper()} {sz.group(2)}")
                 i += 2
+            elif nxt and _STATE_ABBR.fullmatch(nxt):
+                out.append(f"{name}, {nxt.upper()}")
+                i += 2
+            elif _ZIP_RE.fullmatch(name):
+                out.append(name[:5])
+                i += 1
             else:
                 out.append(name)
                 i += 1
@@ -258,16 +297,24 @@ def split_location_labels(raw: str) -> List[str]:
 
 
 def city_from_label(text: str, default_state: str = "") -> Optional[CityInfo]:
-    """Parse a typed or dropdown location like 'Coronado, CA' into CityInfo."""
+    """Parse a typed or dropdown location like 'Coronado, CA' or ZIP '92101' into CityInfo."""
     raw = (text or "").strip()
     if not raw:
         return None
+    zip_code = ""
+    zm = _ZIP_IN_TEXT.search(raw)
+    if zm:
+        zip_code = zm.group(1)
+        raw = _ZIP_IN_TEXT.sub("", raw).strip(" ,")
+    if zip_code and not raw:
+        return _city_info(zip_code, default_state or "", 0.0, 0.0, "zip", zip=zip_code)
     if "," in raw:
         name, rest = [p.strip() for p in raw.split(",", 1)]
         # Only treat the remainder as a state if it is a 2-letter code.
         # Otherwise this was a bulk list stuffed into one field.
-        if _STATE_ABBR.fullmatch(rest):
-            state = rest.upper()
+        rest_state = rest.split()[0] if rest else ""
+        if _STATE_ABBR.fullmatch(rest) or _STATE_ABBR.fullmatch(rest_state):
+            state = (rest if _STATE_ABBR.fullmatch(rest) else rest_state).upper()
         else:
             name = split_location_labels(raw)[0] if split_location_labels(raw) else name
             state = default_state
@@ -278,7 +325,8 @@ def city_from_label(text: str, default_state: str = "") -> Optional[CityInfo]:
         name, state = raw, default_state
     if not name:
         return None
-    return _city_info(name, state or "", 0.0, 0.0, "city")
+    kind = "zip" if zip_code and name == zip_code else "city"
+    return _city_info(name, state or "", 0.0, 0.0, kind, zip=zip_code)
 
 
 def flatten_extra_locations(extra_labels: Optional[List[str]], default_state: str = "") -> List[CityInfo]:
@@ -290,7 +338,7 @@ def flatten_extra_locations(extra_labels: Optional[List[str]], default_state: st
             info = city_from_label(part, default_state=default_state)
             if not info:
                 continue
-            key = (info.name.lower(), (info.state or "").lower())
+            key = (info.name.lower(), (info.state or "").lower(), (info.zip or "").lower())
             if key in seen:
                 continue
             seen.add(key)
@@ -316,23 +364,69 @@ async def resolve_generation_cities(
         if _STATE_ABBR.fullmatch(maybe):
             default_state = maybe.upper()
     extras = flatten_extra_locations(extra_labels, default_state=default_state)
-    num = max(1, min(int(num_cities or 1), 100))
+    num = max(1, min(int(num_cities or 1), 250))
     loc = (base_location or "").strip()
-
-    if extras and len(extras) >= num:
-        return extras[:num]
+    # ZIP in the base field (e.g. "92101" or "San Diego, CA 92101")
+    base_place = city_from_label(loc, default_state=default_state) if loc else None
 
     nearby: List[CityInfo] = []
-    if loc:
-        nearby = await expand_places_from_base(loc, num)
-    elif extras:
-        seed = f"{extras[0].name}, {extras[0].state}".strip(", ")
-        if seed.strip(", "):
-            nearby = await expand_places_from_base(seed, num)
+    try:
+        if loc and not (base_place and base_place.kind == "zip"):
+            nearby = await expand_places_from_base(loc, num)
+        elif extras:
+            seed = f"{extras[0].name}, {extras[0].state}".strip(", ")
+            if seed.strip(", ") and not re.fullmatch(r"\d{5}", extras[0].name or ""):
+                nearby = await expand_places_from_base(seed, num)
+    except LocationNotResolvedError:
+        nearby = []
 
     if extras:
-        return merge_extra_locations(nearby, extra_labels)[:num]
-    return nearby[:num]
+        # Pinned chips are the source of truth — never truncate 90 ZIPs down to the slider.
+        target = min(250, max(num, len(extras)))
+        if len(extras) >= target:
+            result = extras[:target]
+        else:
+            result = merge_extra_locations(nearby, extra_labels)[:target]
+    elif base_place and (base_place.zip or base_place.kind == "zip"):
+        result = [base_place]
+        if nearby:
+            result = merge_extra_locations(nearby, [loc])[:num]
+            if not any((c.zip or "") == base_place.zip for c in result):
+                result = [base_place] + result[: max(0, num - 1)]
+    else:
+        result = nearby[:num]
+
+    enriched: List[CityInfo] = []
+    for info in result:
+        enriched.append(await enrich_zip_place(info))
+    return enriched
+
+
+async def enrich_zip_place(info: CityInfo) -> CityInfo:
+    """Fill city/state from OpenCage when the chip is a ZIP or includes a ZIP."""
+    if not info:
+        return info
+    query = (info.zip or "").strip()
+    if not query and info.kind != "zip":
+        return info
+    if not query:
+        query = (info.name or "").strip()
+    place = await _geocode_opencage_place(query if re.fullmatch(r"\d{5}", query) else f"{info.name}, {info.state} {info.zip}".strip())
+    if not place:
+        return info
+    name = info.name
+    if info.kind == "zip" or (info.zip and (not name or name == info.zip)):
+        name = place.get("city") or info.name
+    return CityInfo(
+        name=name,
+        state=(place.get("state") or info.state or ""),
+        country=info.country or "USA",
+        latitude=place.get("lat") or info.latitude,
+        longitude=place.get("lon") or info.longitude,
+        population=info.population,
+        kind="zip" if info.zip or info.kind == "zip" else info.kind,
+        zip=info.zip or place.get("zip") or "",
+    )
 
 
 _SD_COUNTY_CACHE = None
@@ -624,7 +718,7 @@ async def get_nearby_cities(base_location: str, num_cities: int = 10) -> List[Ci
 
     For a **city** base: returns nearest cities (and a few nearby counties).
     """
-    num_cities = max(1, min(int(num_cities or 10), 100))
+    num_cities = max(1, min(int(num_cities or 10), 250))
 
     # ── 1) State-level query ──────────────────────────────────────
     state_rec = _resolve_as_state(base_location)

@@ -44,7 +44,7 @@ export const registerUser = async ({ name, email, password, role = 'client' }) =
 
 // ── Content ──────────────────────────────────────────────────────
 export const generateBulk = (data) =>
-  api.post('/content/generate', data)
+  api.post('/content/generate', data, { timeout: 600000 })
 
 export const suggestContentBrief = (data) =>
   api.post('/content/suggest-brief', data)
@@ -103,6 +103,13 @@ export const discoverCompetitors = (website, businessType, city) =>
 // ── Pages ────────────────────────────────────────────────────────
 export const savePage = (businessType, city, state = 'CA') =>
   api.post('/pages/save', null, { params: { business_type: businessType, city, state } })
+
+export const saveEditedBlock = (block, { businessType = '', applyGlobally = true } = {}) =>
+  api.post('/pages/save-block', {
+    block,
+    business_type: businessType || block?.business_type || '',
+    apply_globally: applyGlobally,
+  })
 
 export const listPages = (skip = 0, limit = 20) =>
   api.get('/pages/', { params: { skip, limit } })
@@ -210,6 +217,9 @@ export const refreshSeoIndexing = (id) =>
 
 export const inspectSeoIndexingUrl = (data) =>
   api.post('/seo-indexing/inspect', data)
+
+export const notifyBingIndexing = () =>
+  api.post('/seo-indexing/notify-bing', null, { timeout: 60000 })
 
 // ── Leads ────────────────────────────────────────────────────────
 export const getLeads = (params = {}) =>

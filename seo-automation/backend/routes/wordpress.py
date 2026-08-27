@@ -65,6 +65,17 @@ async def _track_and_verify(result: PublishResult, block: SEOBlock, session: Asy
             record.status = "sitemap_added"
             record.sitemap_submitted_at = datetime.now(timezone.utc)
 
+        if is_post:
+            try:
+                from services import indexnow_service
+                if getattr(settings, "INDEXNOW_ENABLED", True) and indexnow_service.is_configured():
+                    indexnow_service.submit_urls([url])
+                extra = (settings.WP_POST_SITEMAP_URL or settings.WP_SITEMAP_URL or "").strip()
+                if extra:
+                    indexnow_service.ping_bing_sitemap(extra)
+            except Exception as e:
+                logger.warning("IndexNow after WordPress publish failed: %s", e)
+
         inspect = search_console_service.inspect_url(url)
         if inspect.get("ok"):
             record.status = inspect["status"]

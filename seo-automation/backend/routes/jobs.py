@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 import asyncio
 from models.schemas import BulkGenerateResponse, GenerateRequest, BulkPublishRequest, CityInfo
 from services.job_service import create_job, get_job, run_bulk_job, cleanup_old_jobs
-from services.content_service import generate_seo_block
+from services.content_service import generate_seo_block, generate_seo_block_until_floor
 from services.wordpress_service import publish_to_wordpress
 from services.location_service import get_nearby_cities, LocationNotResolvedError, resolve_generation_cities
 
@@ -66,10 +66,11 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
         keyword_index = item["i"]
         name = city_info.name if hasattr(city_info, "name") else city_info["name"]
         state = city_info.state if hasattr(city_info, "state") else city_info["state"]
+        zip_code = city_info.zip if hasattr(city_info, "zip") else (city_info.get("zip") if isinstance(city_info, dict) else "")
         async with used_lock:
             exclude = list(used_featured)
             bodies_snapshot = list(existing_bodies)
-        block = await generate_seo_block(
+        block, extra_attempts = await generate_seo_block_until_floor(
             business_type=req.business_type,
             city=name,
             state=state,
@@ -83,7 +84,13 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
             audience=req.audience,
             keyword_index=keyword_index,
             existing_bodies=bodies_snapshot,
+            zip=zip_code or "",
         )
+        if extra_attempts:
+            print(
+                f"[Jobs] {name} scored below 90% — generated again "
+                f"({extra_attempts} extra pass(es))"
+            )
         async with used_lock:
             # Re-check under lock in case another task claimed the same URL first
             if block.featured_image_url:
@@ -93,7 +100,7 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
                 if key in taken:
                     images = await generate_article_images(
                         f"{req.target_keywords[0] if req.target_keywords else req.business_type} {name}",
-                        f"{name}, {state}".strip(", "),
+                        f"{name}, {state} {zip_code}".strip(),
                         "ZeOrbit",
                         count=3,
                         exclude_urls=used_featured,
@@ -102,6 +109,7 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
                         search_intent=getattr(block, "search_intent", "") or "",
                         image_concept_text=getattr(block, "image_concept", "") or "",
                         keyword_index=keyword_index,
+                        audience=req.audience or "",
                     )
                     if images:
                         from services.image_service import assign_canonical_images
@@ -115,15 +123,6 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
                 if block.featured_image_url:
                     used_featured.append(block.featured_image_url)
             existing_bodies.append(f"{block.intro or ''}\n{block.content or ''}")
-        from services.zeorbit_local_seo import MIN_PUBLISH_SCORE, MIN_KEYWORD_USE_SCORE, scores_meet_floor
-        q = float(getattr(block, "quality_score", None) or getattr(block, "readability_score", None) or 0)
-        kw = float(getattr(block, "keyword_density", None) or 0)
-        if not scores_meet_floor(q, kw):
-            raise ValueError(
-                f"Scores below {int(MIN_PUBLISH_SCORE)}% floor "
-                f"(Quality {round(q)}%, Keyword use {round(kw)}% — both need "
-                f"{int(MIN_KEYWORD_USE_SCORE)}%+). Not saved."
-            )
         return block.model_dump()
 
     background_tasks.add_task(
@@ -131,7 +130,7 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
         job_id=job_id,
         items=indexed,
         task_fn=generate_task,
-        concurrency=3,
+        concurrency=4,
         retry_count=2,
     )
 

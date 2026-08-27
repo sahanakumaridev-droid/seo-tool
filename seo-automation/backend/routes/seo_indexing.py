@@ -15,6 +15,8 @@ import asyncio
 
 from db import get_session, PublishedUrlRecord
 from services import crawl_check_service, search_console_service
+from services import indexnow_service
+from services.sitemap_service import editorial_post_urls
 from providers.demo_google import use_demo_fallback, build_demo_index_urls
 from datetime import datetime, timezone
 from urllib.parse import urlparse
@@ -82,6 +84,56 @@ def _to_dict(rec: PublishedUrlRecord, demo: bool = False) -> dict:
         "created_at": rec.created_at.isoformat() if rec.created_at else None,
         "updated_at": rec.updated_at.isoformat() if rec.updated_at else None,
         "demo": demo,
+    }
+
+
+async def _bing_findings(session, base: str) -> dict:
+    """Checklist + counts for Bing/Yahoo (IndexNow + post sitemap)."""
+    from config import settings
+
+    base = (base or LIVE_SITE).rstrip("/")
+    key = (getattr(settings, "INDEXNOW_KEY", "") or "").strip()
+    enabled = bool(getattr(settings, "INDEXNOW_ENABLED", True) and key)
+    key_url = f"{base}/{key}.txt" if key else ""
+    posts = await editorial_post_urls(session, site_base=base)
+    post_sm = f"{base}/post-sitemap.xml"
+    return {
+        "indexnow_enabled": enabled,
+        "indexnow_key_url": key_url,
+        "post_sitemap_url": post_sm,
+        "post_count": len(posts),
+        "bing_webmaster": "https://www.bing.com/webmasters",
+        "yahoo_note": "Yahoo Search uses Bing’s index.",
+        "safari_note": "Safari / iPhone search mostly uses Google + Bing.",
+        "steps": [
+            {
+                "id": "post_sitemap",
+                "label": "Blog sitemap (post-sitemap.xml)",
+                "done": len(posts) > 0,
+                "detail": f"{len(posts)} live blog URLs" if posts else "Publish a blog post to list it here",
+                "href": post_sm,
+            },
+            {
+                "id": "indexnow_key",
+                "label": "IndexNow key file",
+                "done": enabled,
+                "detail": key_url or "Set INDEXNOW_KEY",
+                "href": key_url or None,
+            },
+            {
+                "id": "indexnow_ping",
+                "label": "Notify Bing / Yahoo on publish",
+                "done": enabled,
+                "detail": "IndexNow ping runs when you publish a blog" if enabled else "Enable INDEXNOW_ENABLED",
+            },
+            {
+                "id": "bing_webmaster",
+                "label": "Bing Webmaster Tools (one-time)",
+                "done": False,
+                "detail": "Add the site once and paste post-sitemap.xml — Yahoo uses Bing",
+                "href": "https://www.bing.com/webmasters",
+            },
+        ],
     }
 
 
@@ -155,6 +207,7 @@ async def get_status(session: AsyncSession = Depends(get_session)):
         "demo": False,
         "mode": mode,
         "urls": payload,
+        "bing": await _bing_findings(session, LIVE_SITE),
     }
 
 
@@ -290,8 +343,8 @@ async def refresh_status(id: Optional[int] = None, session: AsyncSession = Depen
 
 
 @router.get("/setup")
-async def setup_checklist():
-    """What is wired for Google Search discovery of /p/ pages."""
+async def setup_checklist(session: AsyncSession = Depends(get_session)):
+    """What is wired for Google Search + Bing/Yahoo discovery."""
     from config import settings
     from routes.pages import _reader_base
     import os
@@ -343,6 +396,7 @@ async def setup_checklist():
             "detail": "Ready to submit sitemap + inspect URLs" if gsc else "Complete steps above, add SA as Owner in GSC",
         },
     ]
+    bing = await _bing_findings(session, base or LIVE_SITE)
     return {
         "ready": gsc,
         "public_base_url": base,
@@ -350,7 +404,23 @@ async def setup_checklist():
         "sitemap_url": f"{base}/sitemap.xml" if base else "",
         "setup_cmd": "python3 scripts/setup_gsc.py",
         "steps": steps,
+        "bing": bing,
     }
+
+
+@router.post("/notify-bing")
+async def notify_bing(session: AsyncSession = Depends(get_session)):
+    """Ping IndexNow with current blog URLs (Bing / Yahoo / partners)."""
+    from routes.pages import _reader_base
+
+    base = (_reader_base() or LIVE_SITE).rstrip("/")
+    posts = await editorial_post_urls(session, site_base=base)
+    urls = [loc for loc, _ in posts]
+    if not urls:
+        return {"ok": False, "detail": "No blog URLs in post sitemap yet.", "count": 0}
+    ping = indexnow_service.submit_urls(urls)
+    indexnow_service.ping_bing_sitemap(f"{base}/post-sitemap.xml")
+    return {"ok": ping.get("ok"), "count": len(urls), "indexnow": ping, "post_sitemap": f"{base}/post-sitemap.xml"}
 
 
 @router.post("/push-all")
@@ -468,6 +538,7 @@ async def push_all_to_google(session: AsyncSession = Depends(get_session)):
         "inspected": inspected,
         "mode": "gsc" if gsc else "crawl",
         "urls": [_to_dict(r) for r in all_rows[:100]],
+        "bing": await _bing_findings(session, base or LIVE_SITE),
         "next": (
             None
             if gsc

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Zap, MapPin, Globe, Eye, X, RefreshCw, Save, CheckCircle, AlertTriangle,
          FileJson, Tag, Plus, Megaphone, Trash2, FileText, Newspaper, Sparkles, Wand2 } from 'lucide-react'
 import { generateBulk, exportJson, generateSingle,
-         savePage, publishToWeb, startBulkGenerateJob, getJob, publishAllToWeb, zeorbitBlogUrl, zeorbitArticleUrl,
+         saveEditedBlock, publishToWeb, startBulkGenerateJob, getJob, publishAllToWeb, zeorbitBlogUrl, zeorbitArticleUrl,
          getNearbyCities, getSanDiegoCounty, searchCities, deletePage, listPages, suggestContentBrief } from '../api'
 import axios from 'axios'
 import LocationMap from '../components/LocationMap'
@@ -18,12 +18,15 @@ const BUSINESS_TYPES = [
   'Finance', 'Accounting',
   'Plumbing', 'HVAC', 'Roofing', 'Landscaping', 'Cleaning', 'Electrical', 'Painting', 'Pest Control', 'Moving',
 ]
-const INDUSTRIES = ['Contractors', 'Healthcare', 'Retail', 'Restaurants',
-  'Professional Services', 'Real Estate', 'Legal', 'Finance', 'Education', 'Other']
+const INDUSTRIES = [
+  'Contractors', 'Healthcare', 'Retail', 'Restaurants',
+  'Real Estate', 'Legal', 'Finance', 'Education', 'Nonprofit',
+  'Technology', 'Home Services', 'Hospitality', 'Other',
+]
 const AUDIENCES = [
   'Small businesses', 'Startups', 'Local retailers', 'Healthcare practices',
   'Restaurants & hospitality', 'Nonprofits', 'Homeowners', 'Enterprise teams',
-  'eCommerce brands', 'Professional services',
+  'eCommerce brands', 'Service businesses',
 ]
 const KW_SUGGESTIONS = ['web design san diego', 'affordable web design', 'small business website',
   'website designer near me', 'wordpress website san diego', 'custom website design',
@@ -55,6 +58,25 @@ function buildKeywordSuggestions({ niche, industry, city, contentKind }) {
     out.push(k)
   }
   return out
+}
+
+/** Suggest an Industry list value from Business niche (editor can still override). */
+function suggestIndustryFromNiche(niche) {
+  const t = (niche || '').toLowerCase()
+  if (!t.trim()) return ''
+  if (/(plumb|hvac|roof|landscap|clean|electric|paint|pest|moving|contractor|remodel)/.test(t)) return 'Contractors'
+  if (/(restaurant|cafe|catering|dining|food)/.test(t)) return 'Restaurants'
+  if (/(health|dental|clinic|medical|doctor)/.test(t)) return 'Healthcare'
+  if (/(real estate|realtor|property)/.test(t)) return 'Real Estate'
+  if (/(legal|law|attorney|lawyer)/.test(t)) return 'Legal'
+  if (/(financ|account|bank|invest|bookkeep)/.test(t)) return 'Finance'
+  if (/(educat|tutor|school|course|university|college)/.test(t)) return 'Education'
+  if (/(nonprofit|non-profit|charity)/.test(t)) return 'Nonprofit'
+  if (/(retail|store|shop|ecommerce|e-commerce)/.test(t)) return 'Retail'
+  if (/(hotel|hospitality|salon|spa|fitness)/.test(t)) return 'Hospitality'
+  if (/(software|saas|tech|app|mobile)/.test(t)) return 'Technology'
+  if (/(home service|handyman)/.test(t)) return 'Home Services'
+  return ''
 }
 
 const SEARCH_INTENT_OPTIONS = [
@@ -329,6 +351,10 @@ function industryFamily(industry) {
     Legal: 'legal',
     Finance: 'finance',
     Education: 'education',
+    Nonprofit: 'other',
+    Technology: 'software',
+    'Home Services': 'contractors',
+    Hospitality: 'restaurant',
     Other: 'other',
   }
   return map[industry] || categoryFamily(industry) || 'other'
@@ -400,7 +426,7 @@ function PreviewModal({ block, businessType, targetKeywords = [], onClose, onReg
   }
 
   const handleSave = async () => {
-    await savePage(businessType, block.city, block.state)
+    await saveEditedBlock(block, { businessType, applyGlobally: true })
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
   }
@@ -669,7 +695,6 @@ export default function ContentPage() {
   const [briefFields, setBriefFields] = useState(() => ({ ...EMPTY_BRIEF }))
   const [briefAiBusy, setBriefAiBusy] = useState('') // '' | 'all' | field key
   const [showAdvancedBrief, setShowAdvancedBrief] = useState(true)
-  const [postLocalize, setPostLocalize] = useState(false)
   const [sdCounty, setSdCounty] = useState(null)
   const [sdPick, setSdPick] = useState('Chula Vista')
   const [sdLayer, setSdLayer] = useState('areas')
@@ -740,10 +765,9 @@ export default function ContentPage() {
     showToast('Session results cleared — ready to regenerate')
   }
 
-  // Location Expansion preview — reflect the real nearby cities for whatever
-  // base_location is currently typed, instead of a hardcoded city list.
+  // Location Expansion preview — nearby cities / counties / streets (Page + Blog)
   useEffect(() => {
-    if (contentKind === 'post' && !postLocalize) {
+    if (contentKind !== 'page' && contentKind !== 'post') {
       setNearbyCities([])
       setNearbyError('')
       return
@@ -764,7 +788,7 @@ export default function ContentPage() {
       }
     }, 500)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [form.base_location, form.num_cities, contentKind, postLocalize])
+  }, [form.base_location, form.num_cities, contentKind])
 
   // Poll an async job until it finishes, then drop the generated pages into
   // the results table (same review/publish flow as sync generation).
@@ -778,27 +802,19 @@ export default function ContentPage() {
         setJobProgress({ completed: data.completed, failed: data.failed, total: data.total, status: data.status })
         const finished = data.status === 'completed' || (data.completed + data.failed) >= data.total
         if (finished) {
-          const MIN_Q = 90
-          const passes = (p) => {
-            const q = Math.round(p.quality_score ?? p.readability_score ?? 0)
-            const k = Math.min(100, Math.round(p.keyword_density || 0))
-            return q >= MIN_Q && k >= MIN_Q
-          }
           const raw = (data.results || []).filter(r => r && !r.error)
-          const ok = raw.filter(passes)
-          const weak = raw.length - ok.length
-          const failN = (data.failed || 0) + weak
-          setPages(ok)
+          const failN = data.failed || 0
+          setPages(raw)
           setLoading(false)
           setAsyncJobId('')
           setJobProgress(null)
-          if (!ok.length) {
-            setError(`All results scored below ${MIN_Q}% (Quality and Keyword use must both be ${MIN_Q}%+) or failed. Nothing kept.`)
-            showToast(`Blocked: nothing hit ${MIN_Q}%+ on all scores`, 'warning')
+          if (!raw.length) {
+            setError('Generation finished with no results. Try again.')
+            showToast('Nothing generated — try again', 'warning')
           } else if (failN > 0) {
-            showToast(`Kept ${ok.length} at ${MIN_Q}%+; ${failN} dropped or failed`, 'warning')
+            showToast(`${raw.length} kept; ${failN} failed and will need another generate`, 'warning')
           } else {
-            showToast(`${ok.length} pages generated at ${MIN_Q}%+ quality`)
+            showToast(`${raw.length} ${contentKind === 'post' ? 'posts' : 'pages'} generated`)
           }
           setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
         } else {
@@ -974,12 +990,13 @@ export default function ContentPage() {
       const niche = (form.business_type || '').trim() || 'Web Design'
       const baseLoc = (form.base_location || '').trim() || 'San Diego, CA'
       const numCities = form.num_cities >= 1 ? form.num_cities : 5
+      const industry = (form.industry || '').trim() || suggestIndustryFromNiche(niche)
 
       setForm((f) => ({
         ...f,
         business_type: niche,
-        industry: '',
-        audience: '',
+        industry,
+        audience: f.audience || '',
         base_location: baseLoc,
         num_cities: numCities,
       }))
@@ -988,7 +1005,7 @@ export default function ContentPage() {
       if (!kws.length) {
         const suggestions = buildKeywordSuggestions({
           niche,
-          industry: '',
+          industry,
           city: baseLoc,
           contentKind: kind,
         })
@@ -1025,11 +1042,7 @@ export default function ContentPage() {
     if (contentKind === 'post') {
       if (!targetKeywords.length) missing.push('At least one Target Keyword')
       if (!(form.business_type || '').trim()) missing.push('Business niche / category')
-      if (postLocalize) {
-        if (!(form.base_location || '').trim()) {
-          missing.push('Base city (localize is on)')
-        }
-      }
+      // Base location / cities / streets are optional for blog
     }
     return missing
   }
@@ -1043,7 +1056,7 @@ export default function ContentPage() {
       showToast('Add keyword, niche, and location', 'warning')
       const scrollId = !contentKind ? 'content-kind-section'
         : !targetKeywords.length ? 'target-keywords-section'
-          : contentKind === 'page' && !(form.business_type || '').trim() ? 'business-niche-section'
+          : !(form.business_type || '').trim() ? 'business-niche-section'
             : 'target-locations-panel'
       document.getElementById(scrollId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
@@ -1054,10 +1067,14 @@ export default function ContentPage() {
     setUseAi(true)
 
     const niche = (form.business_type || '').trim()
-    setExtraLocations([])
-    setExtraLocDraft('')
-    const useLocations = contentKind === 'page' || postLocalize
-    const pageCount = useLocations ? Number(form.num_cities) || 1 : 1
+    const hasBlogLocations = contentKind === 'post' && (
+      !!(form.base_location || '').trim() || extraLocations.length > 0
+    )
+    // Page always uses locations. Blog uses them only when base/chips are set.
+    const useLocations = contentKind === 'page' || hasBlogLocations
+    const pageCount = useLocations
+      ? Math.max(Number(form.num_cities) || 1, extraLocations.length || 0, 1)
+      : 1
     // Auto async for large batches
     const runAsync = useAsync || pageCount >= 20
     setPublishResults({})
@@ -1066,15 +1083,21 @@ export default function ContentPage() {
       const payload = {
         ...form,
         business_type: niche || (contentKind === 'post' ? 'Digital Services' : niche),
-        industry: '',
-        audience: '',
+        industry: (() => {
+          const raw = (form.industry || '').trim()
+          if (!raw || raw.toLowerCase() === 'professional services') {
+            return suggestIndustryFromNiche(niche) || ''
+          }
+          return raw
+        })(),
+        audience: (form.audience || '').trim(),
         num_cities: pageCount,
         base_location: useLocations ? (form.base_location || '') : '',
         target_keywords: targetKeywords.length
           ? [...targetKeywords]
           : ['website design'],
-        // Backend expands cities / localities / streets — no frontend chips
-        extra_locations: [],
+        // Manual chips first; backend fills remaining from base location
+        extra_locations: useLocations ? [...extraLocations] : [],
         content_kind: contentKind,
         custom_requirements: '',
         use_ai: true,
@@ -1089,34 +1112,16 @@ export default function ContentPage() {
       } else {
         const res = await generateBulk(payload)
         const raw = res.data.pages || []
-        const requested = res.data.requested ?? raw.length
-        const droppedApi = res.data.dropped ?? 0
-        const MIN_Q = 90
-        const passes = (p) => {
-          const q = Math.round(p.quality_score ?? p.readability_score ?? 0)
-          const k = Math.min(100, Math.round(p.keyword_density || 0))
-          return q >= MIN_Q && k >= MIN_Q
-        }
-        const ok = raw.filter(passes)
-        const weak = raw.length - ok.length
-        const dropped = droppedApi + weak
-        setPages(ok)
-        if (!ok.length) {
-          setError(
-            res.data.message
-            || `All ${requested} results scored below ${MIN_Q}% (Quality and Keyword use must both be ${MIN_Q}%+). Nothing kept.`
-          )
-          showToast(`Blocked: nothing hit ${MIN_Q}%+ on all scores`, 'warning')
-        } else if (dropped > 0) {
+        setPages(raw)
+        if (!raw.length) {
+          setError('Generation produced no results. Try again.')
+          showToast('Nothing generated — try again', 'warning')
+        } else if (res.data.message) {
           setError('')
-          showToast(
-            res.data.message
-            || `Kept ${ok.length} of ${requested} at ${MIN_Q}%+; dropped ${dropped}`,
-            'warning'
-          )
+          showToast(res.data.message, 'success')
         } else {
           setError('')
-          showToast(`${ok.length} ${contentKind === 'post' ? 'posts' : 'pages'} generated at ${MIN_Q}%+ quality`)
+          showToast(`${raw.length} ${contentKind === 'post' ? 'posts' : 'pages'} generated`)
         }
         setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
       }
@@ -1202,7 +1207,11 @@ export default function ContentPage() {
         {[
           ['1', 'Page or Post', !!contentKind],
           ['2', 'Keywords', targetKeywords.length > 0],
-          ['3', 'Niche + location', !!contentKind && (contentKind === 'post' || (!!(form.business_type || '').trim() && (!!extraLocations.length || !!(form.base_location || '').trim())))],
+          ['3', contentKind === 'post' ? 'Niche (+ location optional)' : 'Niche + location', !!contentKind && (
+            contentKind === 'post'
+              ? !!(form.business_type || '').trim()
+              : (!!(form.business_type || '').trim() && (!!extraLocations.length || !!(form.base_location || '').trim()))
+          )],
           ['4', 'Generate', pages.length > 0],
         ].map(([n, label, on]) => (
           <span key={label} className={`crm-step${on ? ' is-on' : ''}`}><b>{n}</b> {label}</span>
@@ -1213,7 +1222,10 @@ export default function ContentPage() {
         <button
           type="button"
           aria-pressed={contentKind === 'page'}
-          onClick={() => { setContentKind('page'); setPostLocalize(false) }}
+          onClick={() => {
+            setContentKind('page')
+            // keep location chips for pages
+          }}
           className="kind-card text-left"
           data-active={contentKind === 'page' ? 'true' : 'false'}
         >
@@ -1229,7 +1241,13 @@ export default function ContentPage() {
         <button
           type="button"
           aria-pressed={contentKind === 'post'}
-          onClick={() => { setContentKind('post'); updateForm((f) => ({ ...f, num_cities: 1 })) }}
+          onClick={() => {
+            setContentKind('post')
+            // Keep base location + pinned cities/streets/areas (same picker as Page)
+            if (!(form.num_cities >= 1)) {
+              updateForm((f) => ({ ...f, num_cities: 1 }))
+            }
+          }}
           className="kind-card text-left"
           data-active={contentKind === 'post' ? 'true' : 'false'}
         >
@@ -1239,7 +1257,7 @@ export default function ContentPage() {
             <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: 'var(--brand-soft)', color: 'var(--brand-dark)' }}>Required pick</span>
           </div>
           <p className="text-xs" style={{ color: 'var(--text-3)' }}>
-            How-to and educational articles. Goes to <strong>post-sitemap.xml</strong>.
+            How-to articles from your keyword. Optional: base location, cities, streets, counties. Goes to <strong>post-sitemap.xml</strong>.
           </p>
         </button>
       </div>
@@ -1358,18 +1376,18 @@ export default function ContentPage() {
             <Tag size={15} style={{ color: 'var(--brand)' }} />
             <span className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>Target Keywords</span>
             <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: 'var(--amber-soft)', color: 'var(--amber)' }}>Required</span>
-            <span className="text-xs" style={{ color: 'var(--text-4)' }}>— topic for the blog; AI writes the rest</span>
+            <span className="text-xs" style={{ color: 'var(--text-4)' }}>— body is written from this query only</span>
           </div>
           {!targetKeywords.length && (
             <div className="mb-3 text-xs font-semibold rounded-lg px-3 py-2.5" style={{ color: '#92400e', background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(180, 83, 9, 0.35)' }}>
-              Add at least one keyword (e.g. 301 redirects, Shopify vs WordPress).
+              Add the search query (e.g. how to fix a website). Title, H1, and body follow that query.
             </div>
           )}
           <div className="flex gap-2 mb-3">
             <input type="text" value={kwInput}
               onChange={e => setKwInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword() } }}
-              placeholder="e.g. 301 redirects — press Enter to add"
+              placeholder="e.g. how to fix a website — press Enter to add"
               className="flex-1 rounded-lg px-4 py-2.5 text-sm"
               style={{ background: '#fff', border: `1px solid ${targetKeywords.length ? 'var(--border-bright)' : 'var(--amber)'}`, color: 'var(--text-1)' }} />
             <button type="button" onClick={() => addKeyword()}
@@ -1420,45 +1438,61 @@ export default function ContentPage() {
           </h3>
           <p className="text-[11px] mb-4" style={{ color: 'var(--text-4)' }}>
             {contentKind === 'post'
-              ? 'Type keyword + niche. Backend writes the brief and article.'
-              : 'Type keyword + niche + base city. Backend expands places and writes each page.'}
+              ? 'Keyword + niche + industry required. Base location, cities, streets, and counties are optional.'
+              : 'Type keyword + niche + industry + base location. Pick cities, streets, and counties — then generate.'}
           </p>
           <form onSubmit={handleGenerate} className="space-y-4">
-            <div id="business-niche-section">
+            <div id="business-niche-section" className="space-y-3">
               <SearchSelect
                 label="Business niche / category"
-                required={contentKind === 'page'}
+                required
                 value={form.business_type}
-                onChange={(v) => updateForm((f) => ({ ...f, business_type: v }))}
+                onChange={(v) => updateForm((f) => {
+                  const next = { ...f, business_type: v }
+                  // Soft-fill Industry from niche when empty or still the old catch-all
+                  const curInd = (f.industry || '').trim()
+                  if (!curInd || curInd.toLowerCase() === 'professional services') {
+                    const suggested = suggestIndustryFromNiche(v)
+                    if (suggested) next.industry = suggested
+                  }
+                  return next
+                })}
                 options={BUSINESS_TYPES}
                 placeholder="e.g. Web Design, WordPress, Mobile Apps…"
               />
+              <SearchSelect
+                label="Industry"
+                required={false}
+                value={form.industry}
+                onChange={(v) => updateForm((f) => ({
+                  ...f,
+                  industry: (v || '').trim().toLowerCase() === 'professional services' ? '' : v,
+                }))}
+                options={INDUSTRIES}
+                placeholder="Pick from list or type — e.g. Contractors, Healthcare…"
+              />
+              <p className="text-[10px] -mt-1" style={{ color: 'var(--text-4)' }}>
+                Who the content is for (buyer vertical). Used in titles/examples — not forced into the slug as “Professional Services”.
+              </p>
             </div>
-            {contentKind === 'post' && (
-              <label className="flex items-start gap-2 text-xs" style={{ color: 'var(--text-2)' }}>
-                <input type="checkbox" checked={postLocalize} onChange={(e) => {
-                  const on = e.target.checked
-                  setPostLocalize(on)
-                  if (!on) {
-                    updateForm((f) => ({ ...f, num_cities: 1 }))
-                    setExtraLocations([])
-                  }
-                }} className="mt-0.5" />
-                <span>Localize this post to a city (optional)</span>
-              </label>
-            )}
-            {(contentKind === 'page' || postLocalize) && (
             <div>
               <SearchSelect
-                label="Base city"
-                required={contentKind === 'page' || postLocalize}
+                label="Base location"
+                required={contentKind === 'page'}
                 value={form.base_location}
                 onChange={(v) => updateForm((f) => ({ ...f, base_location: v }))}
                 options={baseCityOptions}
                 remoteSearch={fetchCityOptions}
                 maxResults={50}
-                placeholder="Type any US city…"
+                placeholder={contentKind === 'post'
+                  ? 'Optional — e.g. Chula Vista, CA'
+                  : 'City, ZIP, county, or area — e.g. Chula Vista, CA or 91910'}
               />
+              <p className="text-[10px] mt-1" style={{ color: 'var(--text-4)' }}>
+                {contentKind === 'post'
+                  ? 'Optional for blog. Leave blank for a national topic post, or set a base to expand cities / streets / counties.'
+                  : 'Starting point for expansion: cities, ZIP codes, streets, and counties nearby.'}
+              </p>
               {nearbyError && (
                 <div className="mt-1.5 text-[10px]" style={{ color: 'var(--red)' }}>{nearbyError}</div>
               )}
@@ -1475,14 +1509,13 @@ export default function ContentPage() {
                 <input
                   type="range"
                   min="1"
-                  max="50"
-                  value={form.num_cities}
+                  max="250"
+                  value={Math.min(250, Math.max(1, form.num_cities))}
                   onChange={(e) => updateForm((f) => ({ ...f, num_cities: Number(e.target.value) }))}
                   className="w-full accent-indigo-500"
                 />
               </div>
             </div>
-            )}
             {error && (
               <div
                 className="rounded-xl p-3 flex gap-2"
@@ -1510,6 +1543,9 @@ export default function ContentPage() {
                   <div style={{ marginTop: 34, fontSize: 12.5, fontWeight: 600, color: 'var(--text-2)' }}>
                     Generating… {done} / {total}
                   </div>
+                  <p className="text-[11px] text-center px-3" style={{ color: 'var(--text-3)' }}>
+                    If a location scores below 90%, it is generated again immediately.
+                  </p>
                 </div>
               )
             })()}
@@ -1518,38 +1554,158 @@ export default function ContentPage() {
               type="submit"
               disabled={
                 loading || !!asyncJobId
-                || (contentKind === 'page' && (!(form.business_type || '').trim() || !targetKeywords.length || !(form.base_location || '').trim()))
-                || (contentKind === 'post' && (!(form.business_type || '').trim() || !targetKeywords.length))
+                || !(form.business_type || '').trim()
+                || !targetKeywords.length
+                || (contentKind === 'page' && !(form.base_location || '').trim())
               }
               className="btn-primary w-full py-2.5 rounded-lg text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
             >
               {loading || asyncJobId
                 ? <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.2)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/></svg>Generating…</>
-                : <><Zap size={14} />{contentKind === 'post' && !postLocalize ? 'Generate post' : `Generate ${form.num_cities || 1} ${(contentKind === 'post' ? 'posts' : 'pages')}`}</>}
+                : <><Zap size={14} />{
+                  contentKind === 'post'
+                    ? ((form.base_location || '').trim() || extraLocations.length
+                      ? `Generate ${form.num_cities || 1} posts`
+                      : 'Generate post')
+                    : `Generate ${form.num_cities || 1} pages`
+                }</>}
             </button>
             <p className="text-[10px] text-center" style={{ color: 'var(--text-3)' }}>
-              Backend fills intent, problem, pricing, FAQs, and tone from the master instruction. Only 90%+ quality is kept.
+              Backend fills intent, problem, pricing, FAQs, and tone. Locations below 90% are generated again right away until they pass — then all results are shown.
             </p>
           </form>
         </div>
 
-        {(contentKind === 'page' || postLocalize) ? (
-        <div className="card p-5 lg:col-span-2">
-          <h4 className="text-sm font-semibold mb-1 flex items-center gap-2" style={{ color: 'var(--text-1)' }}>
-            <Globe size={14} style={{ color: 'var(--brand)' }} />
-            Locations (backend auto-expand)
+        <div id="target-locations-panel" className="card p-5 lg:col-span-2">
+          <h4 className="text-sm font-semibold mb-1 flex items-center justify-between gap-2" style={{ color: 'var(--text-1)' }}>
+            <span className="inline-flex items-center gap-2">
+              <Globe size={14} style={{ color: 'var(--brand)' }} />
+              Locations — cities, streets &amp; counties
+            </span>
+            {extraLocations.length > 0 && (
+              <span className="inline-flex gap-2">
+                <button type="button" className="text-[11px]" style={{ color: 'var(--brand)' }}
+                  onClick={() => navigator.clipboard.writeText(extraLocations.join(', '))}>Copy</button>
+                <button type="button" className="text-[11px]" style={{ color: 'var(--red)' }}
+                  onClick={() => setExtraLocations([])}>Clear</button>
+              </span>
+            )}
           </h4>
           <p className="text-[12px] mb-3 leading-relaxed" style={{ color: 'var(--text-4)' }}>
-            From your base city, the backend picks nearby <strong>cities</strong>, <strong>localities</strong>, and <strong>streets</strong> (when catalog data exists). No manual chip picking.
+            {contentKind === 'post'
+              ? <>Locations are <strong>optional</strong> for blog. Set a base and pin <strong>cities</strong>, <strong>streets</strong>, or <strong>counties</strong> only if you want place-tied posts. Otherwise leave blank — body still follows your keyword query.</>
+              : <>Set a <strong>base location</strong>, then pin <strong>cities</strong>, <strong>streets</strong>, and <strong>counties</strong> (plus local areas). Pinned chips generate first; remaining slots auto-fill from the base.</>}
           </p>
-          {!form.base_location.trim() && (
-            <p className="text-xs" style={{ color: 'var(--amber)' }}>Set a base city on the left to preview expansion.</p>
+          <div className="flex flex-col gap-2 mb-3">
+            <div className="flex flex-col sm:flex-row gap-1.5">
+              <select
+                value={sdPick}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setSdPick(v)
+                  setSdFilter('')
+                  updateForm((f) => ({
+                    ...f,
+                    base_location: v === 'Unincorporated' || v === 'All cities'
+                      ? (f.base_location || 'San Diego, CA')
+                      : `${v}, CA`,
+                  }))
+                }}
+                className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-1)' }}
+              >
+                <option value="All cities">All San Diego County cities</option>
+                {sdCityNames.map((n) => <option key={n} value={n}>{n}</option>)}
+                <option value="Unincorporated">Unincorporated county</option>
+              </select>
+              <div className="crm-seg" role="tablist" aria-label="Cities, local areas, or streets">
+                <button type="button" aria-pressed={sdLayer === 'cities'} onClick={() => { setSdLayer('cities'); setSdFilter('') }}>Cities</button>
+                <button type="button" aria-pressed={sdLayer === 'areas'} onClick={() => { setSdLayer('areas'); setSdFilter('') }}>Local areas</button>
+                <button type="button" aria-pressed={sdLayer === 'streets'} onClick={() => { setSdLayer('streets'); setSdFilter('') }}>Streets</button>
+              </div>
+            </div>
+            <div className="flex gap-1.5">
+              <input
+                type="search"
+                value={sdFilter}
+                onChange={(e) => setSdFilter(e.target.value)}
+                placeholder={
+                  sdLayer === 'streets'
+                    ? 'Search any street…'
+                    : sdLayer === 'cities'
+                      ? 'Search any city…'
+                      : 'Search any community / locality…'
+                }
+                className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-1)' }}
+              />
+              <button
+                type="button"
+                disabled={!sdItems.length}
+                onClick={() => addSdItems(sdItems)}
+                className="px-3 py-2 rounded-lg text-xs font-semibold text-white flex-shrink-0 disabled:opacity-50"
+                style={{ background: 'var(--brand, #4f46e5)' }}
+              >
+                Add all {sdItems.length}
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto">
+              {sdItems.slice(0, 80).map((name, i) => (
+                <button
+                  key={`${sdLayer}-${name}-${i}`}
+                  type="button"
+                  onClick={() => addExtraLocation(name)}
+                  className="text-[11px] px-2 py-0.5 rounded font-medium"
+                  style={{
+                    background: extraLocations.some((x) => locKey(x) === locKey(name)) ? '#ecfdf5' : '#fff',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-2)',
+                  }}
+                >
+                  {name}
+                </button>
+              ))}
+              {sdItems.length > 80 && (
+                <span className="text-[11px]" style={{ color: 'var(--text-4)' }}>+{sdItems.length - 80} more</span>
+              )}
+            </div>
+            <div className="flex gap-1.5">
+              <input type="text" value={extraLocDraft}
+                onChange={e => setExtraLocDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addExtraLocation() } }}
+                placeholder="Or type / paste City, State, ZIP (e.g. 91910) and press Add"
+                className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-1)' }} />
+              <button type="button" onClick={() => addExtraLocation()}
+                className="px-3 py-2 rounded-lg text-xs font-semibold text-white flex-shrink-0"
+                style={{ background: 'var(--brand, #4f46e5)' }}>
+                Add
+              </button>
+            </div>
+          </div>
+          {extraLocations.length > 0 && (
+            <div className="mb-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-3)' }}>
+                Pinned for generate ({extraLocations.length})
+              </p>
+              <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+                {extraLocations.map(loc => (
+                  <span key={`extra-${loc}`}
+                    className="text-[11px] px-2 py-0.5 rounded font-semibold inline-flex items-center gap-1"
+                    style={{ background: '#ecfdf5', border: '1px solid #059669', color: '#065f46' }}>
+                    {loc}
+                    <button type="button" onClick={() => removeExtraLocation(loc)} aria-label={`Remove ${loc}`}
+                      className="leading-none opacity-70 hover:opacity-100">×</button>
+                  </span>
+                ))}
+              </div>
+            </div>
           )}
-          {nearbyError && (
-            <p className="text-xs mb-2" style={{ color: 'var(--red)' }}>{nearbyError}</p>
-          )}
-          <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto">
-            {nearbyCities.slice(0, 60).map((c) => {
+          <p className="text-[10px] mb-2" style={{ color: 'var(--text-3)' }}>
+            Auto-fill preview (cities / counties / streets from base — fills remaining slots up to {form.num_cities || 1}):
+          </p>
+          <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+            {nearbyCities.slice(0, 40).map((c) => {
               const kind = c.kind || 'city'
               const label = `${c.name}${c.state ? `, ${c.state}` : ''}`
               const style = kind === 'area'
@@ -1557,46 +1713,29 @@ export default function ContentPage() {
                 : kind === 'street'
                   ? { background: '#fff7ed', border: '1px solid #ea580c', color: '#9a3412' }
                   : kind === 'county'
-                    ? { background: '#eef2ff', border: '1px solid #6366f1', color: '#312e81' }
-                    : { background: '#f8fafc', border: '1px solid #64748b', color: '#0f172a' }
+                    ? { background: '#eff6ff', border: '1px solid #2563eb', color: '#1e40af' }
+                  : { background: '#f8fafc', border: '1px solid #64748b', color: '#0f172a' }
               return (
-                <span
-                  key={`${c.name}-${c.state}-${kind}`}
+                <button
+                  key={`near-${c.name}-${c.state}-${kind}`}
+                  type="button"
+                  onClick={() => addExtraLocation(label)}
                   className="text-[11px] px-2 py-0.5 rounded font-semibold"
                   style={style}
+                  title="Click to pin"
                 >
                   {kind !== 'city' && (
-                    <span className="uppercase text-[9px] mr-1" style={{ opacity: 0.85, fontWeight: 800 }}>
-                      {kind}
-                    </span>
+                    <span className="uppercase text-[9px] mr-1" style={{ opacity: 0.85, fontWeight: 800 }}>{kind}</span>
                   )}
                   {label}
-                </span>
+                </button>
               )
             })}
-            {nearbyCities.length > 60 && (
-              <span className="text-[11px] px-2 py-0.5 rounded font-semibold"
-                style={{ background: '#eef2ff', border: '1px solid #6366f1', color: '#3730a3' }}>
-                +{nearbyCities.length - 60} more at generate
-              </span>
-            )}
             {!nearbyCities.length && !nearbyError && form.base_location.trim() && (
-              <span className="text-xs" style={{ color: 'var(--text-3)' }}>Looking up locations…</span>
+              <span className="text-xs" style={{ color: 'var(--text-3)' }}>Looking up nearby places…</span>
             )}
           </div>
-          <p className="text-[10px] mt-3" style={{ color: 'var(--text-3)' }}>
-            Generate creates up to <strong>{form.num_cities || 1}</strong> location pages. Intent, niche adaptation, and copy stay in the backend agent.
-          </p>
         </div>
-        ) : (
-        <div className="card p-5 lg:col-span-2">
-          <h4 className="text-sm font-semibold mb-2" style={{ color: 'var(--text-1)' }}>Topic article</h4>
-          <p className="text-sm leading-relaxed" style={{ color: 'var(--text-3)' }}>
-            One how-to / educational post from your keyword + niche. Backend fills the brief from the master instruction.
-            Turn on “Localize” only if you want city examples.
-          </p>
-        </div>
-        )}
       </div>
       )}
 
@@ -1610,9 +1749,6 @@ export default function ContentPage() {
             <div>
               <p className="font-semibold text-sm" style={{ color: '#0f172a' }}>
                 {pages.length} {pages[0]?.content_type === 'blog' || contentKind === 'post' ? 'blog posts' : 'pages'} generated
-                {form.num_cities > pages.length && contentKind === 'page' ? (
-                  <span style={{ color: '#B45309' }}> (asked {form.num_cities} — some dropped below 90%)</span>
-                ) : null}
               </p>
               <p className="text-xs mt-0.5" style={{ color: '#334155' }}>
                 {(pages[0]?.content_type === 'blog' || contentKind === 'post')

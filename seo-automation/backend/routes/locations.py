@@ -81,7 +81,7 @@ async def search_cities(
 @router.get("/nearby", response_model=List[CityInfo])
 async def nearby_cities(
     base_location: str = Query(default="San Diego, CA"),
-    num_cities: int = Query(default=10, ge=1, le=100)
+    num_cities: int = Query(default=10, ge=1, le=250)
 ):
     """Preview of places the generate agent will expand from the base city."""
     from services.location_service import expand_places_from_base

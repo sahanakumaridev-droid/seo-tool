@@ -1,95 +1,83 @@
 import { Link } from 'react-router-dom'
 import Logo from '../Logo'
 import SocialBrandIcon from '../SocialBrandIcon'
+import { SITE_CONTACT, siteUrl } from '../../data/revampContent'
+
+const WEBSITES = [
+  { label: 'Custom Websites', to: '/website-designing#business' },
+  { label: 'Shopify & Ecommerce', to: '/website-designing#ecommerce' },
+  { label: 'Landing Pages', to: '/website-designing#landing' },
+  { label: 'Website Redesign', to: '/website-designing#redesign' },
+  { label: 'UI / UX Design', to: '/website-designing#ux' },
+  { label: 'Care & Maintenance', to: '/website-designing#care' },
+]
+
+const APPS = [
+  { label: 'iOS & Android', to: '/mobile-apps#native' },
+  { label: 'Cross-Platform', to: '/mobile-apps#cross' },
+  { label: 'App Timeline', to: '/mobile-apps#timeline' },
+  { label: 'Mobile UX / UI', to: '/mobile-apps#ux' },
+]
+
+const GROWTH = [
+  { label: 'Technical SEO', to: '/seo-ppc#seo' },
+  { label: 'Local SEO', to: '/seo-ppc#local' },
+  { label: 'Content SEO', to: '/seo-ppc#content' },
+  { label: 'Google Ads', to: '/seo-ppc#ads' },
+  { label: 'Social Ads', to: '/seo-ppc#social-ads' },
+  { label: 'Pricing', to: '/seo-ppc#pricing' },
+]
+
+const SOFTWARE = [
+  { label: 'Dashboards', to: '/custom-software#platforms' },
+  { label: 'CRM & Workflows', to: '/custom-software#crm' },
+  { label: 'API Integrations', to: '/custom-software#integrations' },
+  { label: 'Automation', to: '/custom-software#automation' },
+]
+
+const RESOURCES = [
+  { label: 'Blog', to: '/blog' },
+  { label: 'Portfolio', to: '/portfolio' },
+  { label: 'Areas We Serve', to: '/areas' },
+  { label: 'Get a Free Quote', to: '/contact' },
+]
+
+const COMPANY = [
+  { label: 'About ZeOrbit', to: '/' },
+  { label: 'Contact', to: '/contact' },
+  { label: 'Privacy Policy', to: '/privacy-policy' },
+  { label: "Let's Talk", to: '/contact' },
+]
 
 const COLUMNS = [
-  {
-    title: 'Product',
-    items: [
-      { label: 'Features', href: '#features' },
-      { label: 'Keyword Research', to: '/keywords' },
-      { label: 'Site Audit', to: '/site-audit' },
-      { label: 'Rank Tracker', to: '/rankings' },
-      { label: 'Content Tools', to: '/content' },
-      { label: 'Pricing', href: '#pricing' },
-    ],
-  },
-  {
-    title: 'Workspace',
-    items: [
-      { label: 'Dashboard', to: '/dashboard' },
-      { label: 'Articles', to: '/articles' },
-      { label: 'Leads', to: '/leads' },
-      { label: 'Google Ads', to: '/google-ads' },
-      { label: 'Integrations', to: '/integrations' },
-    ],
-  },
-  {
-    title: 'Company',
-    items: [
-      { label: 'ZeOrbit.com', href: 'https://zeorbit.com/', external: true },
-      { label: 'Areas We Serve', href: 'https://zeorbit.com/areas', external: true },
-      { label: 'Contact', href: 'https://zeorbit.com/contact', external: true },
-      { label: 'Log in', to: '/login' },
-      { label: 'Start free trial', to: '/register' },
-    ],
-  },
-  {
-    title: 'Legal',
-    items: [
-      { label: 'Privacy Policy', href: 'https://zeorbit.com/privacy-policy', external: true },
-      { label: 'Terms', href: 'https://zeorbit.com/', external: true },
-    ],
-  },
+  { title: 'Websites', items: WEBSITES },
+  { title: 'Mobile Apps', items: APPS },
+  { title: 'SEO & Ads', items: GROWTH },
+  { title: 'Software', items: SOFTWARE },
+  { title: 'Resources', items: RESOURCES },
+  { title: 'Company', items: COMPANY },
 ]
-
-/** Same social set as zeorbit.com SiteFooter */
-const SOCIAL = [
-  { label: 'Facebook', href: 'https://www.facebook.com/zeorbit.web.designers.mobileapp.developers' },
-  { label: 'Instagram', href: 'https://www.instagram.com/zeorbit/' },
-  { label: 'LinkedIn', href: 'https://www.linkedin.com/company/zeorbit/' },
-  { label: 'YouTube', href: 'https://www.youtube.com/@ZeOrbit-Firm' },
-  { label: 'X', href: 'https://twitter.com/orbit_ze' },
-  { label: 'Pinterest', href: 'https://www.pinterest.com/zeorbitsd/' },
-  { label: 'Apple Maps', href: 'https://maps.apple/p/VA-_LREgJ5PzDV' },
-  { label: 'Google Maps', href: 'https://maps.app.goo.gl/teVefHUc3yycwkcA7' },
-  { label: 'Yelp', href: 'https://www.yelp.com/biz/zeorbit-san-diego-2' },
-]
-
-function FooterLink({ item }) {
-  if (item.to) {
-    return <Link to={item.to}>{item.label}</Link>
-  }
-  if (item.external) {
-    return (
-      <a href={item.href} target="_blank" rel="noreferrer">
-        {item.label}
-      </a>
-    )
-  }
-  return <a href={item.href}>{item.label}</a>
-}
 
 /**
- * Marketing footer matched to zeorbit.com host footer:
- * logo-blue accent bar, link columns, logo + social icons, legal row.
+ * Marketing footer matched 1:1 to zeorbit.com SiteFooter host chrome.
+ * All site links open on zeorbit.com.
  */
 export default function MarketingFooter() {
   const year = new Date().getFullYear()
 
   return (
-    <footer className="seo-site-footer">
-      <div className="seo-site-footer-accent" aria-hidden />
+    <footer id="about" className="zo-site-footer zo-host-footer">
+      <div className="zo-host-footer-accent" aria-hidden />
 
-      <div className="seo-site-footer-main">
-        <div className="seo-site-shell seo-site-footer-grid">
+      <div className="zo-host-footer-main">
+        <div className="rv-shell zo-host-footer-grid">
           {COLUMNS.map((col) => (
-            <div key={col.title} className="seo-site-footer-col">
+            <div key={col.title} className="zo-host-footer-col">
               <h4>{col.title}</h4>
               <ul>
                 {col.items.map((item) => (
                   <li key={item.label}>
-                    <FooterLink item={item} />
+                    <a href={siteUrl(item.to)}>{item.label}</a>
                   </li>
                 ))}
               </ul>
@@ -98,20 +86,24 @@ export default function MarketingFooter() {
         </div>
       </div>
 
-      <div className="seo-site-footer-mid">
-        <div className="seo-site-shell seo-site-footer-mid-inner">
-          <a className="seo-site-footer-logo" href="https://zeorbit.com/" target="_blank" rel="noreferrer" aria-label="ZeOrbit website">
+      <div className="zo-host-footer-mid">
+        <div className="rv-shell zo-host-footer-mid-inner">
+          <a
+            href={siteUrl('/')}
+            className="zo-host-footer-logo"
+            aria-label="ZeOrbit website"
+          >
             <Logo size={34} />
           </a>
-          <div className="seo-site-footer-social">
-            {SOCIAL.map((s) => (
+          <div className="zo-host-footer-social">
+            {SITE_CONTACT.social.map((s) => (
               <a
                 key={s.label}
                 href={s.href}
                 target="_blank"
                 rel="noreferrer"
                 aria-label={s.label}
-                className={`seo-site-social is-${s.label.toLowerCase().replace(/\s+/g, '-')}`}
+                className={`zo-host-social is-${s.label.toLowerCase().replace(/\s+/g, '-')}`}
               >
                 <SocialBrandIcon label={s.label} />
               </a>
@@ -120,18 +112,17 @@ export default function MarketingFooter() {
         </div>
       </div>
 
-      <div className="seo-site-footer-legal">
-        <div className="seo-site-shell seo-site-footer-legal-inner">
-          <p>© {year} ZeOrbit — SEO Intelligence Platform for U.S. businesses.</p>
-          <div className="seo-site-footer-legal-links">
-            <a href="mailto:info@zeorbit.com">info@zeorbit.com</a>
-            <a href="tel:+16197249517">619-724-9517</a>
-            <a href="https://zeorbit.com/privacy-policy" target="_blank" rel="noreferrer">
-              Privacy policy
-            </a>
-            <a href="https://zeorbit.com/contact" target="_blank" rel="noreferrer">
-              Contact
-            </a>
+      <div className="zo-host-footer-legal">
+        <div className="rv-shell zo-host-footer-legal-inner">
+          <p>
+            © {year} ZeOrbit — Websites, apps, SEO, and custom software for ambitious U.S. brands.
+          </p>
+          <div className="zo-host-footer-legal-links">
+            <a href={`mailto:${SITE_CONTACT.email}`}>{SITE_CONTACT.email}</a>
+            <a href={`tel:${SITE_CONTACT.phoneTel}`}>{SITE_CONTACT.phone}</a>
+            <a href={siteUrl('/privacy-policy')}>Privacy policy</a>
+            <a href={siteUrl('/contact')}>Contact</a>
+            <Link to="/login">Log in</Link>
           </div>
         </div>
       </div>

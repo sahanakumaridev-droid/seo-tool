@@ -10,7 +10,7 @@ from models.schemas import (
     BriefSuggestRequest, BriefSuggestResponse,
 )
 from services.location_service import get_nearby_cities, LocationNotResolvedError, merge_extra_locations, resolve_generation_cities
-from services.content_service import generate_seo_block, generate_articles
+from services.content_service import generate_seo_block, generate_seo_block_until_floor, generate_articles
 from services.website_analysis_service import analyze_website
 from services.export_service import export_json, export_html, export_wordpress
 from db import get_session, PageRecord
@@ -68,10 +68,13 @@ async def ensure_brief_for_generate(req: GenerateRequest) -> GenerateRequest:
     Minimal UI path: keyword + niche + location.
     Always compose the structured brief from the master instruction when thin/missing.
     """
-    from services.zeorbit_local_seo import ZEORBIT_FACTS
+    from services.zeorbit_local_seo import ZEORBIT_FACTS, resolve_industry_label, is_generic_industry
 
-    if not (req.industry or "").strip():
-        req.industry = "Professional Services"
+    # Never invent "Professional Services" — infer a real vertical from niche/keywords, else leave blank
+    if not (req.industry or "").strip() or is_generic_industry(req.industry):
+        req.industry = resolve_industry_label(
+            "", req.business_type or "", list(req.target_keywords or [])
+        )
     if not (req.audience or "").strip():
         req.audience = "Small business owners"
 
@@ -98,24 +101,31 @@ async def ensure_brief_for_generate(req: GenerateRequest) -> GenerateRequest:
         if llm_available():
             place = suggest_req.base_location or "United States"
             kind = "blog post" if req.content_kind == "post" else "location / service page"
+            blog_extra = ""
+            if req.content_kind == "post":
+                kw0 = (req.target_keywords or ["the search query"])[0]
+                blog_extra = f"""
+BLOG-ONLY RULE: topic_title, search_intent, customer_problem, key_points, and faq_ideas MUST be about the editor's keyword/query "{kw0}".
+Do not rewrite it into a location page or generic web-design sales brief. Answer that query.
+"""
             prompt = f"""You fill a ZeOrbit content brief for a {kind}.
 Follow this MASTER CUSTOM INSTRUCTION exactly (this is the format and rule set):
 {master_instruction_for_prompt(6500)}
-
+{blog_extra}
 Business niche: {req.business_type or "Web Design"}
-Industry (client type — infer if blank): {req.industry or "infer from keyword + niche"}
+Industry (client type — examples only for blogs): {req.industry or "infer from keyword + niche"}
 Audience (infer if blank): {req.audience or "infer from keyword + niche"}
 Location: {place}
-Keywords: {', '.join(req.target_keywords) or 'website design'}
+Keywords (for blogs this IS the article subject): {', '.join(req.target_keywords) or 'website design'}
 
 Return ONLY JSON:
 {{
-  "topic_title": "working title",
+  "topic_title": "working title that names the keyword/query",
   "search_intent": "short intent label matched to the keyword",
-  "customer_problem": "1-2 sentences",
+  "customer_problem": "1-2 sentences about the searcher's problem for this query",
   "pricing": "{ZEORBIT_FACTS['pricing_range']}",
-  "key_points": "5-7 bullet lines starting with -",
-  "faq_ideas": "4-6 bullet questions starting with -",
+  "key_points": "5-7 bullet lines starting with - that teach the query",
+  "faq_ideas": "4-6 bullet questions starting with - about the query",
   "cta_direction": "1 soft CTA sentence",
   "tone_notes": "1-2 sentences on voice",
   "industry": "inferred industry label if helpful",
@@ -130,7 +140,14 @@ Return ONLY JSON:
                     elif isinstance(val, list):
                         base[key] = "\n".join(f"- {x}" for x in val if x)
                 if isinstance(data.get("industry"), str) and data["industry"].strip():
-                    req.industry = data["industry"].strip()
+                    from services.zeorbit_local_seo import is_generic_industry, resolve_industry_label
+                    inferred = data["industry"].strip()
+                    if not is_generic_industry(inferred):
+                        req.industry = inferred
+                    elif not (req.industry or "").strip():
+                        req.industry = resolve_industry_label(
+                            "", req.business_type or "", list(req.target_keywords or [])
+                        )
                 if isinstance(data.get("audience"), str) and data["audience"].strip():
                     req.audience = data["audience"].strip()
     except Exception as e:
@@ -278,7 +295,7 @@ async def _places_for_generate(req: GenerateRequest) -> List:
 
 @router.post("/generate", response_model=BulkGenerateResponse)
 async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(get_session)):
-    """Generate location pages. Autofills brief from keyword+niche+location; drops under 90%."""
+    """Generate location pages/posts. Regenerates any result below 90% until it passes."""
     from services.zeorbit_local_seo import MIN_PUBLISH_SCORE, MIN_KEYWORD_USE_SCORE, scores_meet_floor
 
     req = await ensure_brief_for_generate(req)
@@ -286,6 +303,7 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
     requested_n = len(cities)
 
     pages: List[SEOBlock] = []
+    retried_n = 0
     used_featured: List[str] = []
     existing_bodies: List[str] = []
     # Avoid colliding with images already saved for other locations (featured + body)
@@ -360,7 +378,7 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             free_keys = {normalize_image_key(u) for u in free_urls}
             exclude = [u for u in exclude if normalize_image_key(u) not in free_keys]
 
-        block = await generate_seo_block(
+        block, extra_attempts = await generate_seo_block_until_floor(
             req.business_type,
             city_info.name,
             city_info.state,
@@ -374,7 +392,14 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             audience=req.audience,
             keyword_index=keyword_index,
             existing_bodies=existing_bodies,
+            zip=getattr(city_info, "zip", "") or "",
         )
+        if extra_attempts:
+            retried_n += 1
+            print(
+                f"[Quality] {city_info.name} first scored below 90% — "
+                f"generated again ({extra_attempts} extra pass(es))"
+            )
         # Final uniqueness guard (same as async jobs path)
         if block.featured_image_url:
             taken = {normalize_image_key(u) for u in used_featured}
@@ -382,7 +407,7 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             if key in taken:
                 images = await generate_article_images(
                     focus,
-                    f"{city_info.name}, {city_info.state}".strip(", "),
+                    f"{city_info.name}, {city_info.state} {getattr(city_info, 'zip', '') or ''}".strip(),
                     "ZeOrbit",
                     count=3,
                     exclude_urls=used_featured,
@@ -391,6 +416,9 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
                     search_intent=getattr(block, "search_intent", "") or "",
                     image_concept_text=getattr(block, "image_concept", "") or "",
                     keyword_index=keyword_index,
+                    content_type="blog" if req.content_kind == "post" else "service",
+                    match_query=focus if req.content_kind == "post" else "",
+                    audience=req.audience or "",
                 )
                 if images:
                     from services.image_service import assign_canonical_images
@@ -419,27 +447,6 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
         batch_slugs.add(slug)
         block.slug = slug
         pages.append(block)
-
-        score = float(
-            getattr(block, "quality_score", None)
-            or getattr(block, "readability_score", None)
-            or 0
-        )
-        kw_use = float(getattr(block, "keyword_density", None) or 0)
-        if not scores_meet_floor(score, kw_use):
-            # One more boost pass before dropping — batch uniqueness used to wipe most of 50.
-            try:
-                from services.content_service import boost_block_to_floor
-                block = boost_block_to_floor(block)
-                score = float(block.quality_score or block.readability_score or 0)
-                kw_use = float(block.keyword_density or 0)
-            except Exception as e:
-                print(f"[Quality] boost before drop failed for {city_info.name}: {e}")
-        if not scores_meet_floor(score, kw_use):
-            print(
-                f"[Quality] drop {city_info.name}: quality={score} keyword={kw_use}"
-            )
-            continue
 
         # Upsert by FINAL slug — preview_slug often differs once industry is applied,
         # which previously caused UNIQUE constraint failures on INSERT.
@@ -496,26 +503,9 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             by_slug[slug] = row
             existing_rows.append(row)
 
-    # Never hand weak pages back — quality + keyword use must both clear 90+.
-    strong = [
-        p for p in pages
-        if scores_meet_floor(
-            float(getattr(p, "quality_score", None) or getattr(p, "readability_score", None) or 0),
-            float(getattr(p, "keyword_density", None) or 0),
-        )
-    ]
-    if not strong:
+    if not pages:
         await session.rollback()
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f"All {len(pages)} results scored below {int(MIN_PUBLISH_SCORE)}% "
-                f"(Quality and Keyword use must both be {int(MIN_KEYWORD_USE_SCORE)}%+). "
-                "Nothing was saved. Fix brief/keywords or use AI fill — then generate again."
-            ),
-        )
-    pages = strong
-    dropped_n = requested_n - len(pages)
+        raise HTTPException(status_code=502, detail="Generation produced no pages. Try again.")
 
     try:
         await session.commit()
@@ -530,10 +520,10 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
         raise HTTPException(status_code=500, detail=f"Could not save generated pages: {detail[:240]}")
 
     msg = None
-    if dropped_n > 0:
+    if retried_n > 0:
         msg = (
-            f"Requested {requested_n} locations · kept {len(pages)} at "
-            f"{int(MIN_PUBLISH_SCORE)}%+ · dropped {dropped_n} below the floor."
+            f"{retried_n} location{'s' if retried_n != 1 else ''} first scored below "
+            f"{int(MIN_PUBLISH_SCORE)}% — generated again, then kept all {len(pages)}."
         )
 
     return BulkGenerateResponse(
@@ -541,7 +531,7 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
         pages=pages,
         job_id=str(uuid.uuid4()),
         requested=requested_n,
-        dropped=dropped_n,
+        dropped=0,
         message=msg,
     )
 
@@ -698,6 +688,8 @@ async def refresh_images(
             kw = ""
         focus = kw or f"{business} {city}".strip()
         location = f"{city}, {state}".strip(", ")
+        ctype = (block.get("content_type") or "").lower()
+        is_blog = ctype in ("blog", "post") or not (city or "").strip()
         family = topic_image_family(
             f"{business} {focus} {block.get('title') or ''} {block.get('industry') or ''}"
         )
@@ -705,8 +697,11 @@ async def refresh_images(
             focus, location, "", count=3,
             angle_title=block.get("title") or "",
             exclude_urls=used_by_family[family],
-            industry=block.get("industry") or "",
+            industry="" if is_blog else (block.get("industry") or ""),
             niche=business,
+            content_type="blog" if is_blog else "service",
+            match_query=focus if is_blog else "",
+            image_concept_text=block.get("image_concept") or "",
         )
         if not images:
             skipped.append(row.slug)

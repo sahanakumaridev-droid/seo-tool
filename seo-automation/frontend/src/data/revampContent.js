@@ -1,8 +1,87 @@
+/** SEO landing in-page anchors (legacy/simple headers). */
 export const PRIMARY_NAV = [
   { label: 'Product', href: '#features' },
   { label: 'Pricing', href: '#pricing' },
   { label: 'FAQ', href: '#faq' },
 ]
+
+/** Same contact block as zeorbit.com — used by matching header/footer chrome. */
+export const SITE_CONTACT = {
+  email: 'info@zeorbit.com',
+  phone: '619-724-9517',
+  phoneTel: '+16197249517',
+  social: [
+    { label: 'Facebook', href: 'https://www.facebook.com/zeorbit.web.designers.mobileapp.developers' },
+    { label: 'Instagram', href: 'https://www.instagram.com/zeorbit/' },
+    { label: 'LinkedIn', href: 'https://www.linkedin.com/company/zeorbit/' },
+    { label: 'YouTube', href: 'https://www.youtube.com/@ZeOrbit-Firm' },
+    { label: 'X', href: 'https://twitter.com/orbit_ze' },
+    { label: 'Pinterest', href: 'https://www.pinterest.com/zeorbitsd/' },
+    { label: 'Apple Maps', href: 'https://maps.apple/p/VA-_LREgJ5PzDV' },
+    { label: 'Google Maps', href: 'https://maps.app.goo.gl/teVefHUc3yycwkcA7' },
+    { label: 'Yelp', href: 'https://www.yelp.com/biz/zeorbit-san-diego-2' },
+  ],
+}
+
+/** Same primary nav as zeorbit.com (paths resolve under SITE_ORIGIN). */
+export const SITE_PRIMARY_NAV = [
+  { label: 'Home', href: '/' },
+  {
+    label: 'Websites',
+    href: '/website-designing',
+    children: [
+      { label: 'Custom Websites', href: '/website-designing#business' },
+      { label: 'Shopify & Ecommerce', href: '/website-designing#ecommerce' },
+      { label: 'Landing Pages', href: '/website-designing#landing' },
+      { label: 'Website Redesign', href: '/website-designing#redesign' },
+      { label: 'UI / UX Design', href: '/website-designing#ux' },
+      { label: 'Care & Maintenance', href: '/website-designing#care' },
+    ],
+  },
+  {
+    label: 'Mobile Apps',
+    href: '/mobile-apps',
+    children: [
+      { label: 'iOS & Android', href: '/mobile-apps#native' },
+      { label: 'Cross-Platform', href: '/mobile-apps#cross' },
+      { label: 'App Timeline', href: '/mobile-apps#timeline' },
+      { label: 'Mobile UX / UI', href: '/mobile-apps#ux' },
+    ],
+  },
+  {
+    label: 'SEO & Ads',
+    href: '/seo-ppc',
+    children: [
+      { label: 'Technical SEO', href: '/seo-ppc#seo' },
+      { label: 'Local SEO', href: '/seo-ppc#local' },
+      { label: 'Content SEO', href: '/seo-ppc#content' },
+      { label: 'Google Ads', href: '/seo-ppc#ads' },
+      { label: 'Social Ads', href: '/seo-ppc#social-ads' },
+      { label: 'Blog & Insights', href: '/seo-ppc#blog' },
+      { label: 'Pricing', href: '/seo-ppc#pricing' },
+    ],
+  },
+  {
+    label: 'Custom Software',
+    href: '/custom-software',
+    children: [
+      { label: 'Dashboards', href: '/custom-software#platforms' },
+      { label: 'CRM & Workflows', href: '/custom-software#crm' },
+      { label: 'API Integrations', href: '/custom-software#integrations' },
+      { label: 'Automation', href: '/custom-software#automation' },
+    ],
+  },
+  { label: 'Work', href: '/portfolio' },
+  { label: 'Contact', href: '/contact' },
+]
+
+export const SITE_ORIGIN = 'https://zeorbit.com'
+
+export function siteUrl(path = '/') {
+  if (!path) return SITE_ORIGIN
+  if (/^https?:\/\//i.test(path)) return path
+  return `${SITE_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`
+}
 
 export const TRUST_ITEMS = [
   'Site Performance',

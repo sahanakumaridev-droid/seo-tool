@@ -95,6 +95,11 @@ class Settings(BaseSettings):
     # Auto-submit sitemap + track all /p/ pages after publish (default on).
     GSC_AUTO_PUSH_ON_PUBLISH: bool = True
 
+    # IndexNow (Bing, Yahoo via Bing, Yandex, Seznam, Naver). Public key file
+    # must be served at https://zeorbit.com/{INDEXNOW_KEY}.txt
+    INDEXNOW_KEY: str = "zeorbit-indexnow-7f3c9a2e4b1d"
+    INDEXNOW_ENABLED: bool = True
+
     # ── Image APIs ───────────────────────────────────────────────
     UNSPLASH_ACCESS_KEY: str = ""
     PEXELS_API_KEY: str = ""
