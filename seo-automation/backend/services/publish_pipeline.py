@@ -20,23 +20,33 @@ from services import indexnow_service
 logger = logging.getLogger(__name__)
 
 
-def _sitemap_urls() -> list[str]:
+def _sitemap_urls_for(is_blog: bool) -> list[str]:
+    """Index + the matching child sitemap only (pages vs posts)."""
     urls = []
-    for raw in (
-        getattr(settings, "WP_SITEMAP_URL", "") or "",
-        getattr(settings, "WP_PAGE_SITEMAP_URL", "") or "",
-        getattr(settings, "WP_POST_SITEMAP_URL", "") or "",
-    ):
-        u = raw.strip()
+    index = (getattr(settings, "WP_SITEMAP_URL", "") or "").strip()
+    child = (
+        (getattr(settings, "WP_POST_SITEMAP_URL", "") or "").strip()
+        if is_blog
+        else (getattr(settings, "WP_PAGE_SITEMAP_URL", "") or "").strip()
+    )
+    for u in (index, child):
         if u and u not in urls:
             urls.append(u)
     base = (settings.PUBLIC_BASE_URL or settings.MARKETING_SITE_URL or "").rstrip("/")
     if base:
-        for path in ("/sitemap.xml", "/page-sitemap.xml", "/post-sitemap.xml"):
+        for path in ("/sitemap.xml", "/post-sitemap.xml" if is_blog else "/page-sitemap.xml"):
             u = f"{base}{path}"
             if u not in urls:
                 urls.append(u)
     return urls
+
+
+def _sitemap_urls() -> list[str]:
+    seen = []
+    for u in _sitemap_urls_for(False) + _sitemap_urls_for(True):
+        if u and u not in seen:
+            seen.append(u)
+    return seen
 
 
 async def track_public_publish(
@@ -81,10 +91,10 @@ async def track_public_publish(
             await session.commit()
             return out
 
-        sitemaps = _sitemap_urls()
-        post_sm = (getattr(settings, "WP_POST_SITEMAP_URL", "") or "").strip()
         kind = (getattr(block, "content_type", "") or "service").lower()
         is_blog = kind in ("blog", "post")
+        sitemaps = _sitemap_urls_for(is_blog)
+        post_sm = (getattr(settings, "WP_POST_SITEMAP_URL", "") or "").strip()
         if sitemaps and settings.GSC_SITE_URL and settings.GOOGLE_INDEXING_KEY_FILE:
             for sm in sitemaps:
                 search_console_service.submit_sitemap(sm)

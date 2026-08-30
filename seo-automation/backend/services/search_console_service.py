@@ -92,6 +92,7 @@ def submit_sitemap(sitemap_url: str) -> dict:
         return {"ok": False, "detail": "Search Console not configured"}
     if not sitemap_url:
         return {"ok": False, "detail": "no sitemap_url"}
+    sitemap_url = _inspection_url(sitemap_url)
     try:
         from urllib.parse import quote
         url = _SITEMAPS_ENDPOINT.format(site=quote(site_url, safe=""), feed=quote(sitemap_url, safe=""))

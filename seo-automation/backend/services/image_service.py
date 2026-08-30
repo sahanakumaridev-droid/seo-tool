@@ -562,6 +562,7 @@ def build_image_metadata(
     image_concept_text: str = "",
     industry: str = "",
     photo_alt: str = "",
+    slot_hint: str = "",
 ) -> dict:
     """Generate SEO-friendly filename + alt/title/caption/description for an image.
 
@@ -601,17 +602,25 @@ def build_image_metadata(
             f"Website design on a laptop{f' for a business in {city}' if city else ''}"
         ).strip()
     by = f" by {biz}" if biz and is_featured else ""
+    roles = ("Featured header", "Footer", "In-article")
+    role = roles[idx] if 0 <= idx < len(roles) else f"Image {idx + 1}"
+    zip_m = re.search(r"\b(\d{5})\b", loc)
+    zip_code = zip_m.group(1) if zip_m else ""
+    zip_bit = f" {zip_code}" if zip_code else ""
+    loc_bit = f" — {city}{zip_bit}" if city else (f" — ZIP {zip_code}" if zip_code else "")
+    hint = re.sub(r"\s+", " ", (slot_hint or role).strip())[:48]
+    if hint and hint.lower() not in (phrase or "").lower():
+        phrase = f"{hint}: {phrase}" if phrase else hint
 
-    if is_featured:
-        alt = f"{phrase}{by}"
-        title = phrase
-        caption = f"{phrase}."
-    else:
-        alt = f"{phrase}"
-        title = phrase
-        caption = f"{phrase}."
+    alt = f"{phrase}{by}{loc_bit}".strip()
+    title = f"{role} · {city or 'article'}{zip_bit}: {hint or phrase}".strip()
+    caption = f"{city or 'This article'}{zip_bit} · {role} #{idx + 1}: {hint or phrase}."
     caption = re.sub(r"[\.?]+$", ".", caption)
-    description = f"On-topic website design image for {phrase.rstrip('.?!').lower()}{by}. Laptop / web UI — not tourism or unrelated stock."
+    caption = re.sub(r"\s+", " ", caption).strip()
+    description = (
+        f"{role} for {city or 'this article'}{zip_bit}. {phrase.rstrip('.?!')}. "
+        "Unique visual for this location and slot."
+    )
     return {
         "filename": filename,
         "alt_text": alt[:140],
@@ -678,6 +687,8 @@ _DEAD_UNSPLASH_IDS = frozenset({
     "photo-1611162618475-46b635cb6868",
     "photo-1611944212129-2995ae3b5ca3",
     "photo-1618761714954-0b8cd0026356",
+    "photo-1481487196290-ab5e5f0d0aa2",
+    "photo-1661956602119-0de8e45c0430",
 })
 
 
@@ -692,6 +703,20 @@ def _is_banned_stock_key(key: str) -> bool:
     if k.startswith("photo-161116261"):
         return True
     return False
+
+
+def stock_url_needs_replace(url: str) -> bool:
+    """True if this stored URL is empty, placeholder, or a known-404 Unsplash ID."""
+    u = (url or "").strip().lower()
+    if not u:
+        return True
+    if "picsum.photos" in u:
+        return True
+    if "live.staticflickr.com" in u or "flickr.com" in u:
+        return True
+    if "placeholder" in u:
+        return True
+    return _is_banned_stock_key(normalize_image_key(url))
 
 _WEB_DESIGN_IMAGES = [
     "https://images.unsplash.com/photo-1467232004584-a241de8bcf5d",
@@ -764,6 +789,42 @@ _WEB_DESIGN_IMAGES = [
     "https://images.unsplash.com/photo-1593720213428-28a5b9e94613",
     "https://images.unsplash.com/photo-1571171637578-41bc2dd41cd2",
     "https://images.unsplash.com/photo-1550439062-609e1531270e",
+    "https://images.unsplash.com/photo-1542744094-3a31f272c490",
+    "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4",
+    "https://images.unsplash.com/photo-1522071820081-009f0129c71c",
+    "https://images.unsplash.com/photo-1522199755839-a2bacb67c546",
+    "https://images.unsplash.com/photo-1551434678-e076c223a692",
+    "https://images.unsplash.com/photo-1573164713714-d95e436ab8d6",
+    "https://images.unsplash.com/photo-1516321165247-4aa89a48be28",
+    "https://images.unsplash.com/photo-1481487196290-ab5e5f0d0aa2",
+    "https://images.unsplash.com/photo-1519389950473-47ba0277781c",
+    "https://images.unsplash.com/photo-1460925895917-afdab827c52f",
+    "https://images.unsplash.com/photo-1553877522-43269d4ea984",
+    "https://images.unsplash.com/photo-1556155092-490a1ba16284",
+    "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40",
+    "https://images.unsplash.com/photo-1542744173-8e7e53415bb0",
+    "https://images.unsplash.com/photo-1531482615713-2afd69097998",
+    "https://images.unsplash.com/photo-1600880292203-757bb62b4baf",
+    "https://images.unsplash.com/photo-1522202176988-66273c2fd55f",
+    "https://images.unsplash.com/photo-1552664730-d307ca884978",
+    "https://images.unsplash.com/photo-1661956602119-0de8e45c0430",
+    "https://images.unsplash.com/photo-1586717791821-3f44a563fa4c",
+    "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4",
+    "https://images.unsplash.com/photo-1496171367470-9ed9a91ea931",
+    "https://images.unsplash.com/photo-1483058712412-4245e9b90334",
+    "https://images.unsplash.com/photo-1504384308090-c894fdcc538d",
+    "https://images.unsplash.com/photo-1559136555-9303baea8ebd",
+    "https://images.unsplash.com/photo-1432888498266-38ffec3eaf0a",
+    "https://images.unsplash.com/photo-1556761175-5973dc0f32e7",
+    "https://images.unsplash.com/photo-1516321318423-f06f85e504b3",
+    "https://images.unsplash.com/photo-1499951360447-b19be8fe80f5",
+    "https://images.unsplash.com/photo-1531403009284-440f080d1e12",
+    "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158",
+    "https://images.unsplash.com/photo-1557804506-669a67965ba0",
+    "https://images.unsplash.com/photo-1556761175-b413da4baf72",
+    "https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3",
+    "https://images.unsplash.com/photo-1516321497487-e288fb19713f",
+    "https://images.unsplash.com/photo-1460925895917-afdab827c52f",
 ]
 
 # Dedupe while preserving order; drop logo / dead IDs.
@@ -1449,21 +1510,24 @@ async def _hosted_image_url(
     """Return (url, photographer_alt) from Unsplash/Pexels, or curated URL + empty alt."""
     exclude_keys = {normalize_image_key(u) for u in (exclude or []) if u}
     search = query
-    page = (_stable_index(seed, 20) + 1)
+    page0 = (_stable_index(f"{seed}|{len(exclude_keys)}", 40) + 1)
+    pages = [page0, (page0 % 40) + 1, ((page0 + 7) % 40) + 1, ((page0 + 19) % 40) + 1]
     if settings.UNSPLASH_ACCESS_KEY:
         try:
             async with httpx.AsyncClient(timeout=12) as client:
-                resp = await client.get(
-                    "https://api.unsplash.com/search/photos",
-                    params={
-                        "query": search,
-                        "per_page": 30,
-                        "orientation": "landscape",
-                        "page": page,
-                    },
-                    headers={"Authorization": f"Client-ID {settings.UNSPLASH_ACCESS_KEY}"},
-                )
-                if resp.status_code == 200:
+                for page in pages:
+                    resp = await client.get(
+                        "https://api.unsplash.com/search/photos",
+                        params={
+                            "query": search,
+                            "per_page": 30,
+                            "orientation": "landscape",
+                            "page": page,
+                        },
+                        headers={"Authorization": f"Client-ID {settings.UNSPLASH_ACCESS_KEY}"},
+                    )
+                    if resp.status_code != 200:
+                        continue
                     results = resp.json().get("results", [])
                     scored = []
                     for r in results:
@@ -1479,25 +1543,26 @@ async def _hosted_image_url(
                         scored.append((score, url, alt))
                     if scored:
                         scored.sort(key=lambda x: (-x[0], x[1]))
-                        top = [t for t in scored if t[0] == scored[0][0]]
-                        pick = top[_stable_index(seed, len(top))]
+                        pick = scored[_stable_index(seed, len(scored))]
                         return pick[1], pick[2]
         except Exception as e:
             print(f"[Image] Unsplash search error: {e}")
     if settings.PEXELS_API_KEY:
         try:
             async with httpx.AsyncClient(timeout=12) as client:
-                resp = await client.get(
-                    "https://api.pexels.com/v1/search",
-                    params={
-                        "query": search,
-                        "per_page": 30,
-                        "orientation": "landscape",
-                        "page": page,
-                    },
-                    headers={"Authorization": settings.PEXELS_API_KEY},
-                )
-                if resp.status_code == 200:
+                for page in pages:
+                    resp = await client.get(
+                        "https://api.pexels.com/v1/search",
+                        params={
+                            "query": search,
+                            "per_page": 30,
+                            "orientation": "landscape",
+                            "page": page,
+                        },
+                        headers={"Authorization": settings.PEXELS_API_KEY},
+                    )
+                    if resp.status_code != 200:
+                        continue
                     photos = resp.json().get("photos", [])
                     scored = []
                     for p in photos:
@@ -1517,8 +1582,7 @@ async def _hosted_image_url(
                         scored.append((score, cand, alt))
                     if scored:
                         scored.sort(key=lambda x: (-x[0], x[1]))
-                        top = [t for t in scored if t[0] == scored[0][0]]
-                        pick = top[_stable_index(seed, len(top))]
+                        pick = scored[_stable_index(seed, len(scored))]
                         return pick[1], pick[2]
         except Exception as e:
             print(f"[Image] Pexels search error: {e}")
@@ -1624,12 +1688,20 @@ async def generate_article_images(
         concept_for_meta = f"{ind} business website open on a laptop"
         print(f"[Image] page query topic={topic!r}")
 
-    used: Set[str] = {normalize_image_key(u) for u in (exclude_urls or []) if u}
-    # Only website-design curated URLs when we need uniqueness — never photography/classroom pools.
-    web_only_pool = list(_WEB_DESIGN_IMAGES)
+    # Featured must not reuse another page's header. Body/footer only need to be
+    # unique *within this article* — excluding the whole library here left later
+    # pages with a single image once the pool was exhausted.
+    featured_taken: Set[str] = {normalize_image_key(u) for u in (exclude_urls or []) if u}
+    used: Set[str] = set()
+    web_only_pool = list(dict.fromkeys(
+        list(_WEB_DESIGN_IMAGES) + list(_SOFTWARE_IMAGES) + list(_GENERIC_CURATED) + list(_all_curated_urls())
+    ))
     prefer_hosted = bool(settings.UNSPLASH_ACCESS_KEY or settings.PEXELS_API_KEY)
 
     for i in range(count):
+        pick_exclude: Set[str] = set(used)
+        if i == 0:
+            pick_exclude |= featured_taken
         is_featured = i == 0
         modifier = modifiers[i % len(modifiers)]
         query = f"{topic} {modifier}".strip()
@@ -1643,33 +1715,33 @@ async def generate_article_images(
         key = ""
         photo_alt = ""
         if prefer_hosted:
-            hosted, hosted_alt = await _hosted_image_url(query, seed=seed, exclude=used, location="")
+            hosted, hosted_alt = await _hosted_image_url(query, seed=seed, exclude=pick_exclude, location="")
             hkey = normalize_image_key(hosted)
-            if hosted and hkey and hkey not in used and not _is_banned_stock_key(hkey):
+            if hosted and hkey and hkey not in pick_exclude and not _is_banned_stock_key(hkey):
                 url, key, photo_alt = hosted, hkey, hosted_alt
         if not url:
             url = _curated_image_url(
                 fallback_topic if is_blog else "website design",
                 seed=seed,
-                exclude=used,
+                exclude=pick_exclude,
             )
             key = normalize_image_key(url)
             photo_alt = ""
-        if (not url or key in used) and (settings.UNSPLASH_ACCESS_KEY or settings.PEXELS_API_KEY):
-            hosted, hosted_alt = await _hosted_image_url(query, seed=seed, exclude=used, location="")
+        if (not url or key in pick_exclude) and (settings.UNSPLASH_ACCESS_KEY or settings.PEXELS_API_KEY):
+            hosted, hosted_alt = await _hosted_image_url(query, seed=seed, exclude=pick_exclude, location="")
             hkey = normalize_image_key(hosted)
-            if hosted and hkey and hkey not in used and not _is_banned_stock_key(hkey):
+            if hosted and hkey and hkey not in pick_exclude and not _is_banned_stock_key(hkey):
                 url, key, photo_alt = hosted, hkey, hosted_alt
-        if key and key in used:
+        if key and key in pick_exclude:
             for attempt in range(16):
                 alt_seed = f"{seed}|retry|{attempt}|{keyword_index}"
                 alt = _curated_image_url(
                     fallback_topic if is_blog else "website design",
                     seed=alt_seed,
-                    exclude=used,
+                    exclude=pick_exclude,
                 )
                 alt_key = normalize_image_key(alt)
-                if alt_key and alt_key not in used:
+                if alt_key and alt_key not in pick_exclude:
                     url, key = alt, alt_key
                     photo_alt = ""
                     break
@@ -1677,38 +1749,55 @@ async def generate_article_images(
                     hosted, hosted_alt = await _hosted_image_url(
                         f"{topic} {modifiers[(i + attempt) % len(modifiers)]}",
                         seed=alt_seed,
-                        exclude=used,
+                        exclude=pick_exclude,
                         location="",
                     )
                     hkey = normalize_image_key(hosted)
-                    if hosted and hkey and hkey not in used and not _is_banned_stock_key(hkey):
+                    if hosted and hkey and hkey not in pick_exclude and not _is_banned_stock_key(hkey):
                         url, key, photo_alt = hosted, hkey, hosted_alt
                         break
-        # Still colliding — rotate unused website pool first
-        if (not url) or (key and key in used):
+        # Still colliding — rotate unused website pool first (unique within this article)
+        if (not url) or (key and key in pick_exclude):
             picked = False
             for u in web_only_pool:
                 uk = normalize_image_key(u)
                 if uk and uk not in used and not _is_banned_stock_key(uk):
+                    if i == 0 and uk in featured_taken:
+                        continue
                     url, key = _with_unsplash_params(u), uk
                     picked = True
                     break
             if not picked:
-                # Prefer unique, but NEVER leave a page with 0 images — reuse with rotation
-                pool = [
-                    u for u in web_only_pool
-                    if not _is_banned_stock_key(normalize_image_key(u))
-                ] or list(_WEB_DESIGN_IMAGES)
-                pick = pool[(keyword_index + i) % len(pool)]
-                url = _with_unsplash_params(pick)
-                key = normalize_image_key(url)
-                print(
-                    f"[Image] uniqueness exhausted for slot {i} ({query[:60]}); "
-                    f"reusing pool image so page is never blank"
-                )
+                url, key = "", ""
         if not url:
-            url = _with_unsplash_params(_WEB_DESIGN_IMAGES[(keyword_index + i) % len(_WEB_DESIGN_IMAGES)])
-            key = normalize_image_key(url)
+            unused = [
+                u for u in web_only_pool
+                if normalize_image_key(u) not in used
+                and not _is_banned_stock_key(normalize_image_key(u))
+                and (i > 0 or normalize_image_key(u) not in featured_taken)
+            ]
+            if unused:
+                url = _with_unsplash_params(unused[(keyword_index + i) % len(unused)])
+                key = normalize_image_key(url)
+            else:
+                hosted, hosted_alt = await _hosted_image_url(
+                    f"{query} workspace {keyword_index}-{i}",
+                    seed=f"{seed}|exhausted|{keyword_index}|{i}",
+                    exclude=used,
+                    location="",
+                )
+                hkey = normalize_image_key(hosted)
+                if hosted and hkey and hkey not in used and not _is_banned_stock_key(hkey):
+                    url, key, photo_alt = hosted, hkey, hosted_alt
+                else:
+                    # Last resort: any unused curated photo so we still ship 3 images
+                    for u in web_only_pool:
+                        uk = normalize_image_key(u)
+                        if uk and uk not in used and not _is_banned_stock_key(uk):
+                            url, key = _with_unsplash_params(u), uk
+                            break
+                    if not url:
+                        continue
         if key:
             used.add(key)
         if i == 0:
@@ -1725,6 +1814,7 @@ async def generate_article_images(
             image_concept_text=concept_for_meta if concept_for_meta and "working title" not in (concept_for_meta or "").lower() else "",
             industry="" if is_blog else "",
             photo_alt=photo_alt,
+            slot_hint=modifier,
         )
         assets.append(ImageAsset(
             url=url,
@@ -1738,6 +1828,37 @@ async def generate_article_images(
         ))
     # Drop any empty-URL accidents, then guarantee ≥1 real image
     assets = [a for a in assets if (a.url or "").strip()]
+    # Always ship header + footer + body (3). Never leave a page with a single photo.
+    pool_for_pad = list(dict.fromkeys(
+        list(_WEB_DESIGN_IMAGES) + list(_SOFTWARE_IMAGES) + list(_GENERIC_CURATED) + list(_all_curated_urls())
+    ))
+    while len(assets) < count:
+        next_url = ""
+        for u in pool_for_pad:
+            uk = normalize_image_key(u)
+            if uk and uk not in used and not _is_banned_stock_key(uk):
+                next_url = _with_unsplash_params(u)
+                used.add(uk)
+                break
+        if not next_url:
+            break
+        meta = build_image_metadata(
+            clean_focus, location, business_name, len(assets), is_featured=(len(assets) == 0),
+            image_concept_text=concept_for_meta if concept_for_meta and "working title" not in (concept_for_meta or "").lower() else "",
+            industry="" if is_blog else "",
+            photo_alt="",
+            slot_hint=modifiers[len(assets) % len(modifiers)],
+        )
+        assets.append(ImageAsset(
+            url=next_url,
+            filename=meta["filename"],
+            mime_type="image/webp",
+            alt_text=meta["alt_text"],
+            title=meta["title"],
+            caption=meta["caption"],
+            description=meta["description"],
+            is_featured=(len(assets) == 0),
+        ))
     if not assets:
         url = _with_unsplash_params(_WEB_DESIGN_IMAGES[keyword_index % len(_WEB_DESIGN_IMAGES)])
         meta = build_image_metadata("website design", location, business_name, 0, True, image_concept_text="", industry="")
@@ -1794,7 +1915,7 @@ async def reassign_unique_featured_images(rows: Iterable, used: Optional[List[st
         feat = b.get("featured_image_url") or ""
         key = normalize_image_key(feat)
         # Keep the first page that claimed this photo; refresh duplicates + missing
-        if key and owners.get(key) is r and "picsum.photos" not in feat:
+        if key and owners.get(key) is r and not stock_url_needs_replace(feat):
             continue
         exclude = list(used_list)
         focus = b.get("focus_keyword") or r.business_type or "website design"

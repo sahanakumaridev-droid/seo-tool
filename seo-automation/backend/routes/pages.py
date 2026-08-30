@@ -200,6 +200,13 @@ async def publish_to_web(
     q = float(getattr(block, "quality_score", None) or getattr(block, "readability_score", None) or 0)
     kw = float(getattr(block, "keyword_density", None) or 0)
     if not force and getattr(block, "content_type", "service") == "service":
+        from services.zeorbit_local_seo import copy_has_zip, digits_zip
+        blob = f"{block.intro or ''}\n{block.content or ''}\n{block.meta_description or ''}"
+        if not digits_zip(getattr(block, "zip", "") or "") or not copy_has_zip(blob, getattr(block, "zip", "") or ""):
+            raise HTTPException(
+                status_code=400,
+                detail="ZIP is mandatory. Location pages must include a 5-digit ZIP in the content before publish.",
+            )
         if block.publishable is False or not scores_meet_floor(q, kw):
             raise HTTPException(
                 status_code=400,
@@ -250,6 +257,11 @@ async def publish_to_web(
     public_url = f"{_public_base(request)}/{slug}"
     indexing = await track_public_publish(url=public_url, block=block, session=session)
     ads = await maybe_auto_create_ads(public_url=public_url, block=block)
+    try:
+        from services.sitemap_service import persist_live_sitemaps
+        await persist_live_sitemaps(session, site_base=_public_base(request))
+    except Exception:
+        pass
 
     return {
         "slug": slug,
@@ -301,6 +313,11 @@ async def publish_to_web_bulk(
             "indexing": indexing, "ads": ads,
         })
     await session.commit()
+    try:
+        from services.sitemap_service import persist_live_sitemaps
+        await persist_live_sitemaps(session, site_base=base)
+    except Exception:
+        pass
     return {
         "published": published,
         "count": len(published),
@@ -578,6 +595,8 @@ async def list_pages(
     limit: int = 20,
     session: AsyncSession = Depends(get_session),
 ):
+    limit = max(1, min(int(limit or 20), 250))
+    skip = max(0, int(skip or 0))
     result = await session.execute(
         select(PageRecord).offset(skip).limit(limit).order_by(PageRecord.created_at.desc())
     )

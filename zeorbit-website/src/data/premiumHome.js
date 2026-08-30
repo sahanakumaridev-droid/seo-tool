@@ -3,10 +3,10 @@
 export const HERO = {
   brand: 'ZeOrbit',
   eyebrow: 'Web · Apps · Growth',
-  headline: 'We believe fundamental honesty\nis the keystone of business.',
+  headline: 'Fundamental honesty\nis the keystone of business.',
   line: 'Clear work. Clear pricing. Websites, apps, SEO, and care you can trust — built to help ambitious brands grow.',
-  primaryCta: 'Get started with Master Care',
-  primaryHref: '/website-designing#care',
+  primaryCta: 'Start with Master Care',
+  primaryHref: '/?service=Master%20Care#contact',
   scene: '/videos/hero-agency-poster.webp',
   sceneAlt: 'ZeOrbit web design agency cinematic brand film',
   video: '/videos/hero-agency.mp4',

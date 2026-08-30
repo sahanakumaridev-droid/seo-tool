@@ -1,78 +1,752 @@
 [
-  {"name": "Orange County", "state": "CA", "lat": 33.7175, "lon": -117.8311},
-  {"name": "San Diego County", "state": "CA", "lat": 33.0200, "lon": -116.7700},
-  {"name": "Los Angeles County", "state": "CA", "lat": 34.0522, "lon": -118.2437},
-  {"name": "Sacramento County", "state": "CA", "lat": 38.4747, "lon": -121.3542},
-  {"name": "Riverside County", "state": "CA", "lat": 33.7437, "lon": -115.9930},
-  {"name": "San Bernardino County", "state": "CA", "lat": 34.8400, "lon": -116.1700},
-  {"name": "Alameda County", "state": "CA", "lat": 37.6017, "lon": -121.7195},
-  {"name": "Santa Clara County", "state": "CA", "lat": 37.3541, "lon": -121.9552},
-  {"name": "San Francisco County", "state": "CA", "lat": 37.7749, "lon": -122.4194},
-  {"name": "Cook County", "state": "IL", "lat": 41.7377, "lon": -87.6976},
-  {"name": "DuPage County", "state": "IL", "lat": 41.8240, "lon": -88.0900},
-  {"name": "Lake County", "state": "IL", "lat": 42.3220, "lon": -87.9610},
-  {"name": "Will County", "state": "IL", "lat": 41.4440, "lon": -87.9780},
-  {"name": "Kane County", "state": "IL", "lat": 41.9380, "lon": -88.4280},
-  {"name": "Honolulu County", "state": "HI", "lat": 21.4389, "lon": -158.0001},
-  {"name": "Hawaii County", "state": "HI", "lat": 19.5969, "lon": -155.5024},
-  {"name": "Maui County", "state": "HI", "lat": 20.7984, "lon": -156.3319},
-  {"name": "Kauai County", "state": "HI", "lat": 22.0964, "lon": -159.5261},
-  {"name": "Hartford County", "state": "CT", "lat": 41.7637, "lon": -72.6851},
-  {"name": "New Haven County", "state": "CT", "lat": 41.3083, "lon": -72.9279},
-  {"name": "Fairfield County", "state": "CT", "lat": 41.1400, "lon": -73.2600},
-  {"name": "New London County", "state": "CT", "lat": 41.4500, "lon": -72.1000},
-  {"name": "Middlesex County", "state": "CT", "lat": 41.4300, "lon": -72.5200},
-  {"name": "Wake County", "state": "NC", "lat": 35.8032, "lon": -78.5661},
-  {"name": "Mecklenburg County", "state": "NC", "lat": 35.2460, "lon": -80.8330},
-  {"name": "Guilford County", "state": "NC", "lat": 36.0796, "lon": -79.8194},
-  {"name": "Durham County", "state": "NC", "lat": 36.0360, "lon": -78.8760},
-  {"name": "Forsyth County", "state": "NC", "lat": 36.1300, "lon": -80.2300},
-  {"name": "Buncombe County", "state": "NC", "lat": 35.6110, "lon": -82.5300},
-  {"name": "King County", "state": "WA", "lat": 47.5480, "lon": -121.9836},
-  {"name": "Pierce County", "state": "WA", "lat": 47.0379, "lon": -122.0907},
-  {"name": "Snohomish County", "state": "WA", "lat": 48.0330, "lon": -121.8330},
-  {"name": "Maricopa County", "state": "AZ", "lat": 33.3480, "lon": -112.4910},
-  {"name": "Pima County", "state": "AZ", "lat": 32.0575, "lon": -111.6661},
-  {"name": "Harris County", "state": "TX", "lat": 29.8580, "lon": -95.3940},
-  {"name": "Dallas County", "state": "TX", "lat": 32.7660, "lon": -96.7770},
-  {"name": "Travis County", "state": "TX", "lat": 30.3340, "lon": -97.7800},
-  {"name": "Bexar County", "state": "TX", "lat": 29.4490, "lon": -98.5200},
-  {"name": "Tarrant County", "state": "TX", "lat": 32.7730, "lon": -97.2910},
-  {"name": "Miami-Dade County", "state": "FL", "lat": 25.5580, "lon": -80.4580},
-  {"name": "Broward County", "state": "FL", "lat": 26.1900, "lon": -80.3650},
-  {"name": "Orange County", "state": "FL", "lat": 28.5130, "lon": -81.3230},
-  {"name": "Hillsborough County", "state": "FL", "lat": 27.9180, "lon": -82.3480},
-  {"name": "New York County", "state": "NY", "lat": 40.7831, "lon": -73.9712},
-  {"name": "Kings County", "state": "NY", "lat": 40.6501, "lon": -73.9496},
-  {"name": "Queens County", "state": "NY", "lat": 40.7282, "lon": -73.7949},
-  {"name": "Nassau County", "state": "NY", "lat": 40.7300, "lon": -73.5800},
-  {"name": "Suffolk County", "state": "NY", "lat": 40.8200, "lon": -72.8000},
-  {"name": "Clark County", "state": "NV", "lat": 36.2140, "lon": -115.0130},
-  {"name": "Wayne County", "state": "MI", "lat": 42.2810, "lon": -83.2700},
-  {"name": "Oakland County", "state": "MI", "lat": 42.6600, "lon": -83.3800},
-  {"name": "Fulton County", "state": "GA", "lat": 33.7880, "lon": -84.4670},
-  {"name": "Gwinnett County", "state": "GA", "lat": 33.9600, "lon": -84.0200},
-  {"name": "Multnomah County", "state": "OR", "lat": 45.5470, "lon": -122.4170},
-  {"name": "Denver County", "state": "CO", "lat": 39.7392, "lon": -104.9903},
-  {"name": "Philadelphia County", "state": "PA", "lat": 39.9526, "lon": -75.1652},
-  {"name": "Allegheny County", "state": "PA", "lat": 40.4400, "lon": -80.0000},
-  {"name": "Cuyahoga County", "state": "OH", "lat": 41.4240, "lon": -81.6580},
-  {"name": "Franklin County", "state": "OH", "lat": 39.9690, "lon": -83.0100},
-  {"name": "Hennepin County", "state": "MN", "lat": 44.9778, "lon": -93.2650},
-  {"name": "Salt Lake County", "state": "UT", "lat": 40.6660, "lon": -111.8880},
-  {"name": "Fairfax County", "state": "VA", "lat": 38.8300, "lon": -77.2800},
-  {"name": "Montgomery County", "state": "MD", "lat": 39.1370, "lon": -77.2030},
-  {"name": "Middlesex County", "state": "MA", "lat": 42.4470, "lon": -71.2870},
-  {"name": "Suffolk County", "state": "MA", "lat": 42.3300, "lon": -71.0200},
-  {"name": "Jefferson County", "state": "KY", "lat": 38.1870, "lon": -85.6600},
-  {"name": "Davidson County", "state": "TN", "lat": 36.1700, "lon": -86.7800},
-  {"name": "Shelby County", "state": "TN", "lat": 35.1800, "lon": -89.9700},
-  {"name": "Orleans Parish", "state": "LA", "lat": 29.9511, "lon": -90.0715},
-  {"name": "East Baton Rouge Parish", "state": "LA", "lat": 30.5300, "lon": -91.0900},
-  {"name": "Bernallilo County", "state": "NM", "lat": 35.0500, "lon": -106.6700},
-  {"name": "Ada County", "state": "ID", "lat": 43.4500, "lon": -116.2400},
-  {"name": "Anchorage Municipality", "state": "AK", "lat": 61.2181, "lon": -149.9003},
-  {"name": "Providence County", "state": "RI", "lat": 41.8700, "lon": -71.4800},
-  {"name": "New Castle County", "state": "DE", "lat": 39.5800, "lon": -75.6400},
-  {"name": "District of Columbia", "state": "DC", "lat": 38.9072, "lon": -77.0369}
+  {
+    "name": "Alameda County",
+    "state": "CA",
+    "lat": 37.6017,
+    "lon": -121.7195
+  },
+  {
+    "name": "Alpine County",
+    "state": "CA",
+    "lat": 38.5971,
+    "lon": -119.8202
+  },
+  {
+    "name": "Amador County",
+    "state": "CA",
+    "lat": 38.4464,
+    "lon": -120.651
+  },
+  {
+    "name": "Butte County",
+    "state": "CA",
+    "lat": 39.6254,
+    "lon": -121.537
+  },
+  {
+    "name": "Calaveras County",
+    "state": "CA",
+    "lat": 38.196,
+    "lon": -120.5547
+  },
+  {
+    "name": "Colusa County",
+    "state": "CA",
+    "lat": 39.1787,
+    "lon": -122.237
+  },
+  {
+    "name": "Contra Costa County",
+    "state": "CA",
+    "lat": 37.9161,
+    "lon": -121.9174
+  },
+  {
+    "name": "Del Norte County",
+    "state": "CA",
+    "lat": 41.7431,
+    "lon": -123.897
+  },
+  {
+    "name": "El Dorado County",
+    "state": "CA",
+    "lat": 38.7786,
+    "lon": -120.5247
+  },
+  {
+    "name": "Fresno County",
+    "state": "CA",
+    "lat": 36.7378,
+    "lon": -119.7871
+  },
+  {
+    "name": "Glenn County",
+    "state": "CA",
+    "lat": 39.5987,
+    "lon": -122.392
+  },
+  {
+    "name": "Humboldt County",
+    "state": "CA",
+    "lat": 40.745,
+    "lon": -123.8695
+  },
+  {
+    "name": "Imperial County",
+    "state": "CA",
+    "lat": 33.0395,
+    "lon": -115.4734
+  },
+  {
+    "name": "Inyo County",
+    "state": "CA",
+    "lat": 36.5111,
+    "lon": -117.41
+  },
+  {
+    "name": "Kern County",
+    "state": "CA",
+    "lat": 35.3428,
+    "lon": -118.7299
+  },
+  {
+    "name": "Kings County",
+    "state": "CA",
+    "lat": 36.0988,
+    "lon": -119.8815
+  },
+  {
+    "name": "Lake County",
+    "state": "CA",
+    "lat": 39.083,
+    "lon": -122.753
+  },
+  {
+    "name": "Lassen County",
+    "state": "CA",
+    "lat": 40.6736,
+    "lon": -120.594
+  },
+  {
+    "name": "Los Angeles County",
+    "state": "CA",
+    "lat": 34.0522,
+    "lon": -118.2437
+  },
+  {
+    "name": "Madera County",
+    "state": "CA",
+    "lat": 37.218,
+    "lon": -119.762
+  },
+  {
+    "name": "Marin County",
+    "state": "CA",
+    "lat": 38.0834,
+    "lon": -122.7633
+  },
+  {
+    "name": "Mariposa County",
+    "state": "CA",
+    "lat": 37.562,
+    "lon": -119.971
+  },
+  {
+    "name": "Mendocino County",
+    "state": "CA",
+    "lat": 39.438,
+    "lon": -123.391
+  },
+  {
+    "name": "Merced County",
+    "state": "CA",
+    "lat": 37.2,
+    "lon": -120.712
+  },
+  {
+    "name": "Modoc County",
+    "state": "CA",
+    "lat": 41.59,
+    "lon": -120.725
+  },
+  {
+    "name": "Mono County",
+    "state": "CA",
+    "lat": 37.939,
+    "lon": -118.887
+  },
+  {
+    "name": "Monterey County",
+    "state": "CA",
+    "lat": 36.24,
+    "lon": -121.31
+  },
+  {
+    "name": "Napa County",
+    "state": "CA",
+    "lat": 38.5025,
+    "lon": -122.2654
+  },
+  {
+    "name": "Nevada County",
+    "state": "CA",
+    "lat": 39.301,
+    "lon": -120.768
+  },
+  {
+    "name": "Orange County",
+    "state": "CA",
+    "lat": 33.7175,
+    "lon": -117.8311
+  },
+  {
+    "name": "Placer County",
+    "state": "CA",
+    "lat": 39.0916,
+    "lon": -120.8039
+  },
+  {
+    "name": "Plumas County",
+    "state": "CA",
+    "lat": 40.003,
+    "lon": -120.839
+  },
+  {
+    "name": "Riverside County",
+    "state": "CA",
+    "lat": 33.7437,
+    "lon": -115.993
+  },
+  {
+    "name": "Sacramento County",
+    "state": "CA",
+    "lat": 38.4747,
+    "lon": -121.3542
+  },
+  {
+    "name": "San Benito County",
+    "state": "CA",
+    "lat": 36.603,
+    "lon": -121.075
+  },
+  {
+    "name": "San Bernardino County",
+    "state": "CA",
+    "lat": 34.84,
+    "lon": -116.17
+  },
+  {
+    "name": "San Diego County",
+    "state": "CA",
+    "lat": 33.02,
+    "lon": -116.77
+  },
+  {
+    "name": "San Francisco County",
+    "state": "CA",
+    "lat": 37.7749,
+    "lon": -122.4194
+  },
+  {
+    "name": "San Joaquin County",
+    "state": "CA",
+    "lat": 37.9176,
+    "lon": -121.171
+  },
+  {
+    "name": "San Luis Obispo County",
+    "state": "CA",
+    "lat": 35.3102,
+    "lon": -120.4358
+  },
+  {
+    "name": "San Mateo County",
+    "state": "CA",
+    "lat": 37.4337,
+    "lon": -122.4014
+  },
+  {
+    "name": "Santa Barbara County",
+    "state": "CA",
+    "lat": 34.611,
+    "lon": -120.001
+  },
+  {
+    "name": "Santa Clara County",
+    "state": "CA",
+    "lat": 37.3541,
+    "lon": -121.9552
+  },
+  {
+    "name": "Santa Cruz County",
+    "state": "CA",
+    "lat": 37.0454,
+    "lon": -122.058
+  },
+  {
+    "name": "Shasta County",
+    "state": "CA",
+    "lat": 40.7909,
+    "lon": -121.847
+  },
+  {
+    "name": "Sierra County",
+    "state": "CA",
+    "lat": 39.58,
+    "lon": -120.516
+  },
+  {
+    "name": "Siskiyou County",
+    "state": "CA",
+    "lat": 41.5918,
+    "lon": -122.54
+  },
+  {
+    "name": "Solano County",
+    "state": "CA",
+    "lat": 38.268,
+    "lon": -121.939
+  },
+  {
+    "name": "Sonoma County",
+    "state": "CA",
+    "lat": 38.5111,
+    "lon": -122.847
+  },
+  {
+    "name": "Stanislaus County",
+    "state": "CA",
+    "lat": 37.5591,
+    "lon": -120.997
+  },
+  {
+    "name": "Sutter County",
+    "state": "CA",
+    "lat": 39.034,
+    "lon": -121.694
+  },
+  {
+    "name": "Tehama County",
+    "state": "CA",
+    "lat": 40.126,
+    "lon": -122.234
+  },
+  {
+    "name": "Trinity County",
+    "state": "CA",
+    "lat": 40.65,
+    "lon": -123.113
+  },
+  {
+    "name": "Tulare County",
+    "state": "CA",
+    "lat": 36.22,
+    "lon": -118.8
+  },
+  {
+    "name": "Tuolumne County",
+    "state": "CA",
+    "lat": 38.027,
+    "lon": -120.128
+  },
+  {
+    "name": "Ventura County",
+    "state": "CA",
+    "lat": 34.3705,
+    "lon": -119.1391
+  },
+  {
+    "name": "Yolo County",
+    "state": "CA",
+    "lat": 38.6866,
+    "lon": -121.9016
+  },
+  {
+    "name": "Yuba County",
+    "state": "CA",
+    "lat": 39.268,
+    "lon": -121.351
+  },
+  {
+    "name": "Cook County",
+    "state": "IL",
+    "lat": 41.7377,
+    "lon": -87.6976
+  },
+  {
+    "name": "DuPage County",
+    "state": "IL",
+    "lat": 41.824,
+    "lon": -88.09
+  },
+  {
+    "name": "Lake County",
+    "state": "IL",
+    "lat": 42.322,
+    "lon": -87.961
+  },
+  {
+    "name": "Will County",
+    "state": "IL",
+    "lat": 41.444,
+    "lon": -87.978
+  },
+  {
+    "name": "Kane County",
+    "state": "IL",
+    "lat": 41.938,
+    "lon": -88.428
+  },
+  {
+    "name": "Honolulu County",
+    "state": "HI",
+    "lat": 21.4389,
+    "lon": -158.0001
+  },
+  {
+    "name": "Hawaii County",
+    "state": "HI",
+    "lat": 19.5969,
+    "lon": -155.5024
+  },
+  {
+    "name": "Maui County",
+    "state": "HI",
+    "lat": 20.7984,
+    "lon": -156.3319
+  },
+  {
+    "name": "Kauai County",
+    "state": "HI",
+    "lat": 22.0964,
+    "lon": -159.5261
+  },
+  {
+    "name": "Hartford County",
+    "state": "CT",
+    "lat": 41.7637,
+    "lon": -72.6851
+  },
+  {
+    "name": "New Haven County",
+    "state": "CT",
+    "lat": 41.3083,
+    "lon": -72.9279
+  },
+  {
+    "name": "Fairfield County",
+    "state": "CT",
+    "lat": 41.14,
+    "lon": -73.26
+  },
+  {
+    "name": "New London County",
+    "state": "CT",
+    "lat": 41.45,
+    "lon": -72.1
+  },
+  {
+    "name": "Middlesex County",
+    "state": "CT",
+    "lat": 41.43,
+    "lon": -72.52
+  },
+  {
+    "name": "Wake County",
+    "state": "NC",
+    "lat": 35.8032,
+    "lon": -78.5661
+  },
+  {
+    "name": "Mecklenburg County",
+    "state": "NC",
+    "lat": 35.246,
+    "lon": -80.833
+  },
+  {
+    "name": "Guilford County",
+    "state": "NC",
+    "lat": 36.0796,
+    "lon": -79.8194
+  },
+  {
+    "name": "Durham County",
+    "state": "NC",
+    "lat": 36.036,
+    "lon": -78.876
+  },
+  {
+    "name": "Forsyth County",
+    "state": "NC",
+    "lat": 36.13,
+    "lon": -80.23
+  },
+  {
+    "name": "Buncombe County",
+    "state": "NC",
+    "lat": 35.611,
+    "lon": -82.53
+  },
+  {
+    "name": "King County",
+    "state": "WA",
+    "lat": 47.548,
+    "lon": -121.9836
+  },
+  {
+    "name": "Pierce County",
+    "state": "WA",
+    "lat": 47.0379,
+    "lon": -122.0907
+  },
+  {
+    "name": "Snohomish County",
+    "state": "WA",
+    "lat": 48.033,
+    "lon": -121.833
+  },
+  {
+    "name": "Maricopa County",
+    "state": "AZ",
+    "lat": 33.348,
+    "lon": -112.491
+  },
+  {
+    "name": "Pima County",
+    "state": "AZ",
+    "lat": 32.0575,
+    "lon": -111.6661
+  },
+  {
+    "name": "Harris County",
+    "state": "TX",
+    "lat": 29.858,
+    "lon": -95.394
+  },
+  {
+    "name": "Dallas County",
+    "state": "TX",
+    "lat": 32.766,
+    "lon": -96.777
+  },
+  {
+    "name": "Travis County",
+    "state": "TX",
+    "lat": 30.334,
+    "lon": -97.78
+  },
+  {
+    "name": "Bexar County",
+    "state": "TX",
+    "lat": 29.449,
+    "lon": -98.52
+  },
+  {
+    "name": "Tarrant County",
+    "state": "TX",
+    "lat": 32.773,
+    "lon": -97.291
+  },
+  {
+    "name": "Miami-Dade County",
+    "state": "FL",
+    "lat": 25.558,
+    "lon": -80.458
+  },
+  {
+    "name": "Broward County",
+    "state": "FL",
+    "lat": 26.19,
+    "lon": -80.365
+  },
+  {
+    "name": "Orange County",
+    "state": "FL",
+    "lat": 28.513,
+    "lon": -81.323
+  },
+  {
+    "name": "Hillsborough County",
+    "state": "FL",
+    "lat": 27.918,
+    "lon": -82.348
+  },
+  {
+    "name": "New York County",
+    "state": "NY",
+    "lat": 40.7831,
+    "lon": -73.9712
+  },
+  {
+    "name": "Kings County",
+    "state": "NY",
+    "lat": 40.6501,
+    "lon": -73.9496
+  },
+  {
+    "name": "Queens County",
+    "state": "NY",
+    "lat": 40.7282,
+    "lon": -73.7949
+  },
+  {
+    "name": "Nassau County",
+    "state": "NY",
+    "lat": 40.73,
+    "lon": -73.58
+  },
+  {
+    "name": "Suffolk County",
+    "state": "NY",
+    "lat": 40.82,
+    "lon": -72.8
+  },
+  {
+    "name": "Clark County",
+    "state": "NV",
+    "lat": 36.214,
+    "lon": -115.013
+  },
+  {
+    "name": "Wayne County",
+    "state": "MI",
+    "lat": 42.281,
+    "lon": -83.27
+  },
+  {
+    "name": "Oakland County",
+    "state": "MI",
+    "lat": 42.66,
+    "lon": -83.38
+  },
+  {
+    "name": "Fulton County",
+    "state": "GA",
+    "lat": 33.788,
+    "lon": -84.467
+  },
+  {
+    "name": "Gwinnett County",
+    "state": "GA",
+    "lat": 33.96,
+    "lon": -84.02
+  },
+  {
+    "name": "Multnomah County",
+    "state": "OR",
+    "lat": 45.547,
+    "lon": -122.417
+  },
+  {
+    "name": "Denver County",
+    "state": "CO",
+    "lat": 39.7392,
+    "lon": -104.9903
+  },
+  {
+    "name": "Philadelphia County",
+    "state": "PA",
+    "lat": 39.9526,
+    "lon": -75.1652
+  },
+  {
+    "name": "Allegheny County",
+    "state": "PA",
+    "lat": 40.44,
+    "lon": -80.0
+  },
+  {
+    "name": "Cuyahoga County",
+    "state": "OH",
+    "lat": 41.424,
+    "lon": -81.658
+  },
+  {
+    "name": "Franklin County",
+    "state": "OH",
+    "lat": 39.969,
+    "lon": -83.01
+  },
+  {
+    "name": "Hennepin County",
+    "state": "MN",
+    "lat": 44.9778,
+    "lon": -93.265
+  },
+  {
+    "name": "Salt Lake County",
+    "state": "UT",
+    "lat": 40.666,
+    "lon": -111.888
+  },
+  {
+    "name": "Fairfax County",
+    "state": "VA",
+    "lat": 38.83,
+    "lon": -77.28
+  },
+  {
+    "name": "Montgomery County",
+    "state": "MD",
+    "lat": 39.137,
+    "lon": -77.203
+  },
+  {
+    "name": "Middlesex County",
+    "state": "MA",
+    "lat": 42.447,
+    "lon": -71.287
+  },
+  {
+    "name": "Suffolk County",
+    "state": "MA",
+    "lat": 42.33,
+    "lon": -71.02
+  },
+  {
+    "name": "Jefferson County",
+    "state": "KY",
+    "lat": 38.187,
+    "lon": -85.66
+  },
+  {
+    "name": "Davidson County",
+    "state": "TN",
+    "lat": 36.17,
+    "lon": -86.78
+  },
+  {
+    "name": "Shelby County",
+    "state": "TN",
+    "lat": 35.18,
+    "lon": -89.97
+  },
+  {
+    "name": "Orleans Parish",
+    "state": "LA",
+    "lat": 29.9511,
+    "lon": -90.0715
+  },
+  {
+    "name": "East Baton Rouge Parish",
+    "state": "LA",
+    "lat": 30.53,
+    "lon": -91.09
+  },
+  {
+    "name": "Bernallilo County",
+    "state": "NM",
+    "lat": 35.05,
+    "lon": -106.67
+  },
+  {
+    "name": "Ada County",
+    "state": "ID",
+    "lat": 43.45,
+    "lon": -116.24
+  },
+  {
+    "name": "Anchorage Municipality",
+    "state": "AK",
+    "lat": 61.2181,
+    "lon": -149.9003
+  },
+  {
+    "name": "Providence County",
+    "state": "RI",
+    "lat": 41.87,
+    "lon": -71.48
+  },
+  {
+    "name": "New Castle County",
+    "state": "DE",
+    "lat": 39.58,
+    "lon": -75.64
+  },
+  {
+    "name": "District of Columbia",
+    "state": "DC",
+    "lat": 38.9072,
+    "lon": -77.0369
+  }
 ]

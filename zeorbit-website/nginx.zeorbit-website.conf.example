@@ -59,6 +59,29 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # Live sitemaps from SEO tool (published blogs), not the empty static files
+    location = /sitemap.xml {
+        proxy_pass http://127.0.0.1:8001/sitemap.xml;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header Cache-Control "no-store" always;
+    }
+    location = /page-sitemap.xml {
+        proxy_pass http://127.0.0.1:8001/page-sitemap.xml;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header Cache-Control "no-store" always;
+    }
+    location = /post-sitemap.xml {
+        proxy_pass http://127.0.0.1:8001/post-sitemap.xml;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header Cache-Control "no-store" always;
+    }
+
     # Old /p/{slug} article URLs → /{slug}
     location ^~ /p/ {
         rewrite ^/p/(.*)$ /$1 permanent;

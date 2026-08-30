@@ -811,8 +811,15 @@ def ai_page_brief_block(
     title: str,
     h2s: List[str],
     image_concept_text: str,
+    zip: str = "",
 ) -> str:
-    place = f"{city}, {state}".strip(", ") if state else city
+    place = place_label(city, state, zip) or (f"{city}, {state}".strip(", ") if state else city)
+    z = re.sub(r"\D", "", zip or "")[:5]
+    zip_line = (
+        f"ZIP CODE (required in intro AND at least one body section as {place}): {z}"
+        if z else
+        f"LOCATION: {place} — do not invent a ZIP if you do not have one."
+    )
     faqs = intent_faqs(intent, city, industry, 0)
     faq_lines = "\n".join(f"- {f['question']}" for f in faqs)
     return f"""
@@ -820,8 +827,9 @@ SEARCH INTENT FOR THIS PAGE ONLY: {intent.label} ({intent.id})
 CUSTOMER PROBLEM: A business that {intent.customer_problem}.
 SERVICE EMPHASIS: {intent.service_emphasis} ({intent.platform_hint})
 INDUSTRY EXAMPLES TO WEAVE IN (do not force all): {industry}
+{zip_line}
 LOCATION: {place} — do not invent local offices, addresses, competitors, or unverified local statistics.
-If you lack reliable local facts, use neutral wording ("businesses in {city}") instead of inventing details.
+If you lack reliable local facts, use neutral wording ("businesses in {place}") instead of inventing details.
 
 REQUIRED TITLE (use exactly or very close): {title}
 REQUIRED H2 STRUCTURE (refine lightly if needed, keep intent): {h2s}
@@ -973,6 +981,157 @@ def ensure_title_names_city(title: str, city: str, state: str = "") -> str:
     return f"{base} in {place}"
 
 
+def place_label(city: str, state: str = "", zip: str = "") -> str:
+    """City, ST ZIP — used in body, meta, and image captions."""
+    z = re.sub(r"\D", "", zip or "")[:5]
+    city = (city or "").strip()
+    state = (state or "").strip()
+    if city and state:
+        core = f"{city}, {state}"
+    else:
+        core = city or state
+    if z:
+        core = f"{core} {z}".strip() if core else z
+    return (core or "").strip()
+
+
+def digits_zip(zip: str = "") -> str:
+    z = re.sub(r"\D", "", zip or "")[:5]
+    return z if len(z) == 5 else ""
+
+
+def copy_has_zip(text: str, zip: str = "") -> bool:
+    z = digits_zip(zip)
+    blob = text or ""
+    if z:
+        return z in blob
+    return bool(re.search(r"\b\d{5}\b", blob))
+
+
+def force_zip_into_copy(text: str, city: str, state: str = "", zip: str = "") -> str:
+    """ZIP is mandatory: if the 5-digit code is missing, append a serving line."""
+    z = digits_zip(zip)
+    if not z:
+        return text or ""
+    if z in (text or ""):
+        return text or ""
+    place = place_label(city, state, z) or z
+    body = (text or "").rstrip()
+    if body and not re.search(r"[.!?]$", body.split("\n")[0] if False else body[-1:]):
+        if body[-1:] not in ".!?":
+            body += "."
+    line = f" Serving {place}."
+    if not body:
+        return f"This page is for businesses in {place}."
+    # Prefer first paragraph
+    chunks = re.split(r"(\n\n)", body, maxsplit=1)
+    first = (chunks[0] or "").rstrip()
+    if first and first[-1:] not in ".!?":
+        first += "."
+    rest = "".join(chunks[1:]) if len(chunks) > 1 else ""
+    return f"{first}{line}{rest}".strip()
+    """City, ST ZIP — used in body, meta, and image captions."""
+    z = re.sub(r"\D", "", zip or "")[:5]
+    city = (city or "").strip()
+    state = (state or "").strip()
+    if city and state:
+        core = f"{city}, {state}"
+    else:
+        core = city or state
+    if z:
+        core = f"{core} {z}".strip() if core else z
+    return (core or "").strip()
+
+
+def ensure_zip_in_meta(meta: str, city: str, state: str = "", zip: str = "") -> str:
+    """Keep meta 150–160 chars and include ZIP when we have one."""
+    z = re.sub(r"\D", "", zip or "")[:5]
+    out = (meta or "").strip()
+    if not z:
+        if city and city.lower() not in out.lower():
+            place = place_label(city, state, "")
+            extra = f" in {place}." if place else ""
+            out = (out.rstrip(". ") + extra).strip()
+        return out[:160]
+    if z in out:
+        return out[:160]
+    place = place_label(city, state, z)
+    extra = f" Serving {place}."
+    base = out.rstrip(". ")
+    combined = f"{base}{extra}"
+    if len(combined) <= 160:
+        return combined
+    keep = 160 - len(extra) - 1
+    if keep < 80:
+        return f"Website design for businesses in {place}."[:160]
+    return (base[:keep].rstrip() + extra)[:160]
+
+
+def ensure_zip_in_body(text: str, city: str, state: str = "", zip: str = "") -> str:
+    """Put this location's ZIP in the body — weave it into the first city mention."""
+    z = re.sub(r"\D", "", zip or "")[:5]
+    if not (text or "").strip():
+        return text or ""
+    if z and z in text:
+        return text
+    place = place_label(city, state, z)
+    if not place:
+        return text
+    if not z:
+        if city and city.lower() in (text or "").lower():
+            return text
+        sentence = f" Written for {place}."
+        chunks = re.split(r"(\n\n)", text, maxsplit=1)
+        first = (chunks[0] or "").rstrip()
+        if first and not re.search(r"[.!?]$", first):
+            first += "."
+        rest = "".join(chunks[1:]) if len(chunks[1:]) else ""
+        return f"{first}{sentence}{rest}".strip()
+
+    city_pat = re.compile(re.escape(city), re.I) if city else None
+    if city_pat and city_pat.search(text):
+        def _replace_first(m):
+            after = text[m.end(): m.end() + 12]
+            if z in after:
+                return m.group(0)
+            st = (state or "").strip()
+            if st and re.match(rf"\s*,\s*{re.escape(st)}\b", after, re.I):
+                # City, ST → City, ST ZIP
+                return m.group(0)
+            if st:
+                return f"{m.group(0)}, {st} {z}"
+            return f"{m.group(0)} {z}"
+
+        updated, n = city_pat.subn(_replace_first, text, count=1)
+        # If we already had "City, ST", append ZIP after the state.
+        if n and z not in updated:
+            st = (state or "").strip()
+            if st:
+                st_pat = re.compile(
+                    rf"({re.escape(city)}\s*,\s*{re.escape(st)})\b",
+                    re.I,
+                )
+                updated2, n2 = st_pat.subn(rf"\1 {z}", updated, count=1)
+                if n2:
+                    return updated2
+            sentence = f" Serving {place}."
+            chunks = re.split(r"(\n\n)", updated, maxsplit=1)
+            first = (chunks[0] or "").rstrip()
+            if first and not re.search(r"[.!?]$", first):
+                first += "."
+            rest = "".join(chunks[1:]) if len(chunks) > 1 else ""
+            return f"{first}{sentence}{rest}".strip()
+        return updated
+
+    sentence = f" Serving {place}."
+    chunks = re.split(r"(\n\n)", text, maxsplit=1)
+    first = (chunks[0] or "").rstrip()
+    if first and not re.search(r"[.!?]$", first):
+        first += "."
+    rest = "".join(chunks[1:]) if len(chunks) > 1 else ""
+    return f"{first}{sentence}{rest}".strip()
+
+
 def ensure_location_body(
     *,
     intro: str,
@@ -987,7 +1146,9 @@ def ensure_location_body(
 ) -> Tuple[str, str]:
     """Guarantee city-specific body — scrub foreign places + vague 'local / this area' stubs."""
     zip_bit = f" {zip}" if (zip or "").strip() else ""
-    place = f"{city}, {state}{zip_bit}".strip(", ") if state else (f"{city}{zip_bit}".strip() or "").strip()
+    place = place_label(city, state, zip) or (
+        f"{city}, {state}{zip_bit}".strip(", ") if state else (f"{city}{zip_bit}".strip() or "").strip()
+    )
     if not place:
         return intro or "", content or ""
     ind = industry or "small business"
@@ -1154,6 +1315,9 @@ def score_page_quality(
             local += 4
         if intent_id:
             local += 2
+        if not copy_has_zip(body):
+            local = 0.0
+            reasons.append("ZIP code is mandatory in location page content")
         local = min(20.0, local)
         if local < 12:
             reasons.append("Weak local relevance")
@@ -1247,7 +1411,10 @@ def score_page_quality(
         and image >= 5
         and unique >= 7
         and total >= MIN_PUBLISH_SCORE
+        and (is_blog or copy_has_zip(body))
     )
+    if not is_blog and city and not copy_has_zip(body):
+        reasons.append("ZIP code missing — location pages cannot publish without a 5-digit ZIP")
     if total < MIN_PUBLISH_SCORE:
         reasons.append(f"Score {round(total, 1)} below {int(MIN_PUBLISH_SCORE)} floor")
     if not publishable and not reasons:
@@ -1262,9 +1429,10 @@ def build_template_page_copy(
     industry: str,
     pretty_keyword: str,
     index: int,
+    zip: str = "",
 ) -> Dict[str, Any]:
     """Deep, intent-specific template copy when LLM is unavailable."""
-    place = f"{city}, {state}".strip(", ") if state else (city or "your area")
+    place = place_label(city, state, zip) or (f"{city}, {state}".strip(", ") if state else (city or "your area"))
     ind = industry or INDUSTRY_POOL[_stable_int(city, str(index)) % len(INDUSTRY_POOL)]
     pricing = ZEORBIT_FACTS["pricing_range"]
     facts = facts_blurb(index)
@@ -1395,9 +1563,10 @@ def build_template_page_copy(
     )
 
     meta = (
-        f"ZeOrbit builds WordPress and Shopify websites for {ind} in {city}. "
+        f"ZeOrbit builds WordPress and Shopify websites for {ind} in {place}. "
         f"Projects typically {pricing}. Practical, mobile-friendly sites — talk with us."
-    )[:160]
+    )
+    meta = ensure_zip_in_meta(meta, city, state, zip)
 
     cta_options = (
         f"If your {ind} in {city} needs a website that matches a real business problem, ZeOrbit can help with WordPress, Shopify, redesign, or mobile apps. Not sure where to start? We're here to help.",

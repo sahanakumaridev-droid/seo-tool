@@ -68,13 +68,14 @@ const INDUSTRY_ICONS = {
   Hotel,
 }
 
-function usePreferMotionVideo() {
+function usePreferMotionVideo({ allowNarrow = false } = {}) {
   const [preferVideo, setPreferVideo] = useState(false)
 
   useEffect(() => {
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
     const narrow = window.matchMedia('(max-width: 768px)')
-    const sync = () => setPreferVideo(!motion.matches && !narrow.matches)
+    const sync = () =>
+      setPreferVideo(!motion.matches && (allowNarrow || !narrow.matches))
     sync()
     motion.addEventListener('change', sync)
     narrow.addEventListener('change', sync)
@@ -82,7 +83,7 @@ function usePreferMotionVideo() {
       motion.removeEventListener('change', sync)
       narrow.removeEventListener('change', sync)
     }
-  }, [])
+  }, [allowNarrow])
 
   return preferVideo
 }
@@ -150,7 +151,9 @@ function useAutoPlayVideo(enabled) {
 
     el.muted = true
     el.defaultMuted = true
+    el.volume = 0
     el.playsInline = true
+    el.setAttribute('muted', '')
     el.setAttribute('playsinline', '')
     el.setAttribute('webkit-playsinline', 'true')
 
@@ -182,7 +185,7 @@ function useAutoPlayVideo(enabled) {
 function HeroVideo({ preferVideo }) {
   const [videoFailed, setVideoFailed] = useState(false)
   const [videoOn, setVideoOn] = useState(false)
-  const allowVideo = useDeferredMotion(preferVideo, 2800) && !videoFailed
+  const allowVideo = preferVideo && !videoFailed
   const videoRef = useAutoPlayVideo(allowVideo)
 
   return (
@@ -208,8 +211,9 @@ function HeroVideo({ preferVideo }) {
           loop
           muted
           playsInline
-          preload="none"
+          preload="auto"
           disablePictureInPicture
+          onPlaying={() => setVideoOn(true)}
           onCanPlay={() => setVideoOn(true)}
           onError={() => setVideoFailed(true)}
         />
@@ -410,7 +414,7 @@ function FinaleMaps() {
 }
 
 export default function PremiumHome() {
-  const preferHeroVideo = usePreferMotionVideo()
+  const preferHeroVideo = usePreferMotionVideo({ allowNarrow: true })
   useHashScroll()
 
   return (
@@ -424,11 +428,8 @@ export default function PremiumHome() {
             <Reveal className="cz-hero-copy" eager>
               <p className="cz-hero-eyebrow">{HERO.eyebrow}</p>
               <h1 className="cz-hero-title">
-                {HERO.headline.split('\n').map((line) => (
-                  <span key={line} className="cz-hero-title-line">
-                    {line}
-                  </span>
-                ))}
+                <span className="cz-hero-title-line">Fundamental honesty</span>
+                <span className="cz-hero-title-line">is the keystone of business.</span>
               </h1>
               <p className="cz-hero-line">{HERO.line}</p>
               <div className="cz-hero-cta">
@@ -436,6 +437,10 @@ export default function PremiumHome() {
                   {HERO.primaryCta}
                   <ArrowRight size={18} strokeWidth={2.4} />
                 </Link>
+                <a className="cz-btn-ghost cz-hero-call" href={`tel:${SITE_CONTACT.phoneTel}`}>
+                  <Phone size={18} strokeWidth={2.4} aria-hidden />
+                  Call {SITE_CONTACT.phone}
+                </a>
               </div>
             </Reveal>
           </div>

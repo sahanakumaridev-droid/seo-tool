@@ -15,6 +15,20 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _require_zip_for_location_page(block: SEOBlock):
+    if (getattr(block, "content_type", "service") or "service") in ("blog", "post"):
+        return
+    if not (getattr(block, "city", "") or "").strip():
+        return
+    from services.zeorbit_local_seo import copy_has_zip, digits_zip
+    blob = f"{block.intro or ''}\n{block.content or ''}"
+    if not digits_zip(getattr(block, "zip", "") or "") or not copy_has_zip(blob, getattr(block, "zip", "") or ""):
+        raise HTTPException(
+            status_code=400,
+            detail=f"ZIP is mandatory. '{block.city}' has no 5-digit ZIP in the page content.",
+        )
+
+
 async def _track_and_verify(result: PublishResult, block: SEOBlock, session: AsyncSession):
     """After a successful publish: verify the URL is actually crawlable, then
     hand it to the compliant Google Search Console pipeline (sitemap +
@@ -47,9 +61,10 @@ async def _track_and_verify(result: PublishResult, block: SEOBlock, session: Asy
             await session.commit()
             return
 
-        sitemap_url = settings.WP_SITEMAP_URL
         is_post = (getattr(block, "content_type", "") or "") in ("blog", "post")
+        sitemap_url = settings.WP_SITEMAP_URL
         extra_sm = (settings.WP_POST_SITEMAP_URL if is_post else settings.WP_PAGE_SITEMAP_URL) or ""
+        # Never submit a post to page-sitemap or a page to post-sitemap.
         sitemaps = [u for u in (sitemap_url, extra_sm) if u]
         in_sitemap = False
         for sitemap_url in sitemaps:
@@ -107,6 +122,7 @@ async def publish_single(req: PublishRequest, session: AsyncSession = Depends(ge
     _apply_defaults(req.wp_config)
     if not req.wp_config.wp_url or not req.wp_config.wp_username or not req.wp_config.wp_app_password:
         raise HTTPException(status_code=400, detail="WordPress connection not configured.")
+    _require_zip_for_location_page(req.seo_block)
     result = await publish_to_wordpress(req.seo_block, req.wp_config)
     await _track_and_verify(result, req.seo_block, session)
     return result
@@ -120,6 +136,7 @@ async def publish_bulk(req: BulkPublishRequest, session: AsyncSession = Depends(
         raise HTTPException(status_code=400, detail="WordPress connection not configured.")
     results = []
     for block in req.pages:
+        _require_zip_for_location_page(block)
         result = await publish_to_wordpress(block, req.wp_config)
         await _track_and_verify(result, block, session)
         results.append(result)

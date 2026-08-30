@@ -49,7 +49,7 @@ const TOPICS = [
       'Master Care keeps your site updated, secure, backed up, and supported after launch — so you’re not chasing plugins and downtime alone. Want what’s included, or ready to start?',
     followUps: [
       { id: 'care-included', label: 'What’s included?', reply: 'Typical Master Care covers updates, security monitoring, backups, uptime checks, and a support lane for fixes. Exact scope depends on your stack — WordPress, Shopify, or custom.' },
-      { id: 'care-start', label: 'Start Master Care', kind: 'link', href: '/website-designing#care', linkLabel: 'Open Master Care' },
+      { id: 'care-start', label: 'Start Master Care', kind: 'link', href: '/?service=Master%20Care#contact', linkLabel: 'Open the form' },
       { id: 'quote', label: 'Get a free quote', kind: 'quote' },
     ],
   },

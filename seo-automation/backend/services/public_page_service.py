@@ -8,7 +8,7 @@ import html
 import json
 import re
 from models.schemas import SEOBlock
-from services.wordpress_service import _build_content_html
+from services.wordpress_service import _build_content_html, _ai_platform_bar
 from config import settings
 
 EMAIL = "info@zeorbit.com"
@@ -629,8 +629,7 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
     width:100%; max-height:min(48vh, 440px); object-fit:cover; display:block; border-radius:0;
   }}
   figure figcaption, .wp-block-image figcaption {{
-    font-family:var(--sans); font-size:12.5px; color:var(--muted); text-align:left;
-    margin:0; padding:12px 16px 14px; line-height:1.5; border-top:1px solid var(--line); background:#fff;
+    display: none !important;
   }}
 
   /* Trust badges */
@@ -681,6 +680,16 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
     padding:0; border:0;
   }}
   .pull-quote {{ display:none; }} /* legacy pages */
+
+  .ai-ask-bar {{
+    margin:32px 0 8px; padding:0; display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  }}
+  .ai-ask-bar a {{
+    width:40px; height:40px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;
+    text-decoration:none; box-shadow:0 1px 2px rgba(0,0,0,.12);
+  }}
+  .ai-ask-bar a:hover {{ transform:translateY(-2px); }}
+  .ai-ask-bar img {{ width:22px; height:22px; border-radius:6px; object-fit:contain; background:#fff; }}
 
   .share-bar {{
     margin:36px 0 8px; padding:18px 0 6px; border-top:1px solid var(--line);
@@ -935,6 +944,7 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
     {body}
     {footer_figure}
     {share_bar}
+    {_ai_platform_bar()}
     <div class="article-end">
       <div class="contact-card" id="contact">
         <div class="cc-main">

@@ -555,3 +555,36 @@ async def list_sitemaps(session: AsyncSession = Depends(get_session)):
 
     base = _reader_base()
     return await sitemap_overview(session, site_base=base)
+
+
+@router.post("/submit-sitemaps")
+async def submit_sitemaps_to_gsc(session: AsyncSession = Depends(get_session)):
+    """Submit sitemap URLs to Google Search Console (www property aligned)."""
+    from config import settings
+    from routes.pages import _reader_base
+    from services.sitemap_service import sitemap_overview
+
+    if not search_console_service.is_configured():
+        raise HTTPException(
+            status_code=400,
+            detail="Search Console is not configured. Set GSC_SITE_URL and GOOGLE_INDEXING_KEY_FILE.",
+        )
+    base = _reader_base()
+    overview = await sitemap_overview(session, site_base=base)
+    live_page = (settings.WP_PAGE_SITEMAP_URL or "").strip()
+    live_post = (settings.WP_POST_SITEMAP_URL or "").strip()
+    urls = [
+        overview.get("index_url"),
+        overview.get("page_sitemap_url"),
+        overview.get("post_sitemap_url"),
+        live_page,
+        live_post,
+    ]
+    results = []
+    for u in urls:
+        if not u:
+            continue
+        r = search_console_service.submit_sitemap(u)
+        results.append({"url": search_console_service._inspection_url(u), "ok": r.get("ok"), "status": r.get("status"), "detail": r.get("detail")})
+    ok = any(x.get("ok") for x in results)
+    return {"ok": ok, "gsc_site_url": settings.GSC_SITE_URL, "results": results}

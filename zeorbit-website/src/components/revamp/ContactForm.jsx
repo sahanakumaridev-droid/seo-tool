@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { RefreshCw } from 'lucide-react'
+import AiPlatformLinks from '../AiPlatformLinks'
 
 const SERVICE_OPTIONS = [
   { value: 'Website Design & Development', label: 'Website (WordPress / Shopify / Wix / Squarespace)' },
@@ -15,6 +16,7 @@ const SERVICE_OPTIONS = [
 
 const CONTACT_PAGE_SERVICES = [
   { value: '', label: 'Service Need' },
+  { value: 'Master Care', label: 'Master Care' },
   { value: 'Web Designing', label: 'Web Designing' },
   { value: 'Digital Advertising', label: 'Digital Advertising' },
   { value: 'SEO', label: 'SEO' },
@@ -81,6 +83,16 @@ export default function ContactForm({
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState({ type: 'idle', message: '' })
   const [touched, setTouched] = useState({})
+
+  useEffect(() => {
+    const wanted = new URLSearchParams(location.search).get('service')
+    if (!wanted) return
+    const options = isContactPage ? CONTACT_PAGE_SERVICES : SERVICE_OPTIONS
+    const match = options.find(
+      (opt) => opt.value && opt.value.toLowerCase() === wanted.trim().toLowerCase(),
+    )
+    if (match) setForm((prev) => ({ ...prev, service: match.value }))
+  }, [location.search, isContactPage])
 
   const payload = useMemo(() => {
     const trimmed = {
@@ -208,6 +220,10 @@ export default function ContactForm({
   }
 
   return (
+    <>
+      <div className="zo-ai-above-form">
+        <AiPlatformLinks />
+      </div>
     <div
       className={`rv-contact-card${isContactPage ? ' is-contact-page' : ''}`}
       role="region"
@@ -434,5 +450,6 @@ export default function ContactForm({
         </div>
       </form>
     </div>
+    </>
   )
 }

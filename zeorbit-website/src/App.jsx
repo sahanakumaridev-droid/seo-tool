@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import ScrollToTop from './components/ScrollToTop'
 import PageJump from './components/PageJump'
+import RouteMeta from './components/RouteMeta'
 import LandingPage from './pages/LandingPage'
 
 const SiteDock = lazy(() => import('./components/SiteDock'))
@@ -34,6 +35,7 @@ export default function App() {
     <BrowserRouter>
       <ScrollToTop />
       <PageJump />
+      <RouteMeta />
       <DelayedChrome />
       <Suspense fallback={null}>
         <Routes>

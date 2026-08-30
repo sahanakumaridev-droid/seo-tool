@@ -428,23 +428,33 @@ def _strip_instruction_leak(text: str, brief: str = "") -> str:
     return "\n\n".join(keep)
 
 
+def _looks_like_search_query(text: str) -> bool:
+    t = (text or "").strip()
+    if not t:
+        return False
+    if "?" in t:
+        return True
+    if re.match(r"^(how|what|why|when|which|who|where|should|is|are|can|do|does|will)\b", t, re.I):
+        return True
+    return len(t.split()) >= 4
+
+
 def article_topic(brief: str, target_keywords: list, business_type: str) -> str:
     """Blog topic = the editor's search query / first target keyword.
 
-    For blogs, the keyword IS the subject (e.g. "how to fix a website").
+    For blogs, the keyword IS the subject (e.g. a question or how-to sentence).
     Do not replace it with niche, industry, or a leftover page brief.
     """
     kws = [str(k).strip() for k in (target_keywords or []) if str(k).strip()]
-    clean_kws = [
-        k for k in kws
-        if not _looks_like_writing_brief(k) and "working title" not in k.lower()
-    ]
-    if clean_kws:
-        return clean_kws[0]
+    for k in kws:
+        if _looks_like_search_query(k) or not _looks_like_writing_brief(k):
+            if "working title" in k.lower():
+                continue
+            return k
     parsed_topic = extract_brief_topic(brief, kws, business_type)
-    if parsed_topic and not _looks_like_writing_brief(parsed_topic):
+    if parsed_topic and (_looks_like_search_query(parsed_topic) or not _looks_like_writing_brief(parsed_topic)):
         return parsed_topic
-    return business_type or "guide"
+    return kws[0] if kws else (business_type or "guide")
 
 
 def _page_meta_title(
@@ -515,7 +525,7 @@ def normalize_markdown_sections(content: str, h2s: list | None = None) -> str:
         b = block.strip()
         if not b:
             continue
-        if b.startswith("#") or len(b) < 320:
+        if b.startswith("#") or "?" in b[:160] or len(b) < 900:
             chunks.append(b)
             continue
         sentences = re.findall(r"[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$", b)
@@ -534,38 +544,37 @@ def normalize_markdown_sections(content: str, h2s: list | None = None) -> str:
     return "\n\n".join(chunks)
 
 
-def _sectioned_body(h2s: list, intro: str, content: str, brief: str = "") -> str:
+def _section_pad(heading: str, query: str = "") -> str:
+    q = (query or heading or "this topic").strip()
+    h = (heading or q).strip()
+    return (
+        f"{h} — this section answers the search for “{q}.” "
+        f"Explain the situation in plain language, name the checks or facts the reader needs, "
+        f"and finish with one practical next step. Keep it about the query, not a generic agency pitch."
+    )
+
+
+def _sectioned_body(h2s: list, intro: str, content: str, brief: str = "", query: str = "") -> str:
     """Every H2 gets real paragraphs so the live article is not heading-only."""
     heads = [_as_text(h) for h in (h2s or []) if _as_text(h)]
     intro_t = _strip_instruction_leak(_as_text(intro), brief)
     body = normalize_markdown_sections(_strip_instruction_leak(_as_text(content), brief), heads)
-    if heads and re.search(r"(?m)^##\s+", body):
-        missing = [h for h in heads if not re.search(rf"(?m)^##\s+{re.escape(h)}\s*$", body, re.I)]
-        # Also accept heading on its own line without requiring end-anchor only
-        if missing:
-            missing = [
-                h for h in heads
-                if not re.search(rf"(?mi)^##\s+{re.escape(h)}\s*$", body)
-            ]
-        if not missing:
-            # Still ensure no section is empty
-            parts = re.split(r"(?m)^##\s+", body)
-            rebuilt = []
-            for part in parts[1:]:
-                nl = part.find("\n")
-                if nl == -1:
-                    heading, rest = part.strip(), ""
-                else:
-                    heading, rest = part[:nl].strip(), part[nl:].strip()
-                rest = _strip_instruction_leak(rest, brief)
-                if not rest or len(rest.split()) < 25:
-                    rest = (
-                        f"{heading}. ZeOrbit covers this in clear, useful detail — what you offer, "
-                        f"who it is for in this area, and the practical next step visitors should take."
-                    )
-                rebuilt.append(f"## {heading}\n\n{rest}")
-            return "\n\n".join(rebuilt)
-    # Drop leftover markdown headings so we do not wrap ## twice.
+    q = (query or "").strip()
+    md_heads = [h.strip() for h in re.findall(r"(?m)^##\s+(.+)$", body) if h.strip()]
+    if md_heads:
+        parts = re.split(r"(?m)^##\s+", body)
+        rebuilt = []
+        for part in parts[1:]:
+            nl = part.find("\n")
+            if nl == -1:
+                heading, rest = part.strip(), ""
+            else:
+                heading, rest = part[:nl].strip(), part[nl:].strip()
+            rest = _strip_instruction_leak(rest, brief)
+            if not rest or len(rest.split()) < 25:
+                rest = _section_pad(heading, q or heading)
+            rebuilt.append(f"## {heading}\n\n{rest}")
+        return "\n\n".join(rebuilt)
     body = re.sub(r"(?m)^##\s+.+$", "", body).strip()
     paras = [p.strip() for p in re.split(r"\n{2,}", body) if p.strip()]
     if not paras and intro_t:
@@ -574,10 +583,7 @@ def _sectioned_body(h2s: list, intro: str, content: str, brief: str = "") -> str
     if not heads:
         return body or intro_t
     if not paras:
-        paras = [
-            f"{h}. ZeOrbit builds this into a clear, useful page — what you offer, who it is for, and the next step."
-            for h in heads
-        ]
+        paras = [_section_pad(h, q or h) for h in heads]
     n = len(heads)
     chunks: list[list[str]] = [[] for _ in heads]
     idx = 0
@@ -591,17 +597,10 @@ def _sectioned_body(h2s: list, intro: str, content: str, brief: str = "") -> str
         idx += take
     out = []
     for i, h in enumerate(heads):
-        piece = chunks[i] or [
-            f"{h}. We cover this in plain language so visitors in this area know exactly what to do next. "
-            f"ZeOrbit builds WordPress sites with clear service pages, local signals, and a simple path to contact."
-        ]
-        # Ensure minimum substance per section
+        piece = chunks[i] or [_section_pad(h, q or h)]
         joined = "\n\n".join(piece)
         if len(joined.split()) < 25:
-            joined = (
-                f"{joined} ZeOrbit helps you turn this into a practical page for local visitors — "
-                f"clear messaging, mobile layout, and a next step that feels natural."
-            )
+            joined = f"{joined} {_section_pad(h, q or h)}"
         out.append(f"## {h}\n\n{joined}")
     extra = paras[idx:]
     if extra:
@@ -1078,6 +1077,11 @@ def ensure_keyword_coverage(
         f"If {display_kw}{city_bit} is your next step, start with goals, budget, and a homepage that answers what you do and how to contact you.",
         f"Local searchers looking for {display_kw}{city_bit} notice fast load times, readable copy, and contact paths above the fold.",
     ]
+    if len((kw or "").split()) >= 6 or "?" in (kw or "") or re.search(r"\bhow to\b", kw or "", re.I):
+        boosters = [
+            f"If you opened this page for “{display_kw}”, use the sections above in order and confirm the result before you add extras.",
+            f"Stay on “{display_kw}” — do not switch the topic to an unrelated product or a website rebuild.",
+        ]
     new_intro = intro or ""
     if display_kw.lower() not in new_intro.lower():
         new_intro = (
@@ -1282,6 +1286,181 @@ PROVIDER_STYLE_NOTES = {
 }
 
 
+def blog_layout_for_query(query: str, brief: str = "") -> str:
+    """How-to/fix → steps even if the keyword ends with '?'; other questions → Q&A."""
+    t = f"{query or ''} {brief or ''}".lower()
+    if re.search(r"\b(how to|how do i|how do you|step-by-step|guide)\b", t):
+        return "steps"
+    if re.search(r"\b(fix|repair|broken|not working|error)\b", t):
+        return "steps"
+    if "?" in t or re.search(r"^\s*(what|why|when|which|who|where|should|is|are|can|do|does)\b", t):
+        return "qa"
+    if re.search(r"\bquestion\b", t):
+        return "qa"
+    return "story"
+
+
+def _query_task_phrase(query: str) -> str:
+    t = re.sub(r"[?!.]+$", "", (query or "").strip())
+    t = re.sub(r"^(how to|how do i|how do you)\s+", "", t, flags=re.I)
+    return t.strip() or (query or "this").strip()
+
+
+def _blog_query_copy(primary: str) -> dict:
+    """Fallback blog copy that actually teaches the editor's query — never agency filler."""
+    q = (primary or "").strip()
+    ql = q.lower()
+    pretty = pretty_keyword(q)
+    task = _query_task_phrase(q)
+    layout = blog_layout_for_query(q)
+    is_howto = layout == "steps"
+    is_redirect = bool(re.search(r"301|302|redirect", ql))
+
+    if is_redirect:
+        return None  # keep existing 301 branch
+
+    if "gmail" in ql and "safari" in ql:
+        intro = (
+            "Safari does not include a Gmail signup screen of its own. You create the Google account "
+            "in the Gmail website (or the Google account page) while you are in Safari, then you can "
+            "save the password and keep Gmail open in a tab or on the home screen."
+        )
+        content = (
+            f"## Direct answer: {pretty}\n\n"
+            "Open Safari, go to gmail.com (or accounts.google.com/signup), tap Create account, "
+            "enter your name, username, password, and recovery phone or email, then finish Google’s "
+            "verification. After that you can sign in at gmail.com in Safari anytime.\n\n"
+            "You do not install Gmail from the App Store to finish this. Safari is only the browser "
+            "that loads Google’s signup page.\n\n"
+            "## Step-by-step in Safari\n\n"
+            "1. Open Safari on iPhone, iPad, or Mac.\n"
+            "2. Type gmail.com in the address bar and go. If you already have a Google account, use "
+            "Create account instead of Sign in.\n"
+            "3. Choose For my personal use (or For my child / For work, if that is what you need).\n"
+            "4. Enter first and last name, then pick a Gmail address or use an email you already have.\n"
+            "5. Create a strong password. When Safari offers to save it, accept so you are not locked out.\n"
+            "6. Add a recovery phone number or recovery email, complete the CAPTCHA or SMS code, and agree to Google’s terms.\n"
+            "7. Open gmail.com again in Safari and confirm the inbox loads.\n\n"
+            "On iPhone, tap Aa (or Share) → Add to Home Screen if you want a Gmail icon that still opens in Safari.\n\n"
+            "## Safari settings that help\n\n"
+            "Allow pop-ups for accounts.google.com if signup stalls. If cookies are blocked, Google cannot "
+            "finish the session — Settings → Safari → turn off Block All Cookies for this step, then tighten "
+            "again later. Private Browsing will not keep you signed in after you close the tab.\n\n"
+            "iCloud Keychain or Safari AutoFill can store the new password. That is optional but useful if "
+            "you sign in on more than one Apple device.\n\n"
+            "## Mistakes that stop signup\n\n"
+            "Using an old bookmark to a broken Google URL, blocking cookies, skipping phone verification, "
+            "or closing the tab mid-code are the usual failures. Do not use a public computer without signing "
+            "out. If Google says the username is taken, pick another Gmail address — you cannot create a duplicate.\n\n"
+            "## After the account exists\n\n"
+            "Send a test message to yourself, add a profile photo if you want, and turn on 2-Step Verification "
+            "in Google Account → Security. If you also want the Gmail app, that is a separate App Store install "
+            "and is not required to use Gmail in Safari."
+        )
+        h2s = [
+            f"Direct answer: {pretty}",
+            "Step-by-step in Safari",
+            "Safari settings that help",
+            "Mistakes that stop signup",
+            "After the account exists",
+        ]
+        faqs = [
+            FAQItem(question="Can I create a Gmail account only using Safari?", answer="Yes. Safari loads Google’s signup page. You do not need the Gmail app to create the account."),
+            FAQItem(question="Does this work on iPhone Safari and Mac Safari?", answer="Yes. The same gmail.com Create account flow works on iPhone, iPad, and Mac Safari."),
+            FAQItem(question="Why does Google ask for my phone number?", answer="Google uses it to verify you are not a bot and for account recovery if you forget the password."),
+            FAQItem(question="Will Safari save my Gmail password?", answer="It can, if you allow AutoFill / iCloud Keychain when the save prompt appears."),
+            FAQItem(question="Do I need the App Store Gmail app?", answer="No. The app is optional. Mail in Safari at gmail.com is enough."),
+            FAQItem(question="What if Create account will not load?", answer="Turn off content blockers for that tab, allow cookies, and try a non-private window."),
+        ]
+        return {"intro": intro, "content": content, "h2s": h2s, "faqs": faqs, "h3s": []}
+
+    if is_howto:
+        intro = (
+            f"This guide shows how to {task} in plain steps. Follow them in order, then use the checks "
+            f"at the end so you know it worked."
+        )
+        content = (
+            f"## What “{pretty}” actually means\n\n"
+            f"People search “{q}” when they want a working result, not a sales page. "
+            f"The job is to {task} using the product or browser named in that query. Stay on that task "
+            "in every section.\n\n"
+            f"## Step-by-step: {task}\n\n"
+            f"1. Open the app, site, or browser named in the query (for “{q}”, that is the starting place).\n"
+            "2. Find Create, Sign up, Add, or the equivalent control. Read the labels on the screen — do not skip them.\n"
+            "3. Enter the required details (name, email, password, or file) exactly as asked.\n"
+            "4. Complete any confirmation (email link, SMS code, or CAPTCHA).\n"
+            "5. Sign in again or refresh to prove the new account, page, or setting is live.\n\n"
+            f"## How to confirm {task} worked\n\n"
+            "You should see a success screen, an inbox, a new profile, or the setting turned on. "
+            "If you are sent back to a login page, sign in with the details you just created. "
+            "Try a second device only after the first path works.\n\n"
+            "## Mistakes to avoid\n\n"
+            "Closing the tab before the code arrives, using a blocked cookie mode, reusing a password Google rejects, "
+            "or mixing up a similar product (for example another browser or another Google product) are the usual misses.\n\n"
+            "## If you get stuck\n\n"
+            "Retry in a normal (non-private) window, disable blockers for that site, and use the official URL from the "
+            "vendor — not a random search ad. ZeOrbit can help if the problem is actually a website or domain setup, "
+            "not the account signup itself."
+        )
+        h2s = [
+            f"What “{pretty}” actually means",
+            f"Step-by-step: {task}",
+            f"How to confirm {task} worked",
+            "Mistakes to avoid",
+            "If you get stuck",
+        ]
+        faqs = [
+            FAQItem(question=f"Is this really about {task}?", answer=f"Yes. Every section is written for someone who typed “{q}”."),
+            FAQItem(question="Can I do this myself?", answer="Yes. Use the steps above. Get help only if a verification page will not load or an official site is blocked."),
+            FAQItem(question="How long does it take?", answer="Most account or setup tasks take a few minutes if you have a phone number or backup email ready."),
+            FAQItem(question="What if a step fails?", answer="Go back one screen, check spelling, and retry without private browsing or ad blockers."),
+            FAQItem(question="Do I need a developer?", answer="Not for a normal signup or settings change. Call a specialist if you are changing DNS, email hosting, or a live website."),
+            FAQItem(question="What is the next step after it works?", answer="Write down the login, turn on recovery options, and only then add extras (apps, forwarding, or 2-step verification)."),
+        ]
+        return {"intro": intro, "content": content, "h2s": h2s, "faqs": faqs, "h3s": []}
+
+    # Q&A / other topics — still answer the query, not web-design filler
+    intro = (
+        f"You searched “{q}”. This post answers that in direct language, then explains what to check "
+        "and what to skip."
+    )
+    content = (
+        f"## Direct answer: {pretty}\n\n"
+        f"The practical answer to “{q}” is to treat the words in that search as the whole job. "
+        f"If the query is about {task}, explain {task}, show how to verify it, and do not switch the topic "
+        "to an unrelated service.\n\n"
+        f"## What “{task}” involves\n\n"
+        "Name the tool, browser, or product in the query. Say what the reader should see on screen. "
+        "Give one way to confirm they are done. Keep examples inside that topic.\n\n"
+        "## What to do next\n\n"
+        "1. Restate the question in your own words.\n"
+        "2. Do the smallest action that would prove the answer (open the app, load the page, toggle the setting).\n"
+        "3. If it fails, change one thing and retry.\n\n"
+        "## Common mix-ups\n\n"
+        "Swapping in a different product, following an ad instead of the official site, or stopping at a login wall "
+        "are the usual reasons this still feels unsolved.\n\n"
+        "## When to get help\n\n"
+        "If the official page will not load, or you are changing a live website rather than an account setting, "
+        "get a specialist. ZeOrbit helps with websites — not with replacing the answer to this query."
+    )
+    h2s = [
+        f"Direct answer: {pretty}",
+        f"What “{task}” involves",
+        "What to do next",
+        "Common mix-ups",
+        "When to get help",
+    ]
+    faqs = [
+        FAQItem(question=f"What is {ql}?", answer=f"It is the exact question this article answers: {pretty}."),
+        FAQItem(question="Can I do this myself?", answer="Usually yes. Use the checks in this post before paying anyone."),
+        FAQItem(question="How long does it take?", answer="A clear answer and one verification pass often take minutes."),
+        FAQItem(question="What if I get it wrong?", answer="Undo the last change and retry with the official site or app named in the query."),
+        FAQItem(question="Do I need a developer?", answer="Only if the problem is a website, domain, or custom integration — not a normal how-to."),
+        FAQItem(question="What's the next step?", answer=f"Finish {task}, confirm it, then stop. Do not add extra tools until that works."),
+    ]
+    return {"intro": intro, "content": content, "h2s": h2s, "faqs": faqs, "h3s": []}
+
+
 def pick_layout_variant(city: str, business_type: str, kind: str = "service") -> str:
     seed = f"{kind}|{(business_type or '').lower()}|{(city or '').lower()}"
     h = int(hashlib.md5(seed.encode()).hexdigest(), 16)
@@ -1358,6 +1537,15 @@ async def generate_seo_block(
     # Blog section only: always use the query/keyword article path (never location-page engine).
     kind = "blog" if requested_kind == "blog" else "service"
     content_type_out = "blog" if requested_kind == "blog" else "service"
+    if kind != "blog" and (city or "").strip():
+        from services.location_service import lookup_place_zip
+        from services.zeorbit_local_seo import digits_zip
+        zip = digits_zip(zip) or await lookup_place_zip(city, state, zip)
+        zip = digits_zip(zip)
+        if not zip:
+            raise RuntimeError(
+                f"ZIP is mandatory for location pages. Could not resolve a postal code for {city}, {state}."
+            )
     # Real vertical only — never stamp "Professional Services" onto keyword/slug.
     # With target keywords, keep industry explicit/inferred; do not rotate the pool.
     resolved = resolve_industry_label(industry, original_niche, target_keywords or [])
@@ -1396,8 +1584,12 @@ async def generate_seo_block(
             business_type, city, keyword_index, industry=industry or "",
         )
     )
-    primary_kw = strip_generic_industry_prefix(primary_kw)
-    layout = pick_layout_variant(city, f"{primary_kw or business_type}|{(intent.id if intent else '')}", kind)
+    if requested_kind != "blog":
+        primary_kw = strip_generic_industry_prefix(primary_kw)
+    if kind == "blog":
+        layout = blog_layout_for_query(primary_kw, custom_requirements or "")
+    else:
+        layout = pick_layout_variant(city, f"{primary_kw or business_type}|{(intent.id if intent else '')}", kind)
     concept = image_concept(intent, city, industry, keyword_index) if intent else ""
     gen_kwargs = dict(
         business_type=business_type, city=city, state=state, target_keywords=target_keywords,
@@ -1407,6 +1599,7 @@ async def generate_seo_block(
         search_intent=intent.id if intent else "",
         image_concept_text=concept,
         customer_problem=(parsed_brief.get("customer_problem") or (intent.customer_problem if intent else "")),
+        zip=zip or "",
     )
     if use_ai:
         try:
@@ -1419,6 +1612,10 @@ async def generate_seo_block(
                 print(f"[AI] LLM retry failed, falling back to templates: {e2}")
                 block = await _generate_template_block(**gen_kwargs)
     else:
+        block = await _generate_template_block(**gen_kwargs)
+
+    if kind == "blog" and len((block.content or "").split()) < 80:
+        print("[SEO] Blog body too thin — using query-shaped template")
         block = await _generate_template_block(**gen_kwargs)
 
     # Soft uniqueness retry for location pages that are near-duplicates.
@@ -1516,6 +1713,38 @@ async def generate_seo_block(
                     scrubbed_faqs.append({"question": q, "answer": a})
             block.faqs = scrubbed_faqs
 
+        from services.zeorbit_local_seo import ensure_zip_in_meta, ensure_zip_in_body, force_zip_into_copy, digits_zip
+        zip = digits_zip(zip)
+        block.zip = zip
+        block.meta_description = ensure_zip_in_meta(
+            block.meta_description or "", city, state or "", zip,
+        )
+        block.intro = force_zip_into_copy(
+            ensure_zip_in_body(block.intro or "", city, state or "", zip),
+            city, state or "", zip,
+        )
+        block.content = force_zip_into_copy(
+            ensure_zip_in_body(block.content or "", city, state or "", zip),
+            city, state or "", zip,
+        )
+        if block.faqs:
+            for faq in block.faqs:
+                if hasattr(faq, "answer"):
+                    faq.answer = force_zip_into_copy(faq.answer or "", city, state or "", zip)
+                elif isinstance(faq, dict) and faq.get("answer"):
+                    faq["answer"] = force_zip_into_copy(faq["answer"], city, state or "", zip)
+
+    elif city:
+        from services.zeorbit_local_seo import ensure_zip_in_meta, ensure_zip_in_body
+        block.meta_description = ensure_zip_in_meta(
+            block.meta_description or "", city, state or "", zip or "",
+        )
+        if zip:
+            block.intro = ensure_zip_in_body(block.intro or "", city, state or "", zip or "")
+            block.content = ensure_zip_in_body(block.content or "", city, state or "", zip or "")
+        else:
+            block.intro = ensure_zip_in_body(block.intro or "", city, state or "", "")
+
     try:
         from services.image_service import generate_article_images, blog_image_plan
         # Blog: images follow the search-query category (e.g. Wix). Pages: website visuals.
@@ -1593,6 +1822,7 @@ async def generate_seo_block(
                 intent_obj = pick_search_intent(city, keyword_index, industry=industry)
             packed = build_template_page_copy(
                 intent_obj, city, state or "", industry or "", pretty_keyword(primary_kw), keyword_index,
+                zip=zip or "",
             )
             # Prefer AI intro if it already names the city; otherwise use template intro/content.
             body_l = f"{block.intro}\n{block.content}".lower()
@@ -1651,15 +1881,20 @@ async def generate_seo_block(
             print(f"[Quality] repair pass failed for {city}: {e}")
 
     # Keyword-use floor (same 90% bar as Quality) — boost naturally if thin.
+    # Blogs: never inject location-page sales lines; density weave stays on the query.
     focus_for_density = (block.focus_keyword or primary_kw or "").strip()
-    block.intro, block.content, kw_use = ensure_keyword_coverage(
-        block.intro or "",
-        block.content or "",
-        focus_for_density,
-        city=city or "",
-        min_score=MIN_KEYWORD_USE_SCORE,
-    )
-    block.keyword_density = kw_use
+    if kind == "blog":
+        kw_use = _keyword_density(f"{block.intro or ''}\n{block.content or ''}", focus_for_density)
+        block.keyword_density = kw_use
+    else:
+        block.intro, block.content, kw_use = ensure_keyword_coverage(
+            block.intro or "",
+            block.content or "",
+            focus_for_density,
+            city=city or "",
+            min_score=MIN_KEYWORD_USE_SCORE,
+        )
+        block.keyword_density = kw_use
     # Re-score after keyword weave (body changed).
     quality = score_page_quality(
         title=block.title or "",
@@ -1827,6 +2062,7 @@ async def _generate_ai_block(
     search_intent: str = "",
     image_concept_text: str = "",
     customer_problem: str = "",
+    zip: str = "",
 ) -> SEOBlock:
     """Generate SEO content using an LLM (GPT-4, Gemini, or Groq — whichever
     is configured/selected) for higher quality, unique content."""
@@ -1834,7 +2070,8 @@ async def _generate_ai_block(
 
     city, state = _one_place(city, state)
     brief = (custom_requirements or "").strip()
-    place = f"{city}, {state}".strip(", ") if state else city
+    from services.zeorbit_local_seo import place_label
+    place = place_label(city, state, zip) or (f"{city}, {state}".strip(", ") if state else city)
     who = _audience_who(industry, audience)
     buyers = _buyer_word(industry)
     audience_line = (
@@ -1846,7 +2083,10 @@ async def _generate_ai_block(
     primary_kw = (primary_keyword or pick_primary_keyword(
         target_keywords, business_type, city, keyword_index, industry=industry or "",
     )).strip()
-    layout = layout_variant if layout_variant in LAYOUT_INSTRUCTIONS else pick_layout_variant(city, business_type, content_kind)
+    layout = layout_variant if layout_variant in LAYOUT_INSTRUCTIONS else (
+        blog_layout_for_query(primary_kw, brief) if content_kind == "blog"
+        else pick_layout_variant(city, business_type, content_kind)
+    )
     layout_note = LAYOUT_INSTRUCTIONS[layout]
     provider_key = (llm_provider or "").lower().strip()
     provider_note = PROVIDER_STYLE_NOTES.get(provider_key, "Write at the quality level of ChatGPT, Claude, or Gemini — specific and human.")
@@ -1896,7 +2136,7 @@ SEARCH QUERY: "{topic}"
 
 - Title, H1, intro, every H2, body paragraphs, and FAQs MUST directly answer or teach that query.
 - If the query is "how to fix a website", write a practical fix guide (diagnose → fix → verify) — not generic web design sales copy.
-- If the query is a question (what/why/how/when), answer that question first.
+- If the query is a full sentence or question, that sentence IS the article. Answer it in the intro, every H2, the body, and the FAQs. Do not change the topic to web design, ZeOrbit services, or a city landing page unless the sentence itself is about that.
 - If the query is a problem ("broken website", "site not loading"), diagnose and solve that problem.
 - Niche / industry may color EXAMPLES only — they must NOT replace the query as the topic.
 - Do NOT write a location landing page, city SEO page, or "web design in San Diego" article unless the query itself is that.
@@ -1978,6 +2218,7 @@ Return ONLY valid JSON, no markdown fences."""
         )
         master_brief = ai_page_brief_block(
             intent, city, state, industry or "", title_locked, h2_examples, concept,
+            zip=zip or "",
         )
         prompt = f"""You are writing ONE ZeOrbit service / location PAGE for AI search visibility (Google, AI Overviews, ChatGPT Search, Gemini, Bing/Copilot).
 Model style: {provider_note}
@@ -1987,6 +2228,7 @@ WHO WE ARE: ZeOrbit is a technology company that provides website design and dev
 WHAT THIS PAGE SELLS: {business_type}
 WHO IT IS FOR: {who}
 WHERE: {place or "the United States"} — this is the ONLY place named on the page.
+Include the 5-digit ZIP {re.sub(r'\D', '', zip or '')[:5] or '(resolve before write)'} as {place} in the intro and again in the body. Never skip the ZIP when WHERE contains one.
 PRIMARY KEYWORD (weave naturally in title/H1/intro): {pretty}
 Other keywords to use naturally (do not dump as a list): {kw_line}
 
@@ -2075,6 +2317,14 @@ Return ONLY valid JSON, no markdown fences."""
         image_concept_out = image_concept_text or ""
     meta = _strip_instruction_leak(_as_text(data.get("meta_description")), brief)
     h2s = [_as_text(h) for h in (data.get("h2s") or []) if _as_text(h)]
+    if content_kind == "blog" and len(h2s) < 3:
+        pretty_h = pretty_keyword(primary_kw)
+        h2s = [
+            f"Direct answer: {pretty_h}",
+            f"What “{primary_kw}” is really asking",
+            "How to act on this answer",
+            "Mistakes to avoid",
+        ]
     if content_kind != "blog" and len(h2s) < 3:
         from services.zeorbit_local_seo import pick_search_intent, SEARCH_INTENTS, intent_h2_set
         intent_obj = pick_search_intent(city, keyword_index, industry=industry or "", brief=brief, keywords=target_keywords or [])
@@ -2086,8 +2336,11 @@ Return ONLY valid JSON, no markdown fences."""
         h2s = intent_h2_set(intent_obj, city, industry or "", layout)
     h3s = [_as_text(h) for h in (data.get("h3s") or []) if _as_text(h)]
     intro = _strip_instruction_leak(_as_text(data.get("intro")), brief)
-    content = _sectioned_body(h2s, intro, data.get("content"), brief=brief)
+    content = _sectioned_body(h2s, intro, data.get("content"), brief=brief, query=primary_kw)
     content = _strip_instruction_leak(content, brief)
+    md_h2s = [h.strip() for h in re.findall(r"(?m)^##\s+(.+)$", content or "") if h.strip()]
+    if content_kind == "blog" and md_h2s:
+        h2s = md_h2s
     cta = _strip_instruction_leak(_as_text(data.get("cta")), brief)
     content_text = intro + " " + content
 
@@ -2097,6 +2350,7 @@ Return ONLY valid JSON, no markdown fences."""
     return SEOBlock(
         city=city,
         state=state,
+        zip=zip or "",
         business_type=bt,
         industry=industry,
         slug=slug,
@@ -2136,6 +2390,7 @@ async def _generate_template_block(
     search_intent: str = "",
     image_concept_text: str = "",
     customer_problem: str = "",
+    zip: str = "",
     **_kwargs,
 ) -> SEOBlock:
     brief = (custom_requirements or "").strip()
@@ -2145,8 +2400,22 @@ async def _generate_template_block(
         slug = _slugify(primary)
         title = pretty_keyword(topic)[:60]
         h1 = pretty_keyword(topic)
+        packed_blog = _blog_query_copy(primary)
         is_redirect = bool(re.search(r"301|302|redirect", primary, re.I))
-        if is_redirect:
+        q = primary.lower().strip()
+        pretty = pretty_keyword(primary)
+        is_howto = bool(re.search(r"^(how to|how do i)\b", q, re.I)) or "how to" in q
+        is_fix = bool(re.search(r"\b(fix|repair|broken|not working|error)\b", q, re.I))
+        is_q = (not is_howto) and (not is_fix) and (
+            blog_layout_for_query(primary, brief) == "qa" or "?" in primary
+        )
+        if packed_blog and not is_redirect:
+            intro = packed_blog["intro"]
+            content = packed_blog["content"]
+            h2s = packed_blog["h2s"]
+            h3s = packed_blog.get("h3s") or []
+            faqs = packed_blog["faqs"]
+        elif is_redirect:
             intro = (
                 "Need to send an old URL to a new page without losing search equity? "
                 "A 301 redirect is the standard way to tell browsers and Google that a page has moved permanently."
@@ -2171,91 +2440,128 @@ async def _generate_template_block(
                 "Mistakes that drop rankings",
                 "When to get help",
             ]
-        else:
-            # Query-shaped fallback when LLM is unavailable — still center the keyword.
-            q = primary.lower().strip()
-            is_howto = bool(re.search(r"^(how to|how do i)\b", q, re.I)) or "how to" in q
-            is_fix = bool(re.search(r"\b(fix|repair|broken|not working|error)\b", q, re.I))
+        elif is_q:
+            intro = (
+                f"People type “{primary}” when they want a straight answer, not a sales page. "
+                "This post answers that question, then covers what to check and what to do next."
+            )
+            content = (
+                f"## Direct answer: {pretty}\n\n"
+                f"The short answer to that search is this: name the real problem behind the query, "
+                "then fix the cause instead of adding more pages or ads. If the question is about a restaurant "
+                "(or any local business) website, visitors usually bounce because the offer, hours, menu, "
+                "location, or phone path is unclear on a phone.\n\n"
+                "Read the query as a customer would. If they asked why something fails, list the usual causes. "
+                "If they asked what something is, define it in one paragraph, then show when it matters.\n\n"
+                f"## What the search “{q}” is really asking\n\n"
+                "Most question searches want: (1) a yes/no or cause, (2) proof they can check themselves, "
+                "and (3) a next step that does not require buying a full rebuild. Stay on that query in every section.\n\n"
+                "Write H2s as follow-up questions. Answer each one in 2–4 sentences. Use examples that match "
+                "the words in the keyword — restaurants, Wix, Shopify, 301s, or whatever the query named.\n\n"
+                "## How to act on this answer\n\n"
+                "1. Confirm the question in your own words so you do not solve the wrong problem.\n"
+                "2. Check the live site or process against that question (mobile, forms, hours, checkout, speed).\n"
+                "3. Change one thing, retest, then decide if you need a specialist.\n\n"
+                "## Mistakes that ignore the question\n\n"
+                "Rewriting the post as generic web design, stuffing extra services, or skipping a real answer "
+                "in the first screen are the usual misses. If someone asked a question, lead with the answer.\n\n"
+                "## When ZeOrbit can help\n\n"
+                "If the answer points to a broken site, a redesign, or a store that does not convert, ZeOrbit can "
+                "map the fix. Website projects typically range from $500–$3,000 depending on scope."
+            )
+            h2s = [
+                f"Direct answer: {pretty}",
+                f"What the search “{q}” is really asking",
+                "How to act on this answer",
+                "Mistakes that ignore the question",
+                "When ZeOrbit can help",
+            ]
+        elif is_fix or is_howto:
             intro = (
                 f"Searching for “{primary}”? "
-                f"This guide answers that query with clear steps, checks, and mistakes to avoid — in plain American English."
+                "This guide answers that query with clear steps, checks, and mistakes to avoid — in plain American English."
             )
-            if is_fix or is_howto:
-                content = (
-                    f"## What “{primary}” usually involves\n\n"
-                    f"People look up “{q}” when a site is slow, broken, insecure, or simply not doing its job. "
-                    "Before you change anything live, name the symptom: blank page, 404s, SSL warnings, forms failing, "
-                    "mobile layout issues, or a plugin conflict. Write that down — it keeps the fix focused.\n\n"
-                    "Most website problems come from a short list: hosting or DNS outages, expired SSL, a bad plugin or theme update, "
-                    "corrupt cache, wrong redirects, or content/media that never finished uploading. Start with the reversible checks "
-                    "(cache, private window, second device) before you edit theme files or the database.\n\n"
-                    f"## Step-by-step: {pretty_keyword(primary)}\n\n"
-                    "1. Reproduce the issue on desktop and mobile, and note the exact URL and time.\n"
-                    "2. Capture errors from the browser console, hosting error log, or CMS health screen.\n"
-                    "3. Fix one cause at a time — plugins, theme, DNS, SSL, redirects, or content — then retest.\n"
-                    "4. Confirm the fix sticks after a hard refresh, a second browser, and a phone check.\n"
-                    "5. Keep a short before/after note so you can roll back if something else breaks.\n\n"
-                    "If you use WordPress, disable plugins in batches and switch to a default theme temporarily to isolate conflicts. "
-                    "On Shopify or hosted builders, check theme edits, apps, and DNS at the registrar. For custom stacks, verify "
-                    "the deploy, environment variables, and reverse-proxy redirects before rewriting application code.\n\n"
-                    f"## Checks that prove “{q}” is done\n\n"
-                    "Verify the page loads over HTTPS, key forms submit, checkout or contact paths still work, and no new console "
-                    "errors appear. Spot-check internal links and the homepage on mobile. If you changed URLs, confirm redirects "
-                    "return 301 (not 302) and land on the right page.\n\n"
-                    "Optionally watch Search Console or uptime monitors for a day so a silent regression does not slip past you.\n\n"
-                    "## Mistakes that make it worse\n\n"
-                    "Editing live without a backup, stacking multiple changes at once, ignoring mobile, or “fixing” DNS and SSL "
-                    "at the same time are the usual ways a small issue becomes an outage. Avoid chaining redirects and do not "
-                    "leave temporary 302s in place for permanent moves.\n\n"
-                    "## When to get help\n\n"
-                    "If the site is revenue-critical, the root cause is unclear, or you are uncomfortable in hosting/DNS panels, "
-                    "ZeOrbit can diagnose and apply a safe fix with you. Website projects for small businesses typically start "
-                    "around $500–$3,000 depending on scope — a repair consult is often smaller than a full redesign."
-                )
-                h2s = [
-                    f"What “{pretty_keyword(primary)}” usually involves",
-                    f"Step-by-step: {pretty_keyword(primary)}",
-                    f"Checks that prove “{q}” is done",
-                    "Mistakes that make it worse",
-                    "When to get help",
-                ]
-            else:
-                content = (
-                    f"## What people mean by “{primary}”\n\n"
-                    f"This post answers the search for “{q}” — what it is, why it matters, and how to act on it.\n\n"
-                    f"## How to approach {pretty_keyword(primary)}\n\n"
-                    "1. Confirm the goal behind the query.\n"
-                    "2. Apply the change in a staging or test environment when you can.\n"
-                    "3. Verify on the live site.\n"
-                    "4. Watch for errors for a few days after.\n\n"
-                    "## Common mistakes to avoid\n\n"
-                    "Skipping a backup, changing too many things at once, or optimizing for the wrong keyword are the usual traps.\n\n"
-                    "## Tools and checks that save time\n\n"
-                    "Use a checklist: search console / analytics, speed or uptime monitors, and a second-person review of the result.\n\n"
-                    "## When to bring in a specialist\n\n"
-                    "If you get stuck, ZeOrbit can walk through the setup with you."
-                )
-                h2s = [
-                    f"What people mean by “{pretty_keyword(primary)}”",
-                    f"How to approach {pretty_keyword(primary)}",
-                    "Common mistakes to avoid",
-                    "Tools and checks that save time",
-                    "When to bring in a specialist",
-                ]
-        h3s = [
-            "A simple starting point",
-            "What good looks like",
-            "How long it usually takes",
-            "A next step if you need a hand",
-        ]
-        faqs = [
-            FAQItem(question=f"What is {primary.lower()}?", answer=f"{pretty_keyword(primary)} is the topic of this guide. The steps above cover the practical setup so you can decide what to do next."),
-            FAQItem(question="Can I do this myself?", answer="Many teams can handle a first pass. If the setup is messy or high-stakes, get a specialist involved."),
-            FAQItem(question="How long does it take?", answer="A straightforward setup can take minutes. Larger sites take longer because you should test every path."),
-            FAQItem(question="What if I get it wrong?", answer="Most issues are reversible if you catch them early. Test, keep a backup, and don't guess on production."),
-            FAQItem(question="Do I need a developer?", answer="Not always. If you're changing live URLs or app flows, a developer (or ZeOrbit) can keep things from breaking."),
-            FAQItem(question="What's the next step?", answer="Not sure where to start? We're here to help you turn the idea into a working plan."),
-        ]
+            content = (
+                f"## What “{primary}” usually involves\n\n"
+                f"People look up “{q}” when a site is slow, broken, insecure, or simply not doing its job. "
+                "Before you change anything live, name the symptom: blank page, 404s, SSL warnings, forms failing, "
+                "mobile layout issues, or a plugin conflict. Write that down — it keeps the fix focused.\n\n"
+                "Most website problems come from a short list: hosting or DNS outages, expired SSL, a bad plugin or theme update, "
+                "corrupt cache, wrong redirects, or content/media that never finished uploading. Start with the reversible checks "
+                "(cache, private window, second device) before you edit theme files or the database.\n\n"
+                f"## Step-by-step: {pretty}\n\n"
+                "1. Reproduce the issue on desktop and mobile, and note the exact URL and time.\n"
+                "2. Capture errors from the browser console, hosting error log, or CMS health screen.\n"
+                "3. Fix one cause at a time — plugins, theme, DNS, SSL, redirects, or content — then retest.\n"
+                "4. Confirm the fix sticks after a hard refresh, a second browser, and a phone check.\n"
+                "5. Keep a short before/after note so you can roll back if something else breaks.\n\n"
+                "If you use WordPress, disable plugins in batches and switch to a default theme temporarily to isolate conflicts. "
+                "On Shopify or hosted builders, check theme edits, apps, and DNS at the registrar. For custom stacks, verify "
+                "the deploy, environment variables, and reverse-proxy redirects before rewriting application code.\n\n"
+                f"## Checks that prove “{q}” is done\n\n"
+                "Verify the page loads over HTTPS, key forms submit, checkout or contact paths still work, and no new console "
+                "errors appear. Spot-check internal links and the homepage on mobile. If you changed URLs, confirm redirects "
+                "return 301 (not 302) and land on the right page.\n\n"
+                "Optionally watch Search Console or uptime monitors for a day so a silent regression does not slip past you.\n\n"
+                "## Mistakes that make it worse\n\n"
+                "Editing live without a backup, stacking multiple changes at once, ignoring mobile, or “fixing” DNS and SSL "
+                "at the same time are the usual ways a small issue becomes an outage. Avoid chaining redirects and do not "
+                "leave temporary 302s in place for permanent moves.\n\n"
+                "## When to get help\n\n"
+                "If the site is revenue-critical, the root cause is unclear, or you are uncomfortable in hosting/DNS panels, "
+                "ZeOrbit can diagnose and apply a safe fix with you. Website projects for small businesses typically start "
+                "around $500–$3,000 depending on scope — a repair consult is often smaller than a full redesign."
+            )
+            h2s = [
+                f"What “{pretty}” usually involves",
+                f"Step-by-step: {pretty}",
+                f"Checks that prove “{q}” is done",
+                "Mistakes that make it worse",
+                "When to get help",
+            ]
+        else:
+            intro = (
+                f"Searching for “{primary}”? "
+                "This guide answers that query with clear steps, checks, and mistakes to avoid — in plain American English."
+            )
+            content = (
+                f"## What people mean by “{primary}”\n\n"
+                f"This post answers the search for “{q}” — what it is, why it matters, and how to act on it. "
+                "Stay on that wording in every section so the article matches what someone actually typed.\n\n"
+                f"## How to approach {pretty}\n\n"
+                "1. Confirm the goal behind the query.\n"
+                "2. Apply the change in a staging or test environment when you can.\n"
+                "3. Verify on the live site.\n"
+                "4. Watch for errors for a few days after.\n\n"
+                "## Common mistakes to avoid\n\n"
+                "Skipping a backup, changing too many things at once, or optimizing for the wrong keyword are the usual traps.\n\n"
+                "## Tools and checks that save time\n\n"
+                "Use a checklist: search console / analytics, speed or uptime monitors, and a second-person review of the result.\n\n"
+                "## When to bring in a specialist\n\n"
+                "If you get stuck, ZeOrbit can walk through the setup with you."
+            )
+            h2s = [
+                f"What people mean by “{pretty}”",
+                f"How to approach {pretty}",
+                "Common mistakes to avoid",
+                "Tools and checks that save time",
+                "When to bring in a specialist",
+            ]
+        if not (packed_blog and not is_redirect):
+            h3s = [
+                "A simple starting point",
+                "What good looks like",
+                "How long it usually takes",
+                "A next step if you need a hand",
+            ]
+            faqs = [
+                FAQItem(question=f"What is {primary.lower()}?", answer=f"{pretty_keyword(primary)} is the topic of this guide. The steps above cover the practical setup so you can decide what to do next."),
+                FAQItem(question="Can I do this myself?", answer="Many teams can handle a first pass. If the setup is messy or high-stakes, get a specialist involved."),
+                FAQItem(question="How long does it take?", answer="A straightforward setup can take minutes. Larger sites take longer because you should test every path."),
+                FAQItem(question="What if I get it wrong?", answer="Most issues are reversible if you catch them early. Test, keep a backup, and don't guess on production."),
+                FAQItem(question="Do I need a developer?", answer="Not always. If you're changing live URLs or app flows, a developer (or ZeOrbit) can keep things from breaking."),
+                FAQItem(question="What's the next step?", answer="Not sure where to start? We're here to help you turn the idea into a working plan."),
+            ]
         kw = KeywordSet(
             primary=primary.lower(),
             secondary=[k.lower() for k in target_keywords[:5]] or [topic.lower()],
@@ -2264,7 +2570,7 @@ async def _generate_template_block(
             user_questions=[f.question for f in faqs],
         )
         schema = _build_schema(business_type.title(), city or "United States", state, faqs, article_title=title)
-        content = _sectioned_body(h2s, intro, content, brief=brief)
+        content = _sectioned_body(h2s, intro, content, brief=brief, query=primary)
         content = _strip_instruction_leak(content, brief)
         seo_score = _seo_score(intro + " " + content, title, "", h2s, faqs, primary, city or "", slug, h1=h1)
         return SEOBlock(
@@ -2296,7 +2602,7 @@ async def _generate_template_block(
             if i.id == search_intent:
                 intent = i
                 break
-    packed = build_template_page_copy(intent, city, state, industry or "", pretty, keyword_index)
+    packed = build_template_page_copy(intent, city, state, industry or "", pretty, keyword_index, zip=zip or "")
     if image_concept_text:
         packed["image_concept"] = image_concept_text
     if customer_problem:
@@ -2331,7 +2637,7 @@ async def _generate_template_block(
     seo_score = _seo_score(intro + " " + content, title, meta, h2s, faqs, primary, city, slug, h1=h1)
     _ = who
     return SEOBlock(
-        city=city, state=state, business_type=bt, industry=industry,
+        city=city, state=state, zip=zip or "", business_type=bt, industry=industry,
         slug=slug, title=title, meta_description=meta, h1=h1, h2s=h2s, h3s=h3s,
         intro=intro, content=content, faqs=faqs, cta=cta, keywords=kw, schema_markup=schema,
         readability_score=seo_score, keyword_density=_keyword_density(intro + " " + content, primary),

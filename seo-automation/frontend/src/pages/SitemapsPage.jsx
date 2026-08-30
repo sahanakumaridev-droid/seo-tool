@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ExternalLink, Globe2, RefreshCw } from 'lucide-react'
-import { getSeoSitemaps } from '../api'
+import { ExternalLink, Globe2, RefreshCw, Upload } from 'lucide-react'
+import { getSeoSitemaps, submitSeoSitemaps } from '../api'
 
 const TABS = [
   { id: 'index', label: 'Index' },
@@ -55,6 +55,8 @@ export default function SitemapsPage() {
   const [tab, setTab] = useState('pages')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [submitMsg, setSubmitMsg] = useState('')
 
   const load = async () => {
     setLoading(true)
@@ -66,6 +68,26 @@ export default function SitemapsPage() {
       setError(e.response?.data?.detail || e.message || 'Could not load sitemaps.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const submitGsc = async () => {
+    setSubmitting(true)
+    setSubmitMsg('')
+    setError('')
+    try {
+      const res = await submitSeoSitemaps()
+      const ok = res.data?.ok
+      const n = (res.data?.results || []).filter((r) => r.ok).length
+      setSubmitMsg(
+        ok
+          ? `Submitted to Search Console (${n} sitemap${n === 1 ? '' : 's'} accepted). Property: ${res.data?.gsc_site_url || ''}`
+          : 'Search Console did not accept the sitemaps. Check GSC property URL (www vs non-www).',
+      )
+    } catch (e) {
+      setError(e.response?.data?.detail || e.message || 'Could not submit sitemaps.')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -88,14 +110,21 @@ export default function SitemapsPage() {
           <p className="crm-crumb">SEO &gt; Sitemaps</p>
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-1)' }}>Sitemaps</h1>
           <p className="text-sm mt-0.5" style={{ color: 'var(--text-3)' }}>
-            View sitemap.xml, page-sitemap.xml, and post-sitemap.xml inside the SEO tool.
+            View sitemap.xml as the index. Location and service pages go only in page-sitemap.xml. Blog posts go only in post-sitemap.xml.
           </p>
         </div>
-        <button type="button" onClick={load} disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold disabled:opacity-50"
-          style={{ background: '#fff', border: '1px solid #94a3b8', color: '#0f172a' }}>
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={submitGsc} disabled={submitting || loading}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold disabled:opacity-50"
+            style={{ background: 'var(--brand)', border: '1px solid var(--brand)', color: '#fff' }}>
+            <Upload size={14} /> {submitting ? 'Submitting…' : 'Submit to Google'}
+          </button>
+          <button type="button" onClick={load} disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold disabled:opacity-50"
+            style={{ background: '#fff', border: '1px solid #94a3b8', color: '#0f172a' }}>
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -103,12 +132,17 @@ export default function SitemapsPage() {
           {error}
         </div>
       )}
+      {submitMsg && (
+        <div className="rounded-xl p-3" style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', color: '#065F46' }}>
+          {submitMsg}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           { label: 'sitemap.xml', href: data?.index_url, n: 2, hint: 'Index of page + post sitemaps' },
-          { label: 'page-sitemap.xml', href: data?.page_sitemap_url, n: counts.pages, hint: 'Marketing pages' },
-          { label: 'post-sitemap.xml', href: data?.post_sitemap_url, n: counts.posts, hint: 'Published blog posts' },
+          { label: 'page-sitemap.xml', href: data?.page_sitemap_url, n: counts.pages, hint: 'Menu + location/service pages only' },
+          { label: 'post-sitemap.xml', href: data?.post_sitemap_url, n: counts.posts, hint: 'Blog posts only' },
         ].map((c) => (
           <a key={c.label} href={c.href || '#'} target="_blank" rel="noreferrer"
             className="card p-4 block hover:opacity-95">

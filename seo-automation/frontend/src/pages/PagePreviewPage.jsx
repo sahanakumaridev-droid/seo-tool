@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, RefreshCw, Save, CheckCircle, Upload, Globe, ExternalLink, Megaphone, AlertTriangle, Wand2 } from 'lucide-react'
-import { generateSingle, saveEditedBlock, publishToWordPress, publishToWeb, zeorbitBlogUrl, zeorbitArticleUrl, boostPageScores } from '../api'
+import { generateSingle, saveEditedBlock, publishToWordPress, publishToWeb, zeorbitBlogUrl, zeorbitArticleUrl, boostPageScores, repairBlockImages } from '../api'
 
 const MIN_SCORE = 90
 
@@ -107,6 +107,17 @@ export default function PagePreviewPage() {
   const businessType = state?.businessType || block?.business_type || ''
   const isPost = (state?.contentKind === 'post') || (block?.content_type === 'blog')
   const wpConfig = state?.wpConfig
+  const repairedRef = useRef(false)
+
+  useEffect(() => {
+    if (!block || repairedRef.current) return
+    repairedRef.current = true
+    repairBlockImages(block)
+      .then((res) => {
+        if (res?.data) setBlock(res.data)
+      })
+      .catch(() => {})
+  }, [block])
 
   const handlePublishWeb = async () => {
     const gate = scoreFails(block)
@@ -481,9 +492,7 @@ export default function PagePreviewPage() {
                         )}
                       </div>
                       <div className="p-3">
-                        {img.caption && <div className="text-xs font-semibold" style={{ color: 'var(--text-1)' }}>{img.caption}</div>}
-                        {img.alt_text && <div className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>alt: {img.alt_text}</div>}
-                        <a href={img.url} target="_blank" rel="noreferrer" className="text-xs mt-1 inline-flex items-center gap-1" style={{ color: 'var(--brand-violet)' }}>
+                        <a href={img.url} target="_blank" rel="noreferrer" className="text-xs inline-flex items-center gap-1" style={{ color: 'var(--brand-violet)' }}>
                           Open full size <ExternalLink size={10} />
                         </a>
                       </div>

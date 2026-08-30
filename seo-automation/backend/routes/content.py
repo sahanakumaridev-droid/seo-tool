@@ -285,7 +285,51 @@ async def _places_for_generate(req: GenerateRequest) -> List:
         cities = await resolve_generation_cities(req.base_location, req.num_cities, req.extra_locations)
     except LocationNotResolvedError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    cities = [c for c in cities if getattr(c, "kind", "city") != "state"]
+    if req.content_kind != "post":
+        from services.location_service import lookup_place_zip
+        from services.zeorbit_local_seo import digits_zip
+        fallback = ""
+        if req.base_location:
+            base = (req.base_location or "").strip()
+            # "Solana Beach, CA" or "... 92075"
+            fallback = digits_zip(base)
+            if not fallback and "," in base:
+                city_part, _, rest = base.partition(",")
+                st_m = re.search(r"\b([A-Za-z]{2})\b", rest)
+                st = (st_m.group(1) if st_m else rest.strip()[:2]).upper()
+                fallback = digits_zip(await lookup_place_zip(city_part.strip(), st, ""))
+        required: List = []
+        missing_names: List[str] = []
+        for c in cities:
+            z = digits_zip(getattr(c, "zip", "") or "")
+            if not z:
+                z = digits_zip(await lookup_place_zip(c.name, c.state or "", getattr(c, "zip", "") or ""))
+            if z:
+                c.zip = z
+                if not fallback:
+                    fallback = z
+                required.append(c)
+            else:
+                missing_names.append(f"{c.name}, {c.state}".strip(", "))
+                required.append(c)
+        if fallback:
+            for c in required:
+                if not digits_zip(getattr(c, "zip", "") or ""):
+                    c.zip = fallback
+                    print(f"[Location] inherited ZIP {fallback} for {c.name}")
+        still_missing = [
+            f"{c.name}, {c.state}".strip(", ")
+            for c in required
+            if not digits_zip(getattr(c, "zip", "") or "")
+        ]
+        if not required:
+            detail = "ZIP is mandatory for every location page."
+            if missing_names:
+                detail += " Could not resolve a ZIP for: " + "; ".join(missing_names[:12])
+            raise HTTPException(status_code=400, detail=detail)
+        if still_missing:
+            print(f"[Location] still no ZIP after inherit: {still_missing}")
+        cities = required
     if cities:
         return cities
     if req.content_kind == "post":
@@ -336,9 +380,6 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
     batch_slugs: set[str] = set()
 
     for keyword_index, city_info in enumerate(cities):
-        # State chip is for Location Expansion UI; generate for cities + counties only.
-        if getattr(city_info, "kind", "city") == "state":
-            continue
         exclude = list(used_featured)
         from services.slug_utils import article_slug
         from services.content_service import pick_primary_keyword, article_topic
@@ -378,7 +419,8 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             free_keys = {normalize_image_key(u) for u in free_urls}
             exclude = [u for u in exclude if normalize_image_key(u) not in free_keys]
 
-        block, extra_attempts = await generate_seo_block_until_floor(
+        try:
+            block, extra_attempts = await generate_seo_block_until_floor(
             req.business_type,
             city_info.name,
             city_info.state,
@@ -393,7 +435,25 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             keyword_index=keyword_index,
             existing_bodies=existing_bodies,
             zip=getattr(city_info, "zip", "") or "",
-        )
+            )
+        except Exception as e:
+            print(f"[Generate] {city_info.name} failed ({e}); writing a fallback page so none are skipped")
+            block = await generate_seo_block(
+                req.business_type,
+                city_info.name,
+                city_info.state,
+                req.target_keywords,
+                req.industry,
+                use_ai=False,
+                llm_provider=None,
+                exclude_image_urls=exclude,
+                custom_requirements=req.custom_requirements,
+                content_kind=req.content_kind,
+                audience=req.audience,
+                keyword_index=keyword_index,
+                zip=getattr(city_info, "zip", "") or "",
+            )
+            extra_attempts = 0
         if extra_attempts:
             retried_n += 1
             print(
@@ -519,8 +579,14 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             )
         raise HTTPException(status_code=500, detail=f"Could not save generated pages: {detail[:240]}")
 
+    dropped = max(0, requested_n - len(pages))
     msg = None
-    if retried_n > 0:
+    if dropped:
+        msg = (
+            f"{len(pages)} of {requested_n} pages generated. "
+            f"{dropped} did not complete — generate again for the missing ones."
+        )
+    elif retried_n > 0:
         msg = (
             f"{retried_n} location{'s' if retried_n != 1 else ''} first scored below "
             f"{int(MIN_PUBLISH_SCORE)}% — generated again, then kept all {len(pages)}."
@@ -531,7 +597,7 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
         pages=pages,
         job_id=str(uuid.uuid4()),
         requested=requested_n,
-        dropped=0,
+        dropped=dropped,
         message=msg,
     )
 
@@ -635,7 +701,14 @@ async def refresh_images(
     By default only touches pages whose current image looks unrelated (Flickr/picsum/empty).
     Pass dedupe=true to reassign every page so featured photos are unique across the library.
     """
-    from services.image_service import generate_article_images, normalize_image_key, topic_image_family
+    from services.image_service import (
+        generate_article_images,
+        normalize_image_key,
+        topic_image_family,
+        stock_url_needs_replace,
+        collect_image_urls_from_seo_block,
+        assign_canonical_images,
+    )
     from collections import defaultdict
 
     result = await session.execute(select(PageRecord))
@@ -643,17 +716,11 @@ async def refresh_images(
     updated = []
     skipped = []
 
-    def _is_unrelated(url: str) -> bool:
-        u = (url or "").lower()
-        if not u:
+    def _block_needs_image_refresh(block: dict) -> bool:
+        urls = collect_image_urls_from_seo_block(block or {})
+        if not urls:
             return True
-        if "picsum.photos" in u:
-            return True
-        if "live.staticflickr.com" in u or "flickr.com" in u:
-            return True
-        if "placeholder" in u:
-            return True
-        return False
+        return any(stock_url_needs_replace(u) for u in urls)
 
     # When deduping, process all pages and never reuse a featured URL within a niche family.
     if dedupe and not slug:
@@ -663,18 +730,18 @@ async def refresh_images(
     if only_unrelated and not slug and not dedupe:
         for row in rows:
             block = row.seo_block if isinstance(row.seo_block, dict) else {}
-            current = block.get("featured_image_url") or ""
-            if current and not _is_unrelated(current):
+            if not _block_needs_image_refresh(block):
                 biz = row.business_type or block.get("business_type") or ""
                 fam = topic_image_family(f"{biz} {block.get('title') or ''}")
-                used_by_family[fam].append(current)
+                for u in collect_image_urls_from_seo_block(block):
+                    if u:
+                        used_by_family[fam].append(u)
 
     for row in rows:
         if slug and row.slug != slug:
             continue
         block = row.seo_block if isinstance(row.seo_block, dict) else {}
-        current = block.get("featured_image_url") or ""
-        if only_unrelated and not _is_unrelated(current) and not slug:
+        if only_unrelated and not _block_needs_image_refresh(block) and not slug:
             skipped.append(row.slug)
             continue
 
@@ -707,10 +774,17 @@ async def refresh_images(
             skipped.append(row.slug)
             continue
 
+        feat2, foot2, cleaned = assign_canonical_images(images)
         block = dict(block)
-        block["featured_image_url"] = images[0].url
-        block["in_content_images"] = [img.model_dump() if hasattr(img, "model_dump") else img for img in images]
+        block["featured_image_url"] = feat2 or images[0].url
+        block["footer_image_url"] = foot2
+        block["in_content_images"] = [img.model_dump() if hasattr(img, "model_dump") else img for img in cleaned]
         row.seo_block = block
+        try:
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(row, "seo_block")
+        except Exception:
+            pass
         row.updated_at = datetime.now(timezone.utc)
         # Exclude every assigned photo so the next location cannot reuse any of them
         for img in images:
@@ -732,6 +806,56 @@ async def refresh_images(
         "pages": updated[:50],
         "note": "Existing blog copy preserved — images only" + (" (deduped by niche)" if dedupe else ""),
     }
+
+
+@router.post("/repair-images")
+async def repair_block_images(block: dict):
+    """Replace dead/placeholder Unsplash URLs on a draft block without rewriting copy."""
+    from services.image_service import (
+        generate_article_images,
+        stock_url_needs_replace,
+        collect_image_urls_from_seo_block,
+        assign_canonical_images,
+        normalize_image_key,
+    )
+
+    payload = dict(block or {})
+    urls = collect_image_urls_from_seo_block(payload)
+    unique_keys = {normalize_image_key(u) for u in urls if u}
+    needs = (not urls) or any(stock_url_needs_replace(u) for u in urls) or len(unique_keys) < 3
+    if not needs:
+        return block
+
+    business = payload.get("business_type") or ""
+    city = payload.get("city") or ""
+    state = payload.get("state") or ""
+    kw = ""
+    try:
+        kw = (payload.get("keywords") or {}).get("primary") or ""
+    except Exception:
+        kw = ""
+    focus = kw or f"{business} {city}".strip() or "website design"
+    location = f"{city}, {state}".strip(", ")
+    ctype = (payload.get("content_type") or "").lower()
+    is_blog = ctype in ("blog", "post") or not (city or "").strip()
+    images = await generate_article_images(
+        focus, location, "", count=3,
+        angle_title=payload.get("title") or "",
+        industry="" if is_blog else (payload.get("industry") or ""),
+        niche=business,
+        content_type="blog" if is_blog else "service",
+        match_query=focus if is_blog else "",
+        image_concept_text=payload.get("image_concept") or "",
+    )
+    if not images:
+        return block
+    feat2, foot2, cleaned = assign_canonical_images(images)
+    payload["featured_image_url"] = feat2 or images[0].url
+    payload["footer_image_url"] = foot2
+    payload["in_content_images"] = [
+        img.model_dump() if hasattr(img, "model_dump") else img for img in cleaned
+    ]
+    return payload
 
 
 @router.post("/export/json")

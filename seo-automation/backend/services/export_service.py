@@ -1,6 +1,7 @@
 import json
 from typing import List
 from models.schemas import SEOBlock
+from services.wordpress_service import _ai_platform_bar, _build_content_html
 
 def export_json(pages: List[SEOBlock]) -> str:
     return json.dumps([p.model_dump() for p in pages], indent=2)
@@ -84,19 +85,13 @@ def export_html(page: SEOBlock) -> str:
   <section class="cta">
     <p>{page.cta}</p>
   </section>
+{_ai_platform_bar()}
 </body>
 </html>"""
 
 def export_wordpress(page: SEOBlock) -> dict:
     """WordPress REST API compatible format."""
-    content_html = f"<h1>{page.h1}</h1>\n"
-    for h2 in page.h2s:
-        content_html += f"<h2>{h2}</h2>\n"
-    content_html += f"<p>{page.content.replace(chr(10), '</p><p>')}</p>\n"
-    content_html += "<h2>FAQs</h2>\n"
-    for faq in page.faqs:
-        content_html += f"<h4>{faq.question}</h4><p>{faq.answer}</p>\n"
-    content_html += f"<p><strong>{page.cta}</strong></p>"
+    content_html = _build_content_html(page)
 
     return {
         "title": page.title,

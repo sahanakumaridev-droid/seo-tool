@@ -4,7 +4,7 @@ import { Zap, MapPin, Globe, Eye, X, RefreshCw, Save, CheckCircle, AlertTriangle
          FileJson, Tag, Plus, Megaphone, Trash2, FileText, Newspaper, Sparkles, Wand2 } from 'lucide-react'
 import { generateBulk, exportJson, generateSingle,
          saveEditedBlock, publishToWeb, startBulkGenerateJob, getJob, publishAllToWeb, zeorbitBlogUrl, zeorbitArticleUrl,
-         getNearbyCities, getSanDiegoCounty, searchCities, deletePage, listPages, suggestContentBrief } from '../api'
+         getNearbyCities, getSanDiegoCounty, searchCities, getCounties, getPlaceCatalog, deletePage, listPages, suggestContentBrief } from '../api'
 import axios from 'axios'
 import LocationMap from '../components/LocationMap'
 
@@ -452,7 +452,7 @@ function PreviewModal({ block, businessType, targetKeywords = [], onClose, onReg
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/6 flex-shrink-0">
           <div>
-            <h2 className="font-bold text-white text-base">{block.city}, {block.state}</h2>
+            <h2 className="font-bold text-white text-base">{block.city}{block.state ? `, ${block.state}` : ''}{block.zip ? ` ${block.zip}` : ''}</h2>
             <p className="text-xs text-slate-500 mt-0.5">{businessType} · SEO Page Preview</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -666,9 +666,7 @@ export default function ContentPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   // Persist generated results across navigation (View -> back must not wipe them)
-  const [pages, setPages] = useState(() => {
-    try { return JSON.parse(sessionStorage.getItem('seo_pages') || '[]') } catch { return [] }
-  })
+  const [pages, setPages] = useState([])
   const [filter, setFilter] = useState('')
   const [exporting, setExporting] = useState('')
   const [kwInput, setKwInput] = useState('')
@@ -682,7 +680,8 @@ export default function ContentPage() {
   const [deletingSlug, setDeletingSlug] = useState('')
   const [useAsync, setUseAsync] = useState(false)
   const [asyncJobId, setAsyncJobId] = useState('')
-  const [jobProgress, setJobProgress] = useState(null)  // { completed, failed, total, status }
+  const [jobProgress, setJobProgress] = useState(null)
+  const [generateRequested, setGenerateRequested] = useState(0)
   const [publishResults, setPublishResults] = useState({})
   const [toast, setToast] = useState(null)
   const resultsRef = useRef(null)
@@ -696,23 +695,93 @@ export default function ContentPage() {
   const [briefAiBusy, setBriefAiBusy] = useState('') // '' | 'all' | field key
   const [showAdvancedBrief, setShowAdvancedBrief] = useState(true)
   const [sdCounty, setSdCounty] = useState(null)
+  const [countyPick, setCountyPick] = useState('San Diego County')
   const [sdPick, setSdPick] = useState('Chula Vista')
   const [sdLayer, setSdLayer] = useState('areas')
   const [sdFilter, setSdFilter] = useState('')
+  const [countyOptions, setCountyOptions] = useState([])
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), type === 'warning' ? 6500 : 4000)
   }
 
-  // Keep results + keywords alive when navigating to a page preview and back
-  useEffect(() => { sessionStorage.setItem('seo_pages', JSON.stringify(pages)) }, [pages])
-  useEffect(() => { sessionStorage.setItem('seo_keywords', JSON.stringify(targetKeywords)) }, [targetKeywords])
+  // Keep only slugs in the tab — full articles live in the database.
   useEffect(() => {
-    getSanDiegoCounty()
-      .then((res) => setSdCounty(res.data))
-      .catch(() => setSdCounty(null))
+    try { sessionStorage.removeItem('seo_pages') } catch { /* legacy dump */ }
   }, [])
+  useEffect(() => {
+    const slugs = pages.map((p) => p?.slug).filter(Boolean)
+    try {
+      sessionStorage.setItem('seo_page_slugs', JSON.stringify(slugs))
+      if (generateRequested) sessionStorage.setItem('seo_generate_requested', String(generateRequested))
+    } catch { /* slugs are tiny */ }
+  }, [pages, generateRequested])
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('seo_keywords', JSON.stringify(targetKeywords))
+    } catch { /* ignore */ }
+  }, [targetKeywords])
+  useEffect(() => {
+    let cancelled = false
+    const slugs = (() => {
+      try {
+        const raw = JSON.parse(sessionStorage.getItem('seo_page_slugs') || '[]')
+        return Array.isArray(raw) ? raw.filter(Boolean).slice(0, 250) : []
+      } catch { return [] }
+    })()
+    try {
+      const n = Number(sessionStorage.getItem('seo_generate_requested') || 0)
+      if (n > 0) setGenerateRequested(n)
+    } catch { /* ignore */ }
+    listPages(0, 250)
+      .then((r) => {
+        if (cancelled) return
+        const rows = Array.isArray(r.data) ? r.data : []
+        setSavedPages(rows)
+        if (!slugs.length) return
+        const bySlug = new Map(rows.map((row) => [row.slug, row.seo_block || row]))
+        const restored = slugs.map((s) => bySlug.get(s)).filter(Boolean)
+        if (restored.length) setPages(restored)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+  useEffect(() => {
+    getCounties('CA')
+      .then((res) => setCountyOptions(res.data?.counties || []))
+      .catch(() => setCountyOptions([]))
+  }, [])
+  useEffect(() => {
+    const countyLabel = countyPick.includes(',') ? countyPick : `${countyPick}, CA`
+    let cancelled = false
+    const timer = setTimeout(() => {
+      getPlaceCatalog({
+        baseLocation: countyLabel,
+        county: countyLabel,
+        city: sdPick === 'All cities' || sdPick === 'Unincorporated' ? '' : sdPick,
+      })
+        .then((res) => {
+          if (cancelled) return
+          const data = res.data
+          if (!data) return
+          setSdCounty(data)
+          const cities = data.incorporated_cities || []
+          if (
+            cities.length
+            && sdPick !== 'All cities'
+            && sdPick !== 'Unincorporated'
+            && !cities.some((n) => locKey(n) === locKey(sdPick))
+          ) {
+            setSdPick('All cities')
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setSdCounty((prev) => prev)
+        })
+    }, 280)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [countyPick, sdPick])
 
   // Prefill from Lead Engine "Generate in SEO Content"
   useEffect(() => {
@@ -739,7 +808,7 @@ export default function ContentPage() {
   // AI model availability + saved location pages (for trash / restart)
   useEffect(() => {
     axios.get('/api/content/llm-providers').then(r => setLlmAvailability(r.data || {})).catch(() => {})
-    listPages(0, 100).then(r => setSavedPages(Array.isArray(r.data) ? r.data : [])).catch(() => {})
+    listPages(0, 250).then(r => setSavedPages(Array.isArray(r.data) ? r.data : [])).catch(() => {})
   }, [pages])
 
   const handleDeleteSaved = async (slug) => {
@@ -762,6 +831,8 @@ export default function ContentPage() {
     if (!confirm('Clear generated results from this session? Saved/published pages stay until you trash them below.')) return
     setPages([])
     sessionStorage.removeItem('seo_pages')
+    sessionStorage.removeItem('seo_page_slugs')
+    sessionStorage.removeItem('seo_generate_requested')
     showToast('Session results cleared — ready to regenerate')
   }
 
@@ -800,10 +871,12 @@ export default function ContentPage() {
         const { data } = await getJob(asyncJobId)
         if (stop) return
         setJobProgress({ completed: data.completed, failed: data.failed, total: data.total, status: data.status })
-        const finished = data.status === 'completed' || (data.completed + data.failed) >= data.total
+        const finished = ['done', 'completed', 'partial', 'failed'].includes(data.status)
+          || (data.completed + data.failed) >= data.total
         if (finished) {
           const raw = (data.results || []).filter(r => r && !r.error)
           const failN = data.failed || 0
+          const requested = data.total || generateRequested || raw.length
           setPages(raw)
           setLoading(false)
           setAsyncJobId('')
@@ -811,10 +884,12 @@ export default function ContentPage() {
           if (!raw.length) {
             setError('Generation finished with no results. Try again.')
             showToast('Nothing generated — try again', 'warning')
-          } else if (failN > 0) {
-            showToast(`${raw.length} kept; ${failN} failed and will need another generate`, 'warning')
+          } else if (raw.length < requested || failN > 0) {
+            setError(`${raw.length} of ${requested} generated. ${failN || (requested - raw.length)} did not complete.`)
+            showToast(`${raw.length} of ${requested} pages generated`, 'warning')
           } else {
-            showToast(`${raw.length} ${contentKind === 'post' ? 'posts' : 'pages'} generated`)
+            setError('')
+            showToast(`${raw.length} of ${requested} ${contentKind === 'post' ? 'posts' : 'pages'} generated`)
           }
           setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
         } else {
@@ -829,9 +904,9 @@ export default function ContentPage() {
   }, [asyncJobId])
 
   const addKeyword = (kw) => {
-    const k = (kw || kwInput).trim().toLowerCase()
+    const k = (kw || kwInput).trim()
     if (!k) return
-    setTargetKeywords((prev) => (prev.includes(k) ? prev : [...prev, k]))
+    setTargetKeywords((prev) => (prev.some((x) => locKey(x) === locKey(k)) ? prev : [...prev, k]))
     if (!kw) setKwInput('')
   }
   const removeKeyword = (kw) => {
@@ -1041,8 +1116,7 @@ export default function ContentPage() {
     }
     if (contentKind === 'post') {
       if (!targetKeywords.length) missing.push('At least one Target Keyword')
-      if (!(form.business_type || '').trim()) missing.push('Business niche / category')
-      // Base location / cities / streets are optional for blog
+      // Niche and location are optional for blog — keyword is the article subject
     }
     return missing
   }
@@ -1075,6 +1149,7 @@ export default function ContentPage() {
     const pageCount = useLocations
       ? Math.max(Number(form.num_cities) || 1, extraLocations.length || 0, 1)
       : 1
+    setGenerateRequested(pageCount)
     // Auto async for large batches
     const runAsync = useAsync || pageCount >= 20
     setPublishResults({})
@@ -1099,29 +1174,42 @@ export default function ContentPage() {
         // Manual chips first; backend fills remaining from base location
         extra_locations: useLocations ? [...extraLocations] : [],
         content_kind: contentKind,
-        custom_requirements: '',
+        custom_requirements: (() => {
+          const composed = composeBriefFromParts(briefFields, customRequirements)
+          if (composed) return composed
+          if (contentKind === 'post' && targetKeywords[0]) {
+            return `Write the full post to answer this query: ${targetKeywords[0]}`
+          }
+          return ''
+        })(),
         use_ai: true,
         llm_provider: llmProvider || null,
       }
       if (runAsync) {
         const res = await startBulkGenerateJob(payload)
         setAsyncJobId(res.data.job_id)
+        setGenerateRequested(res.data.total || pageCount)
         const existing = JSON.parse(localStorage.getItem('seo_jobs') || '[]')
         localStorage.setItem('seo_jobs', JSON.stringify([res.data.job_id, ...existing]))
         showToast(`Async job started — ID: ${res.data.job_id.slice(0, 8)}...`)
       } else {
         const res = await generateBulk(payload)
         const raw = res.data.pages || []
+        const requested = res.data.requested || pageCount
+        setGenerateRequested(requested)
         setPages(raw)
         if (!raw.length) {
           setError('Generation produced no results. Try again.')
           showToast('Nothing generated — try again', 'warning')
+        } else if (raw.length < requested || res.data.dropped) {
+          setError(`${raw.length} of ${requested} generated${res.data.message ? ` — ${res.data.message}` : ''}`)
+          showToast(`${raw.length} of ${requested} pages generated`, 'warning')
         } else if (res.data.message) {
           setError('')
           showToast(res.data.message, 'success')
         } else {
           setError('')
-          showToast(`${raw.length} ${contentKind === 'post' ? 'posts' : 'pages'} generated`)
+          showToast(`${raw.length} of ${requested} ${contentKind === 'post' ? 'posts' : 'pages'} generated`)
         }
         setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
       }
@@ -1594,10 +1682,27 @@ export default function ContentPage() {
           <p className="text-[12px] mb-3 leading-relaxed" style={{ color: 'var(--text-4)' }}>
             {contentKind === 'post'
               ? <>Locations are <strong>optional</strong> for blog. Set a base and pin <strong>cities</strong>, <strong>streets</strong>, or <strong>counties</strong> only if you want place-tied posts. Otherwise leave blank — body still follows your keyword query.</>
-              : <>Set a <strong>base location</strong>, then pin <strong>cities</strong>, <strong>streets</strong>, and <strong>counties</strong> (plus local areas). Pinned chips generate first; remaining slots auto-fill from the base.</>}
+              : <>Pick a <strong>county</strong> (all 58 in California), then a city. Switching county reloads <strong>local areas</strong> and <strong>streets</strong> for that county only.</>}
           </p>
           <div className="flex flex-col gap-2 mb-3">
             <div className="flex flex-col sm:flex-row gap-1.5">
+              <select
+                value={countyPick}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setCountyPick(v)
+                  setSdPick('All cities')
+                  setSdFilter('')
+                  updateForm((f) => ({ ...f, base_location: `${v}, CA` }))
+                }}
+                className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-1)' }}
+                aria-label="County"
+              >
+                {(countyOptions.length ? countyOptions : [{ name: 'San Diego County' }]).map((c) => (
+                  <option key={c.name} value={c.name}>{c.name}</option>
+                ))}
+              </select>
               <select
                 value={sdPick}
                 onChange={(e) => {
@@ -1607,16 +1712,17 @@ export default function ContentPage() {
                   updateForm((f) => ({
                     ...f,
                     base_location: v === 'Unincorporated' || v === 'All cities'
-                      ? (f.base_location || 'San Diego, CA')
+                      ? `${countyPick}, CA`
                       : `${v}, CA`,
                   }))
                 }}
                 className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
                 style={{ borderColor: 'var(--border)', color: 'var(--text-1)' }}
+                aria-label="City in county"
               >
-                <option value="All cities">All San Diego County cities</option>
+                <option value="All cities">All cities in {countyPick.replace(/ County$/i, '')}</option>
                 {sdCityNames.map((n) => <option key={n} value={n}>{n}</option>)}
-                <option value="Unincorporated">Unincorporated county</option>
+                <option value="Unincorporated">Unincorporated</option>
               </select>
               <div className="crm-seg" role="tablist" aria-label="Cities, local areas, or streets">
                 <button type="button" aria-pressed={sdLayer === 'cities'} onClick={() => { setSdLayer('cities'); setSdFilter('') }}>Cities</button>
@@ -1649,7 +1755,11 @@ export default function ContentPage() {
                 Add all {sdItems.length}
               </button>
             </div>
-            <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto">
+            <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>
+              Showing {sdLayer === 'streets' ? 'streets' : sdLayer === 'cities' ? 'cities' : 'local areas'} in <strong>{countyPick}</strong>
+              {sdPick && sdPick !== 'All cities' ? <> · {sdPick}</> : null}
+            </p>
+            <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto" key={`${countyPick}-${sdPick}-${sdLayer}`}>
               {sdItems.slice(0, 80).map((name, i) => (
                 <button
                   key={`${sdLayer}-${name}-${i}`}
@@ -1743,17 +1853,24 @@ export default function ContentPage() {
       {pages.length > 0 && (
         <div ref={resultsRef} className="content-action-bar rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: '#d1fae5', border: '1px solid #6ee7b7' }}>
-              <CheckCircle size={18} style={{ color: '#047857' }} />
+            <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{
+              background: generateRequested && pages.length < generateRequested ? '#fef3c7' : '#d1fae5',
+              border: generateRequested && pages.length < generateRequested ? '1px solid #f59e0b' : '1px solid #6ee7b7',
+            }}>
+              <CheckCircle size={18} style={{ color: generateRequested && pages.length < generateRequested ? '#b45309' : '#047857' }} />
             </div>
             <div>
               <p className="font-semibold text-sm" style={{ color: '#0f172a' }}>
-                {pages.length} {pages[0]?.content_type === 'blog' || contentKind === 'post' ? 'blog posts' : 'pages'} generated
+                {generateRequested && pages.length !== generateRequested
+                  ? `${pages.length} of ${generateRequested} ${pages[0]?.content_type === 'blog' || contentKind === 'post' ? 'blog posts' : 'pages'} generated`
+                  : `${pages.length} ${pages[0]?.content_type === 'blog' || contentKind === 'post' ? 'blog posts' : 'pages'} generated`}
               </p>
               <p className="text-xs mt-0.5" style={{ color: '#334155' }}>
-                {(pages[0]?.content_type === 'blog' || contentKind === 'post')
-                  ? 'Will list on post-sitemap.xml after publish'
-                  : 'Will list on page-sitemap.xml after publish'}
+                {generateRequested && pages.length < generateRequested
+                  ? `Requested ${generateRequested}. Missing pages are not skipped on purpose — generate again to fill the gap.`
+                  : (pages[0]?.content_type === 'blog' || contentKind === 'post')
+                    ? 'Will list on post-sitemap.xml after publish'
+                    : 'Will list on page-sitemap.xml after publish'}
               </p>
             </div>
           </div>
@@ -1855,7 +1972,7 @@ export default function ContentPage() {
                     <td className="text-xs font-semibold" style={{ color: 'var(--text-3)' }}>{i + 1}</td>
                     <td>
                       <div className="font-semibold text-sm" style={{ color: 'var(--text-1)' }}>{block.city || (block.content_type === 'blog' ? 'Article' : '—')}</div>
-                      <div className="text-xs muted-cell">{block.state || (block.content_type === 'blog' ? 'Blog post' : '')}</div>
+                      <div className="text-xs muted-cell">{[block.state, block.zip].filter(Boolean).join(' ') || (block.content_type === 'blog' ? 'Blog post' : '')}</div>
                     </td>
                     <td className="max-w-[240px]">
                       <div className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>{block.title}</div>

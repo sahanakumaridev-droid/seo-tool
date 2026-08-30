@@ -403,7 +403,14 @@ export default function RevampHeader() {
           >
             {SITE_CONTACT.email}
           </a>
-          <div className="zo-topbar-spacer" aria-hidden />
+          <a
+            className="zo-topbar-phone"
+            href={`tel:${SITE_CONTACT.phoneTel}`}
+            aria-label={`Call ${SITE_CONTACT.phone}`}
+          >
+            <Phone size={13} strokeWidth={2.4} aria-hidden />
+            <span>{SITE_CONTACT.phone}</span>
+          </a>
         </div>
       </div>
 

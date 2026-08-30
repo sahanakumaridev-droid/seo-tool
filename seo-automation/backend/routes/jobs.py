@@ -12,18 +12,9 @@ router = APIRouter()
 @router.post("/generate")
 async def start_bulk_generate_job(req: GenerateRequest, background_tasks: BackgroundTasks):
     """Start an async bulk content generation job. Returns job_id for polling."""
-    from routes.content import ensure_brief_for_generate
+    from routes.content import ensure_brief_for_generate, _places_for_generate
     req = await ensure_brief_for_generate(req)
-    try:
-        cities = await resolve_generation_cities(req.base_location, req.num_cities, req.extra_locations)
-    except LocationNotResolvedError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    cities = [c for c in cities if getattr(c, "kind", "city") != "state"]
-    if not cities:
-        if req.content_kind == "post":
-            cities = [CityInfo(name="", state="", country="US", latitude=0.0, longitude=0.0, kind="city")]
-        else:
-            raise HTTPException(status_code=400, detail="Add at least one location (base city or bulk communities).")
+    cities = await _places_for_generate(req)
 
     job_id = create_job(total=len(cities))
     cleanup_old_jobs()
@@ -70,60 +61,116 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
         async with used_lock:
             exclude = list(used_featured)
             bodies_snapshot = list(existing_bodies)
-        block, extra_attempts = await generate_seo_block_until_floor(
-            business_type=req.business_type,
-            city=name,
-            state=state,
-            target_keywords=req.target_keywords,
-            industry=req.industry,
-            use_ai=req.use_ai,
-            llm_provider=req.llm_provider,
-            exclude_image_urls=exclude,
-            custom_requirements=req.custom_requirements,
-            content_kind=req.content_kind,
-            audience=req.audience,
-            keyword_index=keyword_index,
-            existing_bodies=bodies_snapshot,
-            zip=zip_code or "",
-        )
+        try:
+            block, extra_attempts = await generate_seo_block_until_floor(
+                business_type=req.business_type,
+                city=name,
+                state=state,
+                target_keywords=req.target_keywords,
+                industry=req.industry,
+                use_ai=req.use_ai,
+                llm_provider=req.llm_provider,
+                exclude_image_urls=exclude,
+                custom_requirements=req.custom_requirements,
+                content_kind=req.content_kind,
+                audience=req.audience,
+                keyword_index=keyword_index,
+                existing_bodies=bodies_snapshot,
+                zip=zip_code or "",
+            )
+        except Exception as e:
+            print(f"[Jobs] {name} failed ({e}); writing a fallback page so none are skipped")
+            try:
+                block = await generate_seo_block(
+                    req.business_type,
+                    name,
+                    state,
+                    req.target_keywords,
+                    req.industry,
+                    use_ai=False,
+                    llm_provider=None,
+                    exclude_image_urls=exclude,
+                    custom_requirements=req.custom_requirements,
+                    content_kind=req.content_kind,
+                    audience=req.audience,
+                    keyword_index=keyword_index,
+                    zip=zip_code or "",
+                )
+            except Exception as e2:
+                print(f"[Jobs] fallback also failed for {name}: {e2}")
+                raise
+            extra_attempts = 0
         if extra_attempts:
             print(
                 f"[Jobs] {name} scored below 90% — generated again "
                 f"({extra_attempts} extra pass(es))"
             )
-        async with used_lock:
-            # Re-check under lock in case another task claimed the same URL first
-            if block.featured_image_url:
-                from services.image_service import normalize_image_key, generate_article_images
-                taken = {normalize_image_key(u) for u in used_featured}
-                key = normalize_image_key(block.featured_image_url)
-                if key in taken:
-                    images = await generate_article_images(
-                        f"{req.target_keywords[0] if req.target_keywords else req.business_type} {name}",
-                        f"{name}, {state} {zip_code}".strip(),
-                        "ZeOrbit",
-                        count=3,
-                        exclude_urls=used_featured,
-                        industry="" if req.content_kind == "post" else (req.industry or ""),
-                        niche=req.business_type or "",
-                        search_intent=getattr(block, "search_intent", "") or "",
-                        image_concept_text=getattr(block, "image_concept", "") or "",
-                        keyword_index=keyword_index,
-                        audience=req.audience or "",
-                    )
-                    if images:
-                        from services.image_service import assign_canonical_images
-                        feat, foot, cleaned = assign_canonical_images(images)
-                        if feat:
-                            block.in_content_images = cleaned
-                            block.featured_image_url = feat
-                            block.footer_image_url = foot
-                        else:
-                            print(f"[Image] uniqueness regen empty for {name}; keeping prior featured")
+        try:
+            async with used_lock:
+                # Re-check under lock in case another task claimed the same URL first
                 if block.featured_image_url:
-                    used_featured.append(block.featured_image_url)
-            existing_bodies.append(f"{block.intro or ''}\n{block.content or ''}")
-        return block.model_dump()
+                    from services.image_service import normalize_image_key, generate_article_images
+                    taken = {normalize_image_key(u) for u in used_featured}
+                    key = normalize_image_key(block.featured_image_url)
+                    if key in taken:
+                        images = await generate_article_images(
+                            f"{req.target_keywords[0] if req.target_keywords else req.business_type} {name}",
+                            f"{name}, {state} {zip_code}".strip(),
+                            "ZeOrbit",
+                            count=3,
+                            exclude_urls=used_featured,
+                            industry="" if req.content_kind == "post" else (req.industry or ""),
+                            niche=req.business_type or "",
+                            search_intent=getattr(block, "search_intent", "") or "",
+                            image_concept_text=getattr(block, "image_concept", "") or "",
+                            keyword_index=keyword_index,
+                            audience=req.audience or "",
+                        )
+                        if images:
+                            from services.image_service import assign_canonical_images
+                            feat, foot, cleaned = assign_canonical_images(images)
+                            if feat:
+                                block.in_content_images = cleaned
+                                block.featured_image_url = feat
+                                block.footer_image_url = foot
+                            else:
+                                print(f"[Image] uniqueness regen empty for {name}; keeping prior featured")
+                    if block.featured_image_url:
+                        used_featured.append(block.featured_image_url)
+                existing_bodies.append(f"{block.intro or ''}\n{block.content or ''}")
+        except Exception as e:
+            print(f"[Jobs] image uniqueness for {name} failed ({e}); keeping page")
+        dumped = block.model_dump()
+        try:
+            from db import AsyncSessionLocal, PageRecord
+            from sqlalchemy import select
+            from datetime import datetime, timezone
+            slug = (dumped.get("slug") or "").strip()
+            if slug:
+                async with AsyncSessionLocal() as session:
+                    row = (
+                        await session.execute(select(PageRecord).where(PageRecord.slug == slug))
+                    ).scalar_one_or_none()
+                    if row:
+                        row.seo_block = dumped
+                        row.city = name
+                        row.state = state
+                        row.business_type = req.business_type
+                        row.base_location = req.base_location
+                        row.updated_at = datetime.now(timezone.utc)
+                    else:
+                        session.add(PageRecord(
+                            business_type=req.business_type,
+                            base_location=req.base_location or "",
+                            city=name,
+                            state=state,
+                            slug=slug,
+                            seo_block=dumped,
+                        ))
+                    await session.commit()
+        except Exception as e:
+            print(f"[Jobs] persist {name} to database failed ({e}); page still returned in job")
+        return dumped
 
     background_tasks.add_task(
         run_bulk_job,

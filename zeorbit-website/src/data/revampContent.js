@@ -33,6 +33,7 @@ export const SITE_CONTACT = {
     { label: 'YouTube', href: 'https://www.youtube.com/@ZeOrbit-Firm' },
     { label: 'X', href: 'https://twitter.com/orbit_ze' },
     { label: 'Pinterest', href: 'https://www.pinterest.com/zeorbitsd/' },
+    { label: 'Behance', href: 'https://www.behance.net/zeorbitappdev' },
     { label: 'Apple Maps', href: 'https://maps.apple/p/VA-_LREgJ5PzDV' },
     { label: 'Google Maps', href: 'https://maps.app.goo.gl/teVefHUc3yycwkcA7' },
     { label: 'Yelp', href: 'https://www.yelp.com/biz/zeorbit-san-diego-2' },

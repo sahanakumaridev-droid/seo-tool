@@ -44,6 +44,30 @@ def _us_cities():
     return _US_CITIES
 
 
+@router.get("/counties")
+async def list_us_counties(state: str = Query(default="CA")):
+    """Counties for a US state — California returns all 58."""
+    from services.location_service import list_counties
+    rows = list_counties(state)
+    return {
+        "state": (state or "CA").upper()[:2],
+        "counties": [{"name": c["name"], "state": c["state"], "label": f"{c['name']}, {c['state']}"} for c in rows],
+        "total": len(rows),
+    }
+
+
+@router.get("/place-catalog")
+async def place_catalog(
+    base_location: str = Query(default=""),
+    county: str = Query(default=""),
+    city: str = Query(default=""),
+):
+    """Dynamic cities / local areas / streets for the selected county."""
+    from services.location_service import build_place_catalog
+    loc = (county or base_location or "San Diego County, CA").strip()
+    return build_place_catalog(base_location=loc, county_name=county or loc, city_name=city)
+
+
 @router.get("/san-diego-county")
 async def san_diego_county_breakdown():
     """County → 18 cities + unincorporated → local areas → streets."""

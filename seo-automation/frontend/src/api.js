@@ -62,6 +62,9 @@ export const generateSingle = (businessType, city, state = 'CA', useAi = false) 
 export const boostPageScores = (block) =>
   api.post('/content/boost-scores', block)
 
+export const repairBlockImages = (block) =>
+  api.post('/content/repair-images', block, { timeout: 60000 })
+
 export const exportJson = (data) =>
   api.post('/content/export/json', data)
 
@@ -77,6 +80,14 @@ export const getSanDiegoCounty = () =>
 
 export const searchCities = (q = '', limit = 40) =>
   api.get('/locations/cities', { params: { q, limit } })
+
+export const getCounties = (state = 'CA') =>
+  api.get('/locations/counties', { params: { state } })
+
+export const getPlaceCatalog = ({ baseLocation = '', county = '', city = '' } = {}) =>
+  api.get('/locations/place-catalog', {
+    params: { base_location: baseLocation, county, city },
+  })
 
 // ── Keywords ─────────────────────────────────────────────────────
 export const getKeywords = (businessType, city, state = 'CA') =>
@@ -223,6 +234,9 @@ export const notifyBingIndexing = () =>
 
 export const getSeoSitemaps = () =>
   api.get('/seo-indexing/sitemaps')
+
+export const submitSeoSitemaps = () =>
+  api.post('/seo-indexing/submit-sitemaps', null, { timeout: 60000 })
 
 // ── Leads ────────────────────────────────────────────────────────
 export const getLeads = (params = {}) =>

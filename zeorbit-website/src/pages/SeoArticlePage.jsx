@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams, Navigate } from 'react-router-dom'
 import RevampHeader from '../components/revamp/RevampHeader'
 import SiteFooter from '../components/SiteFooter'
 import SeoHead from '../components/SeoHead'
@@ -8,6 +8,13 @@ import { getPublishedPage } from '../api'
 import { SITE_CONTACT } from '../data/revampContent'
 
 const LAYOUTS = ['qa', 'steps', 'story', 'cards', 'split', 'timeline']
+
+function unpublishedDest(slug) {
+  const s = String(slug || '')
+  let h = 0
+  for (let i = 0; i < s.length; i += 1) h = (h + s.charCodeAt(i)) % 2
+  return h === 0 ? '/' : '/contact'
+}
 
 const INSTRUCTION_MARKERS = [
   'focus each page on the specific',
@@ -118,11 +125,19 @@ function bulletsFrom(text) {
   return parts.length >= 2 ? parts : null
 }
 
+function usableSub(h3) {
+  const t = String(h3 || '').trim()
+  if (!t) return ''
+  if (/^(a simple starting point|what good looks like|how long it usually takes|a next step if you need a hand)$/i.test(t)) {
+    return ''
+  }
+  return t
+}
+
 function fallbackSection(heading) {
   return (
-    `${heading || 'This section'} matters when someone lands on your site and needs a clear answer. `
-    + 'ZeOrbit builds WordPress pages that explain the offer in plain language, show proof, '
-    + 'and make the next step obvious — contact, call, or book.'
+    `${heading || 'This section'} continues the same topic as the rest of this article. `
+    + 'Follow the steps in order and confirm the result before you change anything else.'
   )
 }
 
@@ -151,7 +166,7 @@ function parseMarkdownSections(raw, h2s, h3s) {
     if (!rest || rest.split(/\s+/).length < 20) {
       rest = fallbackSection(heading)
     }
-    return { heading, sub: h3s[i] || '', text: rest, bullets: bulletsFrom(rest) }
+    return { heading, sub: usableSub(h3s[i]), text: rest, bullets: bulletsFrom(rest) }
   })
 }
 
@@ -182,18 +197,33 @@ function allocateSections(h2s, h3s, paras) {
     if (!text || text.split(/\s+/).length < 20) {
       text = fallbackSection(heading)
     }
-    return { heading, sub: h3s[i] || '', text, bullets: bulletsFrom(text) }
+    return { heading, sub: usableSub(h3s[i]), text, bullets: bulletsFrom(text) }
   })
   return { sections, leftover: paras.slice(idx) }
 }
 
-function ArticleSections({ layout, h2s, h3s, body, rawContent, images }) {
+function photoKey(url) {
+  const m = String(url || '').match(/photo-[a-zA-Z0-9_-]+/i)
+  if (m) return m[0].toLowerCase()
+  return String(url || '').split('?')[0].replace(/\/$/, '').toLowerCase()
+}
+
+function ArticleSections({ layout, h2s, h3s, body, rawContent, images, reservedKeys = [] }) {
   const parsed = parseMarkdownSections(rawContent, h2s, h3s)
   const allocated = parsed
     ? { sections: parsed, leftover: [] }
     : allocateSections(h2s, h3s, body)
   const { sections, leftover } = allocated
-  const bodyImages = (images || []).filter((img) => img?.url && !img.is_featured)
+  const reserved = new Set((reservedKeys || []).map(photoKey).filter(Boolean))
+  const seen = new Set(reserved)
+  const bodyImages = []
+  for (const img of images || []) {
+    if (!img?.url || img.is_featured) continue
+    const k = photoKey(img.url)
+    if (!k || seen.has(k)) continue
+    seen.add(k)
+    bodyImages.push(img)
+  }
 
   const withImage = (sec, i) => {
     const img = bodyImages[i]
@@ -211,7 +241,6 @@ function ArticleSections({ layout, h2s, h3s, body, rawContent, images }) {
                 if (fig) fig.style.display = 'none'
               }}
             />
-            {img.caption ? <figcaption>{img.caption}</figcaption> : null}
           </figure>
         ) : null}
         <SectionCopy sec={sec} />
@@ -290,6 +319,10 @@ export default function SeoArticlePage() {
     return () => { cancelled = true }
   }, [slug])
 
+  if (!loading && (error || !row)) {
+    return <Navigate to={unpublishedDest(slug)} replace />
+  }
+
   const block = row?.seo_block || {}
   const title = block.title || block.h1 || 'ZeOrbit'
   const h1 = block.h1 || block.title || ''
@@ -303,44 +336,40 @@ export default function SeoArticlePage() {
   const layout = layoutFor(slug, block.layout_variant)
   const images = Array.isArray(block.in_content_images) ? block.in_content_images : []
   const hero = block.featured_image_url || images.find((im) => im?.is_featured)?.url || images[0]?.url || ''
-  const heroKey = (hero || '').split('?')[0]
-  const distinctBody = images.find((im) => im?.url && im.url.split('?')[0] !== heroKey)
+  const heroKey = photoKey(hero)
+  const distinctBody = images.find((im) => im?.url && photoKey(im.url) && photoKey(im.url) !== heroKey)
   const footerImg = (
-    (block.footer_image_url && block.footer_image_url.split('?')[0] !== heroKey)
+    (block.footer_image_url && photoKey(block.footer_image_url) !== heroKey)
       ? block.footer_image_url
       : (distinctBody?.url || '')
   )
+  const footerKey = photoKey(footerImg)
   const featuredMeta = images.find(
-    (im) => im?.is_featured || (im?.url && hero && im.url.split('?')[0] === hero.split('?')[0]),
+    (im) => im?.is_featured || (im?.url && hero && photoKey(im.url) === heroKey),
   )
   const footerMeta = images.find(
-    (im) => im?.url && footerImg && im.url.split('?')[0] === footerImg.split('?')[0],
+    (im) => im?.url && footerImg && photoKey(im.url) === footerKey,
   )
   const heroAlt = featuredMeta?.alt_text || h1
   const footerAlt = footerMeta?.alt_text || 'Related website design example'
 
   return (
     <div className={`rv-page zo-blog-page zo-seo-article is-layout-${layout}`}>
+      {loading ? null : (
       <SeoHead
         title={title}
-        description={desc}
+        description={(desc || '').replace(/\s+/g, ' ').trim().slice(0, 160)}
         path={`/${slug || ''}`}
         image={hero || '/zeorbit-logo.png'}
         type="article"
       />
+      )}
       <RevampHeader />
 
       <main className="zo-article">
         <div className="rv-shell zo-article-inner">
           {loading ? (
             <p className="zo-blog-empty">Loading…</p>
-          ) : error || !row ? (
-            <div className="zo-article-missing">
-              <p className="zo-blog-eyebrow">Not published yet</p>
-              <h1>This page is not live</h1>
-              <p>Generate it in the SEO tool, then click Publish to ZeOrbit.</p>
-              <Link className="zo-article-back" to="/blog">Back to blog</Link>
-            </div>
           ) : (
             <article>
               {location ? <p className="zo-blog-eyebrow">{location}</p> : null}
@@ -358,8 +387,9 @@ export default function SeoArticlePage() {
                 body={body}
                 rawContent={normalized}
                 images={block.in_content_images || []}
+                reservedKeys={[hero, footerImg]}
               />
-              {footerImg && footerImg.split('?')[0] !== (hero || '').split('?')[0] ? (
+              {footerImg && footerKey && footerKey !== heroKey ? (
                 <figure className="zo-article-footer-image">
                   <img src={footerImg} alt={footerAlt} />
                 </figure>

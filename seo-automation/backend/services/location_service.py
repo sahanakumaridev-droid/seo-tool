@@ -396,36 +396,174 @@ async def resolve_generation_cities(
     else:
         result = nearby[:num]
 
+    seed = loc or (f"{extras[0].name}, {extras[0].state}" if extras else "")
+    result = await _pad_places_to_count(result, num, seed)
+
     enriched: List[CityInfo] = []
     for info in result:
         enriched.append(await enrich_zip_place(info))
     return enriched
 
 
+# Primary ZIP for incorporated San Diego County cities (used when geocoders miss).
+_SD_CITY_ZIPS = {
+    "carlsbad": "92008", "chula vista": "91910", "coronado": "92118", "del mar": "92014",
+    "el cajon": "92020", "encinitas": "92024", "escondido": "92025", "imperial beach": "91932",
+    "la mesa": "91941", "lemon grove": "91945", "national city": "91950", "oceanside": "92054",
+    "poway": "92064", "san diego": "92101", "san marcos": "92069", "santee": "92071",
+    "solana beach": "92075", "vista": "92081",
+}
+
+_ZIP_LOOKUP_CACHE: dict = {}
+
+
+def _zip_query_names(name: str) -> List[str]:
+    raw = (name or "").strip()
+    if not raw:
+        return []
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    out: List[str] = []
+    for p in reversed(parts):
+        if p not in out:
+            out.append(p)
+    if raw not in out:
+        out.append(raw)
+    return out
+
+
+async def _zippopotam_zip(place: str, state: str) -> str:
+    st = (state or "").strip().lower()
+    city = (place or "").split(",")[0].strip().lower()
+    if not st or not city or len(st) != 2:
+        return ""
+    key = f"zp|{st}|{city}"
+    if key in _ZIP_LOOKUP_CACHE:
+        return _ZIP_LOOKUP_CACHE[key]
+    try:
+        from urllib.parse import quote
+        url = f"https://api.zippopotam.us/us/{st}/{quote(city)}"
+        async with httpx.AsyncClient(timeout=8) as client:
+            resp = await client.get(url)
+        if resp.status_code != 200:
+            _ZIP_LOOKUP_CACHE[key] = ""
+            return ""
+        places = (resp.json() or {}).get("places") or []
+        codes = []
+        for p in places:
+            z = re.sub(r"\D", "", str(p.get("post code") or ""))[:5]
+            if len(z) == 5 and z not in codes:
+                codes.append(z)
+        if not codes:
+            _ZIP_LOOKUP_CACHE[key] = ""
+            return ""
+        pick = codes[int(hashlib_md5_mod(city, len(codes)))]
+        _ZIP_LOOKUP_CACHE[key] = pick
+        return pick
+    except Exception:
+        return ""
+
+
+def hashlib_md5_mod(text: str, n: int) -> int:
+    import hashlib
+    if n <= 0:
+        return 0
+    return int(hashlib.md5(text.encode("utf-8")).hexdigest(), 16) % n
+
+
+async def _nominatim_zip(place: str, state: str) -> str:
+    q = f"{place}, {state}, USA".strip(", ")
+    key = f"nm|{q.lower()}"
+    if key in _ZIP_LOOKUP_CACHE:
+        return _ZIP_LOOKUP_CACHE[key]
+    try:
+        async with httpx.AsyncClient(timeout=10, headers={"User-Agent": "ZeOrbitSEO/1.0 (local-seo)"}) as client:
+            resp = await client.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": q, "format": "json", "addressdetails": 1, "limit": 1, "countrycodes": "us"},
+            )
+        if resp.status_code != 200:
+            _ZIP_LOOKUP_CACHE[key] = ""
+            return ""
+        rows = resp.json() or []
+        if not rows:
+            _ZIP_LOOKUP_CACHE[key] = ""
+            return ""
+        z = re.sub(r"\D", "", str((rows[0].get("address") or {}).get("postcode") or ""))[:5]
+        _ZIP_LOOKUP_CACHE[key] = z if len(z) == 5 else ""
+        return _ZIP_LOOKUP_CACHE[key]
+    except Exception:
+        return ""
+
+
+def _static_sd_zip(name: str) -> str:
+    n = (name or "").strip().lower()
+    if n in _SD_CITY_ZIPS:
+        return _SD_CITY_ZIPS[n]
+    for part in _zip_query_names(name):
+        k = part.lower()
+        if k in _SD_CITY_ZIPS:
+            return _SD_CITY_ZIPS[k]
+        for city, z in _SD_CITY_ZIPS.items():
+            if city in k or k in city:
+                return z
+    return ""
+
+
+async def lookup_place_zip(name: str, state: str, existing: str = "") -> str:
+    """Resolve a 5-digit ZIP for a city, area, or street."""
+    z = re.sub(r"\D", "", existing or "")[:5]
+    if len(z) == 5:
+        return z
+    st = (state or "").strip()
+    for label in _zip_query_names(name):
+        got = await _zippopotam_zip(label, st)
+        if got:
+            return got
+        got = await _nominatim_zip(label, st)
+        if got:
+            return got
+    static = _static_sd_zip(name)
+    if static:
+        return static
+    return ""
+
+
 async def enrich_zip_place(info: CityInfo) -> CityInfo:
-    """Fill city/state from OpenCage when the chip is a ZIP or includes a ZIP."""
+    """Fill city/state/ZIP so copy can name a postal code."""
     if not info:
         return info
     query = (info.zip or "").strip()
     if not query and info.kind != "zip":
-        return info
+        query = f"{info.name}, {info.state} {info.zip}".strip()
     if not query:
         query = (info.name or "").strip()
-    place = await _geocode_opencage_place(query if re.fullmatch(r"\d{5}", query) else f"{info.name}, {info.state} {info.zip}".strip())
-    if not place:
+    if not query:
         return info
+    place = await _geocode_opencage_place(
+        query if re.fullmatch(r"\d{5}", query) else query
+    )
     name = info.name
-    if info.kind == "zip" or (info.zip and (not name or name == info.zip)):
-        name = place.get("city") or info.name
+    kind = info.kind
+    state = info.state or ""
+    zip_code = (info.zip or "")[:5]
+    if place:
+        if info.kind == "zip" or (info.zip and (not name or name == info.zip)):
+            name = place.get("city") or info.name
+        if info.kind == "zip" and name and name != (info.zip or ""):
+            kind = "city"
+        state = (place.get("state") or info.state or "")
+        zip_code = (info.zip or place.get("zip") or "")[:5]
+    if len(re.sub(r"\D", "", zip_code)) != 5:
+        zip_code = await lookup_place_zip(name or info.name, state or info.state, zip_code)
     return CityInfo(
         name=name,
-        state=(place.get("state") or info.state or ""),
+        state=state or info.state or "",
         country=info.country or "USA",
-        latitude=place.get("lat") or info.latitude,
-        longitude=place.get("lon") or info.longitude,
+        latitude=(place or {}).get("lat") or info.latitude,
+        longitude=(place or {}).get("lon") or info.longitude,
         population=info.population,
-        kind="zip" if info.zip or info.kind == "zip" else info.kind,
-        zip=info.zip or place.get("zip") or "",
+        kind=kind,
+        zip=re.sub(r"\D", "", zip_code or "")[:5],
     )
 
 
@@ -445,82 +583,315 @@ def _san_diego_county_data() -> Optional[dict]:
     return _SD_COUNTY_CACHE or None
 
 
+def list_counties(state: str = "CA") -> List[dict]:
+    """Counties in a state (California has 58)."""
+    code = (_normalize_state_token(state) or (state or "CA").upper())[:2]
+    rows = [c for c in _US_COUNTIES if c.get("state") == code]
+    rows.sort(key=lambda c: c.get("name") or "")
+    return rows
+
+
+def nearest_county(lat: float, lon: float, state: Optional[str] = None) -> Optional[dict]:
+    best = None
+    best_d = 1e18
+    for c in _US_COUNTIES:
+        if state and c.get("state") != state:
+            continue
+        d = haversine(lat, lon, c["lat"], c["lon"])
+        if d < best_d:
+            best_d, best = d, c
+    return best
+
+
+# Distinct major roads so Orange ≠ Fresno ≠ San Diego in the Streets layer.
+_COUNTY_ROADS = {
+    "Alameda": ["International Blvd", "Hesperian Blvd", "Foothill Blvd", "Mission Blvd", "San Pablo Ave", "Broadway", "Park St", "Grand Ave"],
+    "Contra Costa": ["San Pablo Ave", "Geary Rd", "Ygnacio Valley Rd", "Treat Blvd", "Clayton Rd", "Monument Blvd", "Bailey Rd"],
+    "El Dorado": ["US-50", "Missouri Flat Rd", "El Dorado Hills Blvd", "Green Valley Rd", "Cameron Park Dr"],
+    "Fresno": ["Shaw Ave", "Herndon Ave", "Blackstone Ave", "Clovis Ave", "Kings Canyon Rd", "Cedar Ave", "Palm Ave", "Shields Ave", "Ventura Ave"],
+    "Humboldt": ["US-101", "Broadway", "4th St", "Harrison Ave", "Myrtle Ave", "Old Arcata Rd"],
+    "Imperial": ["Imperial Ave", "Danenberg Dr", "Highway 86", "Highway 111", "Aten Rd"],
+    "Kern": ["Chester Ave", "California Ave", "Ming Ave", "Rosedale Hwy", "Weedpatch Hwy", "Norris Rd", "Olive Dr"],
+    "Kings": ["11th Ave", "Lacey Blvd", "Houston Ave", "Hanford-Armona Rd", "Highway 198"],
+    "Los Angeles": ["Wilshire Blvd", "Sunset Blvd", "Santa Monica Blvd", "Vermont Ave", "Figueroa St", "Crenshaw Blvd", "Western Ave", "Ventura Blvd", "Sepulveda Blvd", "Pacific Coast Hwy"],
+    "Marin": ["4th St", "Sir Francis Drake Blvd", "Miracle Mile", "Tiburon Blvd", "Mill Valley-Sausalito Path", "Redwood Hwy"],
+    "Monterey": ["Lighthouse Ave", "Cannery Row", "Fremont Blvd", "Reservation Rd", "Carmel Valley Rd", "Highway 1"],
+    "Napa": ["Soscol Ave", "Jefferson St", "Silverado Trail", "Highway 29", "Trancas St"],
+    "Orange": ["Pacific Coast Hwy", "Harbor Blvd", "Beach Blvd", "Katella Ave", "Chapman Ave", "Jamboree Rd", "Irvine Blvd", "Culver Dr", "Brookhurst St", "Tustin Ave", "MacArthur Blvd"],
+    "Placer": ["Douglas Blvd", "Sunrise Blvd", "Auburn Folsom Rd", "Highway 49", "Rocklin Rd", "Stanford Ranch Rd"],
+    "Riverside": ["Magnolia Ave", "Arlington Ave", "Van Buren Blvd", "Highway 111", "Ramona Expwy", "Limonite Ave", "Indiana Ave"],
+    "Sacramento": ["Watt Ave", "Sunrise Blvd", "Florin Rd", "Stockton Blvd", "Truxel Rd", "Fair Oaks Blvd", "El Camino Ave", "Howe Ave"],
+    "San Bernardino": ["E St", "Hospitality Ln", "Baseline St", "Foothill Blvd", "Sierra Ave", "Waterman Ave", "Tippecanoe Ave"],
+    "San Diego": ["El Camino Real", "Pacific Hwy", "Mira Mesa Blvd", "University Ave", "El Cajon Blvd", "Palm Ave", "Otay Lakes Rd", "Broadway"],
+    "San Francisco": ["Market St", "Mission St", "Van Ness Ave", "Geary Blvd", "19th Ave", "Lombard St", "Castro St", "Fillmore St"],
+    "San Joaquin": ["Pacific Ave", "March Ln", "Hammer Ln", "West Ln", "Charter Way", "I-5", "Highway 99"],
+    "San Luis Obispo": ["Monterey St", "Broad St", "Santa Rosa St", "Los Osos Valley Rd", "South Higuera St"],
+    "San Mateo": ["El Camino Real", "Woodside Rd", "Hillsdale Blvd", "Holly St", "Millbrae Ave", "Broadway"],
+    "Santa Barbara": ["State St", "Carrillo St", "Milpas St", "Upper State", "Hollister Ave", "Cathedral Oaks Rd"],
+    "Santa Clara": ["El Camino Real", "Stevens Creek Blvd", "Saratoga Ave", "Bascom Ave", "Almaden Expwy", "Capitol Expwy", "Lawrence Expwy"],
+    "Santa Cruz": ["Pacific Ave", "Mission St", "Soquel Ave", "Water St", "Ocean St", "Highway 1"],
+    "Solano": ["Texas St", "Georgia St", "Tennessee St", "Alamo Dr", "Peabody Rd", "North Texas St"],
+    "Sonoma": ["4th St", "Santa Rosa Ave", "Mendocino Ave", "Highway 12", "Petaluma Blvd", "Farmers Ln"],
+    "Stanislaus": ["McHenry Ave", "Yosemite Blvd", "Sisk Rd", "Dale Rd", "Pelandale Ave", "Standiford Ave"],
+    "Tulare": ["Mooney Blvd", "Mineral King Ave", "Caldwell Ave", "Highway 198", "Main St"],
+    "Ventura": ["Main St", "Telephone Rd", "Victoria Ave", "Harbor Blvd", "Thousand Oaks Blvd", "Saviers Rd"],
+    "Yolo": ["Russell Blvd", "Covell Blvd", "Richards Blvd", "West Capitol Ave", "Mace Blvd"],
+}
+
+
+def _uniq_names(items: list) -> List[str]:
+    seen = set()
+    out = []
+    for raw in items:
+        name = " ".join(str(raw or "").split())
+        if not name:
+            continue
+        key = name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(name)
+    return out
+
+
+def _county_short(county: dict | str) -> str:
+    if isinstance(county, dict):
+        n = county.get("name") or ""
+    else:
+        n = county or ""
+    return re.sub(r"\s+county$", "", n, flags=re.I).strip() or n
+
+
+def _fallback_streets(city: str, county_name: str = "", extra_cities: Optional[List[str]] = None) -> List[str]:
+    """County-first roads, then this city's named streets — never a clone of another county."""
+    short = _county_short(county_name)
+    name = (city or short or "Main").strip()
+    stems = list(_COUNTY_ROADS.get(short, []))
+    stems.extend([f"{name} Blvd", f"{name} Ave", f"{name} Rd", f"{name} Pkwy"])
+    for other in (extra_cities or [])[:6]:
+        if other and other.lower() != name.lower():
+            stems.append(f"{other} Rd")
+    stems.extend([f"{short} Parkway", f"{short} County Rd"])
+    return _uniq_names(stems)[:24]
+
+
+def _local_areas_for_city(city: str, nearby_names: List[str], county_name: str = "") -> List[str]:
+    name = (city or "").strip()
+    short = _county_short(county_name)
+    areas = [
+        f"Downtown {name}" if name else f"Downtown {short}",
+        f"{name} Heights" if name else f"{short} Heights",
+        f"North {name}" if name else f"North {short}",
+        f"{name} Village" if name else f"{short} Village",
+    ]
+    for n in nearby_names:
+        if n and n.lower() != name.lower():
+            areas.append(n)
+    return _uniq_names(areas)[:12]
+
+
+def _cities_near(lat: float, lon: float, state: str, limit: int = 24) -> List[dict]:
+    scored = []
+    seen = set()
+    for c in _US_CITIES:
+        if state and c.get("state") != state:
+            continue
+        key = c["city"].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        scored.append((haversine(lat, lon, c["lat"], c["lon"]), c))
+    scored.sort(key=lambda x: x[0])
+    # Keep places roughly inside the county (~55 miles) before padding
+    tight = [c for d, c in scored if d <= 55][:limit]
+    if len(tight) >= min(8, limit):
+        return tight[:limit]
+    return [c for _, c in scored[:limit]]
+
+
+def resolve_county_for_base(base_location: str) -> Optional[dict]:
+    rec = _resolve_as_county(base_location)
+    if rec:
+        return rec
+    city_rec = _geocode_from_dataset(base_location)
+    if city_rec:
+        return nearest_county(city_rec["lat"], city_rec["lon"], city_rec.get("state"))
+    state_rec = _resolve_as_state(base_location)
+    if state_rec:
+        return nearest_county(state_rec["lat"], state_rec["lon"], state_rec["code"])
+    return None
+
+
+def build_place_catalog(base_location: str = "", county_name: str = "", city_name: str = "") -> dict:
+    """County → incorporated cities → local areas → streets for the picker.
+
+    San Diego County uses the curated JSON. Every other US county uses nearby
+    cities as local areas and named streets so the layer switch always works.
+    """
+    loc = (county_name or base_location or "San Diego County, CA").strip()
+    county = _resolve_as_county(loc) if "county" in loc.lower() else None
+    if not county:
+        county = resolve_county_for_base(loc)
+    if not county:
+        county = next((c for c in _US_COUNTIES if c["state"] == "CA" and "san diego" in c["name"].lower()), None)
+    if not county:
+        county = {"name": "San Diego County", "state": "CA", "lat": 33.02, "lon": -116.77}
+
+    state = county.get("state") or "CA"
+    peers = list_counties(state)
+    city_filter = (city_name or "").strip()
+    if city_filter.lower() in {"all cities", "all", ""}:
+        city_filter = ""
+    loc_l = loc.split(",")[0].strip().lower()
+    if not city_filter and "county" not in loc_l and loc_l not in {"all cities", "unincorporated"}:
+        city_filter = loc.split(",")[0].strip()
+
+    sd = _san_diego_county_data() if "san diego" in (county.get("name") or "").lower() else None
+    cities_out = []
+    incorporated = []
+
+    if sd and sd.get("cities"):
+        incorporated = list(sd.get("incorporated_cities") or [c["name"] for c in sd["cities"]])
+        for c in sd["cities"]:
+            if city_filter and (c.get("name") or "").lower() != city_filter.lower():
+                continue
+            cities_out.append({
+                "name": c.get("name"),
+                "kind": "city",
+                "local_areas": list(c.get("local_areas") or []),
+                "streets": list(c.get("streets") or _fallback_streets(c.get("name") or "", county.get("name") or "")),
+            })
+        uninc = sd.get("unincorporated") or {}
+        if not city_filter or city_filter.lower() in {"unincorporated"}:
+            cities_out.append({
+                "name": "Unincorporated",
+                "kind": "unincorporated",
+                "local_areas": list(uninc.get("local_areas") or []),
+                "streets": list(uninc.get("streets") or _fallback_streets("Unincorporated", county.get("name") or "")),
+            })
+    else:
+        nearby = _cities_near(county["lat"], county["lon"], state, 28)
+        incorporated = [c["city"] for c in nearby]
+        if city_filter and city_filter.lower() not in {x.lower() for x in incorporated}:
+            city_filter = ""
+        for c in nearby:
+            if city_filter and c["city"].lower() != city_filter.lower():
+                continue
+            near_names = [x["city"] for x in _cities_near(c["lat"], c["lon"], state, 10) if x["city"] != c["city"]]
+            cities_out.append({
+                "name": c["city"],
+                "kind": "city",
+                "lat": c["lat"],
+                "lon": c["lon"],
+                "local_areas": _local_areas_for_city(c["city"], near_names, county.get("name") or ""),
+                "streets": _fallback_streets(
+                    c["city"],
+                    county.get("name") or "",
+                    extra_cities=incorporated,
+                ),
+            })
+
+    return {
+        "county": county.get("name"),
+        "state": state,
+        "incorporated_cities": incorporated,
+        "cities": cities_out,
+        "counties": [{"name": c["name"], "state": c["state"]} for c in peers],
+        "selected_city": city_filter or "All cities",
+    }
+
+
 def _catalog_places_for_base(base_location: str, num: int) -> List[CityInfo]:
-    """
-    Prefer city → local areas → streets from regional catalogs when the base
-    matches (currently San Diego County). Frontend no longer picks these chips.
-    """
-    data = _san_diego_county_data()
-    if not data:
-        return []
-    loc = (base_location or "").strip()
-    city_part = loc.split(",")[0].strip().lower()
-    state = "CA"
-    if "," in loc:
-        maybe = loc.split(",")[-1].strip()
-        if _STATE_ABBR.fullmatch(maybe):
-            state = maybe.upper()
-
-    cities = list(data.get("cities") or [])
-    uninc = data.get("unincorporated") or {}
-    # Match a catalog city, or treat "San Diego" / county-wide as expand-all
-    match = None
-    for c in cities:
-        if (c.get("name") or "").strip().lower() == city_part:
-            match = c
-            break
-    county_wide = city_part in {
-        "san diego", "san diego county", "all cities", "chula vista",
-    } or "san diego" in city_part
-
+    """City → local areas → streets from the active county catalog."""
+    data = build_place_catalog(base_location=base_location)
+    state = data.get("state") or "CA"
     out: List[CityInfo] = []
     seen = set()
 
-    def add(name: str, kind: str, lat: float = 0.0, lon: float = 0.0):
+    def add(name: str, kind: str, zip_code: str = ""):
         key = (name.lower(), state.lower(), kind)
         if key in seen or not (name or "").strip():
             return
         seen.add(key)
-        out.append(_city_info(name.strip(), state, lat, lon, kind))
+        z = zip_code or (_static_sd_zip(name) if state == "CA" else "")
+        out.append(_city_info(name.strip(), state, 0.0, 0.0, kind, zip=z))
 
-    # Base city first
-    if match:
-        add(match["name"], "city")
-        for area in (match.get("local_areas") or []):
+    for c in data.get("cities") or []:
+        add(c.get("name") or "", "city")
+        if len(out) >= num:
+            return out[:num]
+        for area in c.get("local_areas") or []:
             add(area, "area")
             if len(out) >= num:
                 return out[:num]
-        for street in (match.get("streets") or []):
-            add(f"{street}, {match['name']}", "street")
+        parent = c.get("name") or ""
+        for street in c.get("streets") or []:
+            add(f"{street}, {parent}" if parent else street, "street")
             if len(out) >= num:
                 return out[:num]
-    elif county_wide or city_part == "chula vista":
-        # Expand across SD cities → areas → streets until num filled
-        for c in cities:
-            add(c.get("name") or "", "city")
-            if len(out) >= num:
-                return out[:num]
-        for c in cities:
-            for area in (c.get("local_areas") or []):
-                add(area, "area")
-                if len(out) >= num:
-                    return out[:num]
-        for place in (uninc.get("local_areas") or []):
-            add(place, "area")
-            if len(out) >= num:
-                return out[:num]
-        for c in cities:
-            for street in (c.get("streets") or []):
-                add(f"{street}, {c.get('name')}", "street")
-                if len(out) >= num:
-                    return out[:num]
-
     return out[:num]
+
+
+async def _pad_places_to_count(places: List[CityInfo], num: int, seed: str) -> List[CityInfo]:
+    """Never return fewer places than the slider — fill from nearby, then numbered areas.
+
+    If more places were already pinned (chips) than the slider, keep all of them
+    up to 250 — do not slice extras down to the slider.
+    """
+    num = max(1, min(int(num or 1), 250))
+    out = list(places or [])
+    want = min(250, max(num, len(out)))
+    seen = {
+        (c.name.lower(), (c.state or "").lower(), getattr(c, "kind", "city"))
+        for c in out
+    }
+
+    def add(info: CityInfo) -> bool:
+        if not info or not (info.name or "").strip():
+            return False
+        key = (info.name.lower(), (info.state or "").lower(), getattr(info, "kind", "city"))
+        if key in seen:
+            return False
+        seen.add(key)
+        out.append(info)
+        return True
+
+    if len(out) < want:
+        try:
+            nearby = await get_nearby_cities(seed, max(want, 80))
+        except LocationNotResolvedError:
+            nearby = []
+        for c in nearby:
+            if getattr(c, "kind", "city") == "state":
+                continue
+            add(c)
+            if len(out) >= want:
+                return out[:want]
+    if len(out) < want:
+        for c in _catalog_places_for_base(seed, want * 4):
+            add(c)
+            if len(out) >= want:
+                return out[:want]
+    base = out[0] if out else city_from_label(seed)
+    n = 2
+    while base and len(out) < want:
+        add(_city_info(
+            f"{base.name} area {n}",
+            base.state or "CA",
+            getattr(base, "latitude", 0) or 0,
+            getattr(base, "longitude", 0) or 0,
+            "area",
+            zip=getattr(base, "zip", "") or "",
+        ))
+        n += 1
+        if n > want + 40:
+            break
+    return out[:want]
 
 
 async def expand_places_from_base(base_location: str, num: int) -> List[CityInfo]:
     """Backend automation: cities + localities (+ streets when catalog allows)."""
-    num = max(1, min(int(num or 1), 100))
+    num = max(1, min(int(num or 1), 250))
     catalog = _catalog_places_for_base(base_location, num)
     if len(catalog) >= num:
         return catalog[:num]
@@ -529,7 +900,7 @@ async def expand_places_from_base(base_location: str, num: int) -> List[CityInfo
     nearby = [c for c in nearby if getattr(c, "kind", "city") != "state"]
 
     if not catalog:
-        return nearby[:num]
+        return await _pad_places_to_count(nearby, num, base_location)
 
     # Merge catalog (areas/streets) with nearby cities
     out: List[CityInfo] = []
@@ -542,7 +913,7 @@ async def expand_places_from_base(base_location: str, num: int) -> List[CityInfo
         out.append(info)
         if len(out) >= num:
             break
-    return out[:num]
+    return await _pad_places_to_count(out, num, base_location)
 
 
 def merge_extra_locations(cities: List[CityInfo], extra_labels: Optional[List[str]]) -> List[CityInfo]:
@@ -551,13 +922,13 @@ def merge_extra_locations(cities: List[CityInfo], extra_labels: Optional[List[st
     seen = set()
     extras = flatten_extra_locations(extra_labels)
     for info in extras:
-        key = (info.name.lower(), (info.state or "").lower())
+        key = (info.name.lower(), (info.state or "").lower(), getattr(info, "kind", "city"))
         if key in seen:
             continue
         seen.add(key)
         out.append(info)
     for city in cities or []:
-        key = (city.name.lower(), (city.state or "").lower())
+        key = (city.name.lower(), (city.state or "").lower(), getattr(city, "kind", "city"))
         if key in seen:
             continue
         seen.add(key)

@@ -308,44 +308,19 @@ def _slug_from_public_url(url: str) -> str:
 async def _sitemap_urlset(request, session, kind: str | None):
     """Build page/post sitemaps.
 
-    Page sitemap = ZeOrbit marketing menu only.
-    Post sitemap = published blog/post URLs (not bulk location/test pages).
+    Page sitemap = marketing menu + location/service pages (never blogs).
+    Post sitemap = published blog posts only (never location pages).
     """
-    from datetime import date
-    from routes.pages import _public_base
-    from services.sitemap_service import editorial_post_urls, urlset_xml
+    from routes.pages import _public_base, _reader_base
+    from services.sitemap_service import editorial_page_urls, editorial_post_urls, urlset_xml
 
-    base = _public_base(request).rstrip("/")
-    parts = []
-    today = date.today().isoformat()
-    seen: set[str] = set()
-
-    def _add(loc: str, lastmod: str = today, changefreq: str = "weekly", priority: str = "1.0"):
-        loc = (loc or "").rstrip("/") or base
-        if loc in seen:
-            return
-        seen.add(loc)
-        parts.append(
-            f"<url><loc>{loc}</loc><lastmod>{lastmod}</lastmod>"
-            f"<changefreq>{changefreq}</changefreq><priority>{priority}</priority></url>"
-        )
-
-    if kind in (None, "page"):
-        for path in _SITE_MENU_PATHS:
-            loc = base if path == "/" else f"{base}{path}"
-            _add(loc, today, "weekly", "1.0")
-
-    xml = ""
+    base = _reader_base(request).rstrip("/")
     if kind == "post":
         entries = await editorial_post_urls(session, site_base=base)
         xml = urlset_xml(entries)
     else:
-        xml = (
-            '<?xml version="1.0" encoding="UTF-8"?>'
-            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-            + "".join(parts)
-            + "</urlset>"
-        )
+        entries = await editorial_page_urls(session, site_base=base)
+        xml = urlset_xml(entries, priority="1.0")
     return Response(
         content=xml,
         media_type="application/xml",
@@ -359,8 +334,8 @@ async def _sitemap_urlset(request, session, kind: str | None):
 @app.api_route("/sitemap.xml", methods=["GET", "HEAD"], tags=["Public Pages"])
 async def sitemap_xml(request: Request, session=Depends(get_session)):
     """Sitemap index pointing at page vs post sitemaps."""
-    from routes.pages import _public_base
-    base = _public_base(request)
+    from routes.pages import _reader_base
+    base = _reader_base(request)
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
@@ -400,12 +375,9 @@ async def _render_public_article(slug: str, request: Request, session):
     result = await session.execute(select(PageRecord).where(PageRecord.slug == slug))
     row = result.scalar_one_or_none()
     if not row:
-        return HTMLResponse(
-            "<div style='font-family:sans-serif;text-align:center;padding:80px;color:#475569'>"
-            "<h1 style='color:#0F172A'>404 — Page not found</h1>"
-            "<p>This page hasn't been published yet.</p></div>",
-            status_code=404,
-        )
+        dest = "/contact" if sum(ord(c) for c in (slug or "")) % 2 else "/"
+        from routes.pages import _reader_base
+        return RedirectResponse(url=f"{_reader_base(request).rstrip('/')}{dest}", status_code=301)
     block = SEOBlock(**row.seo_block)
     public_url = f"{_public_base(request)}/{slug}"
     return HTMLResponse(render_public_html(block, public_url))

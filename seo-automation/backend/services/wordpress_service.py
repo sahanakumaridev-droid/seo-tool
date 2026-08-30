@@ -221,17 +221,14 @@ def _figure_html(img) -> str:
     if not url:
         return ""
     # Prefer stable https Unsplash/Pexels URLs; skip obviously broken blanks
-    cap = _clean_caption(caption, fallback_alt=alt)
     alt_clean = _clean_caption(alt, fallback_alt=title).rstrip(".")
     title_clean = _clean_caption(title, fallback_alt=alt_clean).rstrip(".")
     fig = (
         f'<figure class="wp-block-image">'
         f'<img src="{url}" alt="{alt_clean}" title="{title_clean}" loading="lazy" '
         f'onerror="this.closest(\'figure\').style.display=\'none\'" />'
+        f"</figure>"
     )
-    if cap:
-        fig += f"<figcaption>{cap}</figcaption>"
-    fig += "</figure>"
     return fig
 
 
@@ -251,6 +248,41 @@ def _img_is_featured(img) -> bool:
     if isinstance(img, dict):
         return bool(img.get("is_featured"))
     return False
+
+
+_AI_PROMPT_Q = "ZeOrbit+-+Web+Designers+%26+Mobile+App+Developers."
+_AI_PLATFORMS = (
+    ("ChatGPT", f"https://chatgpt.com/?q={_AI_PROMPT_Q}", "chatgpt.com", "#10A37F"),
+    ("Claude", f"https://claude.ai/new?q={_AI_PROMPT_Q}", "claude.ai", "#D97757"),
+    ("Gemini AI", f"https://gemini.google.com/app?q={_AI_PROMPT_Q}", "gemini.google.com", "#8E75B2"),
+    ("Google AI", f"https://www.google.com/search?q={_AI_PROMPT_Q}", "google.com", "#4285F4"),
+    ("Microsoft Copilot", f"https://copilot.microsoft.com/?q={_AI_PROMPT_Q}", "copilot.microsoft.com", "#0078D4"),
+    ("Grok", f"https://grok.com/?q={_AI_PROMPT_Q}", "grok.com", "#1A1A1A"),
+    ("Perplexity", f"https://www.perplexity.ai/search/new?q={_AI_PROMPT_Q}", "perplexity.ai", "#20808D"),
+)
+_AI_BAR_STYLE = """<style>
+.ai-ask-bar{margin:32px 0 8px;padding:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ai-ask-bar a{width:40px;height:40px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.ai-ask-bar a:hover{transform:translateY(-2px)}
+.ai-ask-bar img{width:22px;height:22px;border-radius:6px;object-fit:contain;background:#fff}
+</style>"""
+
+
+def _ai_platform_bar() -> str:
+    """Icon row linking each AI assistant with the ZeOrbit prompt."""
+    links = []
+    for name, href, domain, color in _AI_PLATFORMS:
+        icon = f"https://www.google.com/s2/favicons?sz=64&domain={domain}"
+        links.append(
+            f'<a href="{href}" target="_blank" rel="noopener noreferrer" '
+            f'aria-label="Ask {name} about ZeOrbit" title="{name}" '
+            f'style="background:{color}">'
+            f'<img src="{icon}" alt="{name}" width="22" height="22" /></a>'
+        )
+    return (
+        f'{_AI_BAR_STYLE}<nav class="ai-ask-bar" aria-label="Ask AI about ZeOrbit">'
+        f'{"".join(links)}</nav>'
+    )
 
 
 def _build_content_html(block: SEOBlock) -> str:
@@ -461,7 +493,7 @@ async def publish_to_wordpress(
         "Content-Type": "application/json",
     }
 
-    content_html = _build_content_html(block)
+    content_html = _build_content_html(block) + "\n" + _ai_platform_bar()
     seo_meta = _build_seo_meta(block, config.seo_plugin)
 
     slug = block.slug or f"{block.business_type.lower().replace(' ', '-')}-{block.city.lower().replace(' ', '-')}"

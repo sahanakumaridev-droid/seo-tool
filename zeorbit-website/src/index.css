@@ -20,7 +20,7 @@
 }
 
 @theme {
-  --font-sans: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -85,8 +85,9 @@
   --radius-lg: 16px;
 
   /* ── Type ── */
-  --font-sans: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-display: 'Outfit', var(--font-sans);
+  --font-sans: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Poppins', var(--font-sans);
+  --font-hero: 'Poppins', var(--font-sans);
   --font-impact: var(--font-display);
   --font-serif: var(--font-display);
 
@@ -106,6 +107,7 @@
     color: var(--text-2);
     font-family: var(--font-sans);
     font-size: 14px;
+    font-weight: 400;
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
@@ -1260,10 +1262,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
 
 @media (max-width: 1100px) {
   .zo-nav {
-    display: none;
+    display: none !important;
   }
   .zo-mobile-toggle {
-    display: inline-flex;
+    display: inline-flex !important;
   }
   .zo-mobile-nav {
     display: flex;
@@ -1272,7 +1274,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
     display: none;
   }
   .zo-mega {
-    display: none;
+    display: none !important;
   }
   .zo-navbar-shell {
     border-radius: 20px;
@@ -2477,7 +2479,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
 .zo-blog-feature {
   display: grid;
   grid-template-columns: 1fr;
-  grid-template-rows: minmax(280px, 52vw) auto;
+  /* auto row height — do NOT use 52vw here; it outgrew media max-height and left a white gap under the photo */
+  grid-template-rows: auto auto;
   gap: 0;
   text-decoration: none;
   color: inherit;
@@ -2500,8 +2503,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
 
 .zo-blog-feature-media {
   position: relative;
-  min-height: 280px;
-  max-height: min(58vh, 520px);
+  width: 100%;
+  height: min(42vw, 400px);
+  min-height: 220px;
+  max-height: 400px;
   overflow: hidden;
   background: linear-gradient(135deg, #dbe7f5, #eef3f8);
 }
@@ -2512,7 +2517,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
   height: 100%;
   object-fit: cover;
   display: block;
-  min-height: 280px;
+  min-height: 0;
   transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -2824,10 +2829,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
     min-height: 0;
   }
 
-  .zo-blog-feature-media img,
-  .zo-blog-feature-media .zo-blog-img-fallback {
-    min-height: 240px;
-    aspect-ratio: 16 / 10;
+  .zo-blog-feature-media {
+    height: min(52vw, 320px);
+    min-height: 200px;
+    max-height: 320px;
   }
 
   .zo-blog-secondary {
@@ -2991,6 +2996,14 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
 .rv-contact-wrap {
   margin-top: 28px;
   text-align: left;
+}
+
+.zo-ai-above-form {
+  margin: 0 0 18px;
+}
+
+.zo-ai-above-form .zo-host-footer-ai {
+  justify-content: flex-start;
 }
 
 .rv-contact-card {
@@ -5789,7 +5802,7 @@ html.zo-a11y-links a {
 }
 
 html.zo-a11y-readable body {
-  font-family: Georgia, 'Times New Roman', serif !important;
+  font-family: var(--font-sans) !important;
   letter-spacing: 0.01em;
 }
 
@@ -6993,11 +7006,14 @@ html.zo-a11y-dark body {
 }
 
 .zo-article-hero {
-  margin: 28px 0 32px;
+  margin: 20px 0 24px;
   border-radius: 24px;
   overflow: hidden;
-  aspect-ratio: 21 / 10;
-  max-height: min(52vh, 480px);
+  position: relative;
+  width: 100%;
+  /* fixed height band — avoids aspect-ratio + max-height letterboxing under the photo */
+  height: min(38vw, 340px);
+  max-height: 340px;
   background: linear-gradient(135deg, #dbe7f5, #eef3f8);
   box-shadow: 0 20px 50px rgba(15, 45, 92, 0.1);
 }
@@ -7035,10 +7051,11 @@ html.zo-a11y-dark body {
   height: auto;
 }
 
-.zo-article-inline figcaption {
-  margin-top: 8px;
-  font-size: 13px;
-  color: #5b6676;
+.zo-article-inline figcaption,
+.zo-article-hero figcaption,
+.zo-article-footer-image figcaption,
+.zo-seo-article figcaption {
+  display: none !important;
 }
 
 .zo-article-cta {
@@ -7208,5 +7225,46 @@ html.zo-a11y-dark body {
 
 .zo-article-contact {
   padding: 0 0 80px;
+}
+
+.zo-ai-ask {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 36px 0 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.zo-ai-ask a {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.zo-ai-ask a:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.16);
+}
+
+.zo-ai-ask a:active {
+  transform: scale(0.97);
+}
+
+.zo-ai-ask img {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  object-fit: contain;
+  background: #fff;
 }
 

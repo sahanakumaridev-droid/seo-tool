@@ -59,14 +59,51 @@ const COLUMNS = [
   { title: 'Company', items: COMPANY },
 ]
 
+function SocialLink({ s }) {
+  return (
+    <a
+      href={s.href}
+      target="_blank"
+      rel="noreferrer"
+      aria-label={s.label}
+      className={`zo-host-social is-${s.label.toLowerCase().replace(/\s+/g, '-')}`}
+    >
+      <SocialBrandIcon label={s.label} />
+    </a>
+  )
+}
+
 export default function SiteFooter() {
   const year = new Date().getFullYear()
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const social = SITE_CONTACT.social || []
+  const leftSocial = social.slice(0, 5)
+  const rightSocial = social.slice(5, 10)
 
   return (
     <footer id="about" className="zo-site-footer zo-host-footer">
       <div className="zo-host-footer-accent" aria-hidden />
+
+      {/* Logo + tagline only at top; socials go below link columns */}
+      <div className="zo-host-footer-brand">
+        <div className="rv-shell zo-host-footer-brand-inner">
+          <Link
+            to="/"
+            className="zo-host-footer-logo"
+            aria-label="ZeOrbit home"
+            onClick={(event) => {
+              event.preventDefault()
+              goToHomepageTop(navigate, pathname)
+            }}
+          >
+            <Logo size={48} />
+          </Link>
+          <p className="zo-host-footer-tagline">
+            Websites, apps, SEO, and custom software for ambitious U.S. brands.
+          </p>
+        </div>
+      </div>
 
       <div className="zo-host-footer-main">
         <div className="rv-shell zo-host-footer-grid">
@@ -85,31 +122,17 @@ export default function SiteFooter() {
         </div>
       </div>
 
-      <div className="zo-host-footer-mid">
-        <div className="rv-shell zo-host-footer-mid-inner">
-          <Link
-            to="/"
-            className="zo-host-footer-logo"
-            aria-label="ZeOrbit home"
-            onClick={(event) => {
-              event.preventDefault()
-              goToHomepageTop(navigate, pathname)
-            }}
-          >
-            <Logo size={34} />
-          </Link>
-          <div className="zo-host-footer-social">
-            {SITE_CONTACT.social.map((s) => (
-              <a
-                key={s.label}
-                href={s.href}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={s.label}
-                className={`zo-host-social is-${s.label.toLowerCase().replace(/\s+/g, '-')}`}
-              >
-                <SocialBrandIcon label={s.label} />
-              </a>
+      {/* Socials below content columns — not beside logo */}
+      <div className="zo-host-footer-socials-block">
+        <div className="rv-shell zo-host-footer-social-row" role="group" aria-label="Social media">
+          <div className="zo-host-footer-social zo-host-footer-social-left">
+            {leftSocial.map((s) => (
+              <SocialLink key={s.label} s={s} />
+            ))}
+          </div>
+          <div className="zo-host-footer-social zo-host-footer-social-right">
+            {rightSocial.map((s) => (
+              <SocialLink key={s.label} s={s} />
             ))}
           </div>
         </div>
@@ -123,7 +146,6 @@ export default function SiteFooter() {
           <div className="zo-host-footer-legal-links">
             <a href={`mailto:${SITE_CONTACT.email}`}>{SITE_CONTACT.email}</a>
             <a href={`tel:${SITE_CONTACT.phoneTel}`}>{SITE_CONTACT.phone}</a>
-            <Link to="/privacy-policy">Privacy policy</Link>
             <Link to="/contact">Contact</Link>
           </div>
         </div>
