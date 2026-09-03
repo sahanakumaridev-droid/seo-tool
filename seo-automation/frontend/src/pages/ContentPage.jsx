@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Zap, MapPin, Globe, Eye, X, RefreshCw, Save, CheckCircle, AlertTriangle,
-         FileJson, Tag, Plus, Megaphone, Trash2, FileText, Newspaper, Sparkles, Wand2 } from 'lucide-react'
+         FileJson, Tag, Plus, Megaphone, Trash2, FileText, Newspaper, Sparkles, Wand2, Layers } from 'lucide-react'
 import { generateBulk, exportJson, generateSingle,
          saveEditedBlock, publishToWeb, startBulkGenerateJob, getJob, publishAllToWeb, zeorbitBlogUrl, zeorbitArticleUrl,
          getNearbyCities, getSanDiegoCounty, searchCities, getCounties, getPlaceCatalog, deletePage, listPages, suggestContentBrief } from '../api'
@@ -645,8 +645,9 @@ function ScoreBar({ label, value, color }) {
 
 // ── Main Page ──────────────────────────────────────────────────
 export default function ContentPage() {
-  const DEFAULTS = { business_type: '', base_location: 'Chula Vista, CA', num_cities: 10, industry: '', audience: '' }
+  const DEFAULTS = { business_type: '', base_location: 'Chula Vista, CA', num_cities: 10, industry: '', audience: '', image_keyword: '' }
   const navigate = useNavigate()
+  const routeLocation = useLocation()
   const [form, setForm] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem('seo_project') || '{}')
@@ -665,8 +666,15 @@ export default function ContentPage() {
   }
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  // Persist generated results across navigation (View -> back must not wipe them)
-  const [pages, setPages] = useState([])
+  // Persist generated results across View → back (drafts are not in the DB until Publish).
+  const [pages, setPages] = useState(() => {
+    try {
+      const raw = JSON.parse(sessionStorage.getItem('seo_generated_pages') || '[]')
+      return Array.isArray(raw) ? raw : []
+    } catch {
+      return []
+    }
+  })
   const [filter, setFilter] = useState('')
   const [exporting, setExporting] = useState('')
   const [kwInput, setKwInput] = useState('')
@@ -689,7 +697,14 @@ export default function ContentPage() {
   const [nearbyError, setNearbyError] = useState('')
   const [extraLocations, setExtraLocations] = useState([])
   const [extraLocDraft, setExtraLocDraft] = useState('')
-  const [contentKind, setContentKind] = useState('') // mandatory: 'page' | 'post'
+  const [contentKind, setContentKind] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('seo_content_kind') || ''
+      return saved === 'page' || saved === 'post' ? saved : ''
+    } catch {
+      return ''
+    }
+  })
   const [customRequirements, setCustomRequirements] = useState('')
   const [briefFields, setBriefFields] = useState(() => ({ ...EMPTY_BRIEF }))
   const [briefAiBusy, setBriefAiBusy] = useState('') // '' | 'all' | field key
@@ -706,17 +721,37 @@ export default function ContentPage() {
     setTimeout(() => setToast(null), type === 'warning' ? 6500 : 4000)
   }
 
-  // Keep only slugs in the tab — full articles live in the database.
   useEffect(() => {
-    try { sessionStorage.removeItem('seo_pages') } catch { /* legacy dump */ }
-  }, [])
+    const restored = routeLocation.state?.restoredPages
+    if (Array.isArray(restored) && restored.length) {
+      setPages(restored)
+      showToast(`Master copy applied to ${restored.length} locations`)
+      navigate('/content', { replace: true, state: {} })
+    }
+  }, [routeLocation.state])
+
+  // Keep generated drafts in this browser tab so View → back does not empty the table.
   useEffect(() => {
-    const slugs = pages.map((p) => p?.slug).filter(Boolean)
     try {
-      sessionStorage.setItem('seo_page_slugs', JSON.stringify(slugs))
+      sessionStorage.setItem('seo_generated_pages', JSON.stringify(pages))
+      sessionStorage.setItem('seo_page_slugs', JSON.stringify(pages.map((p) => p?.slug).filter(Boolean)))
       if (generateRequested) sessionStorage.setItem('seo_generate_requested', String(generateRequested))
-    } catch { /* slugs are tiny */ }
+    } catch {
+      try {
+        const slim = pages.map((p) => ({
+          ...p,
+          content: String(p?.content || '').slice(0, 6000),
+          intro: String(p?.intro || '').slice(0, 800),
+        }))
+        sessionStorage.setItem('seo_generated_pages', JSON.stringify(slim))
+      } catch { /* quota */ }
+    }
   }, [pages, generateRequested])
+  useEffect(() => {
+    try {
+      if (contentKind) sessionStorage.setItem('seo_content_kind', contentKind)
+    } catch { /* ignore */ }
+  }, [contentKind])
   useEffect(() => {
     try {
       sessionStorage.setItem('seo_keywords', JSON.stringify(targetKeywords))
@@ -724,12 +759,6 @@ export default function ContentPage() {
   }, [targetKeywords])
   useEffect(() => {
     let cancelled = false
-    const slugs = (() => {
-      try {
-        const raw = JSON.parse(sessionStorage.getItem('seo_page_slugs') || '[]')
-        return Array.isArray(raw) ? raw.filter(Boolean).slice(0, 250) : []
-      } catch { return [] }
-    })()
     try {
       const n = Number(sessionStorage.getItem('seo_generate_requested') || 0)
       if (n > 0) setGenerateRequested(n)
@@ -739,10 +768,6 @@ export default function ContentPage() {
         if (cancelled) return
         const rows = Array.isArray(r.data) ? r.data : []
         setSavedPages(rows)
-        if (!slugs.length) return
-        const bySlug = new Map(rows.map((row) => [row.slug, row.seo_block || row]))
-        const restored = slugs.map((s) => bySlug.get(s)).filter(Boolean)
-        if (restored.length) setPages(restored)
       })
       .catch(() => {})
     return () => { cancelled = true }
@@ -830,6 +855,7 @@ export default function ContentPage() {
     if (!pages.length) return
     if (!confirm('Clear generated results from this session? Saved/published pages stay until you trash them below.')) return
     setPages([])
+    sessionStorage.removeItem('seo_generated_pages')
     sessionStorage.removeItem('seo_pages')
     sessionStorage.removeItem('seo_page_slugs')
     sessionStorage.removeItem('seo_generate_requested')
@@ -1184,6 +1210,7 @@ export default function ContentPage() {
         })(),
         use_ai: true,
         llm_provider: llmProvider || null,
+        image_keyword: (form.image_keyword || '').trim(),
       }
       if (runAsync) {
         const res = await startBulkGenerateJob(payload)
@@ -1562,6 +1589,20 @@ export default function ContentPage() {
               <p className="text-[10px] -mt-1" style={{ color: 'var(--text-4)' }}>
                 Who the content is for (buyer vertical). Used in titles/examples — not forced into the slug as “Professional Services”.
               </p>
+              <label className="block">
+                <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-3)' }}>Image keyword</span>
+                <input
+                  type="text"
+                  value={form.image_keyword || ''}
+                  onChange={(e) => updateForm((f) => ({ ...f, image_keyword: e.target.value }))}
+                  placeholder="e.g. primary care doctor clinic, dentist office, HVAC technician"
+                  className="mt-1 w-full rounded-lg px-3 py-2 text-sm"
+                  style={{ background: '#fff', border: '1px solid #94a3b8', color: '#0f172a' }}
+                />
+                <span className="mt-1 block text-[10px]" style={{ color: 'var(--text-4)' }}>
+                  Used only for photos. Page copy still follows niche + industry + SEO keyword. Example: “doctor with patient” not “web design laptop”.
+                </span>
+              </label>
             </div>
             <div>
               <SearchSelect
@@ -1945,6 +1986,23 @@ export default function ContentPage() {
               <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #6ee7b7' }}>Complete</span>
             </div>
             <div className="flex items-center gap-2">
+              {pages.length > 1 && (pages[0]?.content_type !== 'blog') && (
+                <button type="button"
+                  onClick={() => navigate('/page-preview', {
+                    state: {
+                      block: pages[0],
+                      index: 0,
+                      businessType: form.business_type,
+                      contentKind: 'page',
+                      editAll: true,
+                      allBlocks: pages,
+                    },
+                  })}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold"
+                  style={{ background: 'var(--brand)', border: '1px solid var(--brand)', color: '#fff' }}>
+                  <Layers size={11} /> View all locations
+                </button>
+              )}
               <button type="button" onClick={handleClearResults}
                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold"
                 style={{ background: '#fff', border: '1px solid #94a3b8', color: '#0f172a' }}>

@@ -521,6 +521,15 @@ def normalize_markdown_sections(content: str, h2s: list | None = None) -> str:
         )
     # Soft-break monster paragraphs (2 sentences ≈ one <p>)
     chunks = []
+    md_stash: list[str] = []
+
+    def _stash_md(match: re.Match) -> str:
+        md_stash.append(match.group(0))
+        return f"\x00MD{len(md_stash) - 1}\x00"
+
+    def _restore_md(piece: str) -> str:
+        return re.sub(r"\x00MD(\d+)\x00", lambda m: md_stash[int(m.group(1))], piece)
+
     for block in re.split(r"\n{2,}", text):
         b = block.strip()
         if not b:
@@ -528,10 +537,12 @@ def normalize_markdown_sections(content: str, h2s: list | None = None) -> str:
         if b.startswith("#") or "?" in b[:160] or len(b) < 900:
             chunks.append(b)
             continue
-        sentences = re.findall(r"[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$", b)
+        md_stash = []
+        protected = re.sub(r"\[[^\]]+\]\((?:https?://[^)\s]+|/[^)\s]+)\)", _stash_md, b)
+        sentences = re.findall(r"[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$", protected)
         buf, n = [], 0
         for s in sentences:
-            s = s.strip()
+            s = _restore_md(s.strip())
             if not s:
                 continue
             buf.append(s)
@@ -1509,6 +1520,7 @@ async def generate_seo_block(
     keyword_index: int = 0,
     existing_bodies: Optional[list] = None,
     zip: str = "",
+    image_keyword: str = "",
 ) -> SEOBlock:
     from services.image_service import resolve_campaign_niche
     from services.zeorbit_local_seo import (
@@ -1528,6 +1540,7 @@ async def generate_seo_block(
         resolve_industry_label,
         is_generic_industry,
         strip_generic_industry_prefix,
+        ensure_body_hyperlinks,
     )
     city, state = _one_place(city, state)
     original_niche = normalize_niche_text(business_type or "")
@@ -1656,6 +1669,7 @@ async def generate_seo_block(
     block.city = city
     block.state = state or block.state
     block.zip = zip or getattr(block, "zip", "") or ""
+    block.image_keyword = (image_keyword or "").strip()
     if intent:
         block.search_intent = intent.id
         block.customer_problem = gen_kwargs.get("customer_problem") or intent.customer_problem
@@ -1674,6 +1688,8 @@ async def generate_seo_block(
     block.content = strip_banned_claims(block.content or "")
     block.cta = strip_banned_claims(block.cta or "")
     block.meta_description = strip_banned_claims(block.meta_description or "")
+    from services.zeorbit_local_seo import apply_zip_faq_only, digits_zip
+    apply_zip_faq_only(block, city or "", state or "", digits_zip(zip or getattr(block, "zip", "") or ""))
 
     # Location pages only — never rewrite blog body around a city.
     if city and content_type_out != "blog":
@@ -1713,67 +1729,36 @@ async def generate_seo_block(
                     scrubbed_faqs.append({"question": q, "answer": a})
             block.faqs = scrubbed_faqs
 
-        from services.zeorbit_local_seo import ensure_zip_in_meta, ensure_zip_in_body, force_zip_into_copy, digits_zip
+        from services.zeorbit_local_seo import apply_zip_faq_only, digits_zip
         zip = digits_zip(zip)
         block.zip = zip
-        block.meta_description = ensure_zip_in_meta(
-            block.meta_description or "", city, state or "", zip,
-        )
-        block.intro = force_zip_into_copy(
-            ensure_zip_in_body(block.intro or "", city, state or "", zip),
-            city, state or "", zip,
-        )
-        block.content = force_zip_into_copy(
-            ensure_zip_in_body(block.content or "", city, state or "", zip),
-            city, state or "", zip,
-        )
-        if block.faqs:
-            for faq in block.faqs:
-                if hasattr(faq, "answer"):
-                    faq.answer = force_zip_into_copy(faq.answer or "", city, state or "", zip)
-                elif isinstance(faq, dict) and faq.get("answer"):
-                    faq["answer"] = force_zip_into_copy(faq["answer"], city, state or "", zip)
-
-    elif city:
-        from services.zeorbit_local_seo import ensure_zip_in_meta, ensure_zip_in_body
-        block.meta_description = ensure_zip_in_meta(
-            block.meta_description or "", city, state or "", zip or "",
-        )
-        if zip:
-            block.intro = ensure_zip_in_body(block.intro or "", city, state or "", zip or "")
-            block.content = ensure_zip_in_body(block.content or "", city, state or "", zip or "")
-        else:
-            block.intro = ensure_zip_in_body(block.intro or "", city, state or "", "")
+        apply_zip_faq_only(block, city, state or "", zip)
 
     try:
         from services.image_service import generate_article_images, blog_image_plan
-        # Blog: images follow the search-query category (e.g. Wix). Pages: website visuals.
-        if content_type_out == "blog":
-            plan = blog_image_plan(primary_kw or block.focus_keyword or "", niche=business_type or "")
-            img_focus = plan["topic"]
-            img_niche = plan["category"]
-            img_concept = plan["concept"]
-            img_industry = ""
-        else:
-            img_focus = "website design wordpress shopify"
-            img_niche = "website design"
-            img_concept = block.image_concept or concept or (
-                f"website designer laptop mockup for {industry or 'small business'} in {city or 'local area'}"
-            )
-            img_industry = "" if not city else (industry or "")
-        # Hash city into index so Austin vs Driftwood never share the same image seed.
+        plan = blog_image_plan(
+            (image_keyword or "").strip() or primary_kw or block.focus_keyword or block.title or "",
+            niche="",
+        )
+        img_focus = plan["topic"]
+        img_niche = plan["category"]
+        img_concept = plan.get("concept") or block.image_concept or (
+            f"{industry or primary_kw or 'business'} website on laptop"
+        )
+        img_industry = industry or ""
         loc_offset = int(hashlib.md5(f"{city}|{state}|{zip}".encode()).hexdigest(), 16) % 997
         images = await generate_article_images(
             img_focus, f"{city}, {state} {zip}".strip(), "ZeOrbit", count=3,
             exclude_urls=exclude_image_urls,
-            industry=img_industry or industry or "",
+            industry=img_industry,
             niche=img_niche,
             search_intent=block.search_intent or ("guide" if content_type_out == "blog" else "discovery"),
             image_concept_text=img_concept,
             keyword_index=keyword_index + loc_offset,
             content_type=content_type_out,
-            match_query=primary_kw if content_type_out == "blog" else "",
+            match_query=(image_keyword or "").strip() or primary_kw or "",
             audience=audience or "",
+            image_keyword=(image_keyword or "").strip(),
         )
         block.in_content_images = images
         if images:
@@ -1895,6 +1880,9 @@ async def generate_seo_block(
             min_score=MIN_KEYWORD_USE_SCORE,
         )
         block.keyword_density = kw_use
+        if city:
+            from services.zeorbit_local_seo import apply_zip_faq_only, digits_zip
+            apply_zip_faq_only(block, city, state or "", digits_zip(zip or getattr(block, "zip", "") or ""))
     # Re-score after keyword weave (body changed).
     quality = score_page_quality(
         title=block.title or "",
@@ -1921,7 +1909,9 @@ async def generate_seo_block(
     # UI Score column uses readability_score — keep it aligned with the master quality gate.
     block.readability_score = quality.score
     # Always store readable markdown (## on own lines, short paragraphs).
-    block.content = normalize_markdown_sections(block.content or "", list(block.h2s or []))
+    block.content = ensure_body_hyperlinks(
+        normalize_markdown_sections(block.content or "", list(block.h2s or []))
+    )
     block.intro = (block.intro or "").strip()
     if not block.publishable and city:
         print(
@@ -1991,6 +1981,7 @@ def boost_block_to_floor(block: "SEOBlock") -> "SEOBlock":
         score_page_quality,
         MIN_KEYWORD_USE_SCORE,
         scores_meet_floor,
+        ensure_body_hyperlinks,
     )
     kw = (
         (getattr(block, "focus_keyword", None) or "")
@@ -2005,7 +1996,9 @@ def boost_block_to_floor(block: "SEOBlock") -> "SEOBlock":
         min_score=MIN_KEYWORD_USE_SCORE,
     )
     block.intro = intro
-    block.content = normalize_markdown_sections(content, list(getattr(block, "h2s", None) or []))
+    block.content = ensure_body_hyperlinks(
+        normalize_markdown_sections(content, list(getattr(block, "h2s", None) or []))
+    )
     block.keyword_density = kw_use
     feat_alt = ""
     if block.in_content_images:
@@ -2228,7 +2221,7 @@ WHO WE ARE: ZeOrbit is a technology company that provides website design and dev
 WHAT THIS PAGE SELLS: {business_type}
 WHO IT IS FOR: {who}
 WHERE: {place or "the United States"} — this is the ONLY place named on the page.
-Include the 5-digit ZIP {re.sub(r'\D', '', zip or '')[:5] or '(resolve before write)'} as {place} in the intro and again in the body. Never skip the ZIP when WHERE contains one.
+Include the 5-digit ZIP {re.sub(r'\D', '', zip or '')[:5] or '(resolve before write)'} only in the last FAQ answer as markdown [{re.sub(r'\D', '', zip or '')[:5] or 'ZIP'}](https://www.google.com/maps/search/?api=1&query={re.sub(r'\D', '', zip or '')[:5] or 'ZIP'}). Never put the ZIP in title, H1, intro, body, conclusion, meta, or CTA.
 PRIMARY KEYWORD (weave naturally in title/H1/intro): {pretty}
 Other keywords to use naturally (do not dump as a list): {kw_line}
 
@@ -2249,6 +2242,9 @@ NON-NEGOTIABLE:
 - Mention experience/reviews only as verified: {ZEORBIT_FACTS['experience']}, {ZEORBIT_FACTS['reviews']} — never invent individual reviews or star ratings.
 - Cover platforms as relevant to THIS intent: WordPress, Shopify, redesign, mobile-friendly, SEO-friendly structure, conversions, mobile apps.
 - Keep copy simple, credible, localized to {city} only, UNIQUE to this intent + industry + layout. Do NOT city-swap a generic article.
+- KEYWORD LOCK: Stay on “{pretty}” for {who}. Do not mention unrelated industries (gym, restaurant, salon, roofing, etc.) unless those words are in the PRIMARY KEYWORD.
+- HYPERLINKS: In the body markdown, include internal ZeOrbit links among https://zeorbit.com/website-designing https://zeorbit.com/mobile-apps https://zeorbit.com/seo-ppc https://zeorbit.com/contact. Also include 2–3 external ZeOrbit listing links among https://www.thumbtack.com/ca/san-diego/website-designers https://www.goodfirms.co/company/zeorbit https://www.designrush.com/agency/profile/zeorbit https://www.yelp.com/biz/zeorbit-san-diego-2. Use markdown [label](url). Do not add random unrelated third-party URLs.
+- ZIP: 5-digit {re.sub(r'\D', '', zip or '')[:5] or 'ZIP'} only in the last FAQ answer, hyperlinked as [{re.sub(r'\D', '', zip or '')[:5] or 'ZIP'}](https://www.google.com/maps/search/?api=1&query={re.sub(r'\D', '', zip or '')[:5] or 'ZIP'}). Never in intro, body, conclusion, title, or meta.
 - Do NOT list competitors, fake addresses, or other neighborhoods.
 - Name ZeOrbit in the intro and the CTA.
 - content MUST include '## Exact H2' for each h2s item with 1–2 short paragraphs under each (no empty headings). 320–480 words.

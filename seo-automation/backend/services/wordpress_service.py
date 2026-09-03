@@ -91,6 +91,15 @@ def _clean_caption(caption: str, fallback_alt: str = "") -> str:
     return out
 
 
+def _inline_md_links(text: str) -> str:
+    """Turn [label](https://...) into anchors (ZIP + internal links)."""
+    return re.sub(
+        r"\[([^\]]+)\]\((https?://[^)\s]+|/[^)\s]+)\)",
+        r'<a class="zo-article-link" href="\2">\1</a>',
+        text or "",
+    )
+
+
 def _para_to_html(para: str) -> str:
     para = (para or "").strip()
     if not para or _looks_like_instruction_leak(para):
@@ -113,12 +122,12 @@ def _para_to_html(para: str) -> str:
                     html_lines.append("<ul>")
                     in_list = True
                 item = line.lstrip("•").lstrip("0123456789.").strip()
-                html_lines.append(f"<li>{item}</li>")
+                html_lines.append(f"<li>{_inline_md_links(item)}</li>")
             else:
                 if in_list:
                     html_lines.append("</ul>")
                     in_list = False
-                html_lines.append(f"<p>{line}</p>")
+                html_lines.append(f"<p>{_inline_md_links(line)}</p>")
         if in_list:
             html_lines.append("</ul>")
         return "\n".join(html_lines)
@@ -128,7 +137,7 @@ def _para_to_html(para: str) -> str:
     for chunk in chunks:
         if _looks_like_instruction_leak(chunk) or re.match(r"^#{1,6}\s+", chunk):
             continue
-        out.append(f"<p>{chunk}</p>")
+        out.append(f"<p>{_inline_md_links(chunk)}</p>")
     return "\n".join(out)
 
 
@@ -212,7 +221,7 @@ def _fallback_section_copy(h2: str) -> str:
     )
 
 
-def _figure_html(img) -> str:
+def _figure_html(img, href: str = "") -> str:
     """Render an in-content image as a semantic <figure> with caption."""
     url = img.url if hasattr(img, "url") else (img or {}).get("url", "")
     alt = img.alt_text if hasattr(img, "alt_text") else (img or {}).get("alt_text", "")
@@ -220,16 +229,15 @@ def _figure_html(img) -> str:
     caption = img.caption if hasattr(img, "caption") else (img or {}).get("caption", "")
     if not url:
         return ""
-    # Prefer stable https Unsplash/Pexels URLs; skip obviously broken blanks
     alt_clean = _clean_caption(alt, fallback_alt=title).rstrip(".")
     title_clean = _clean_caption(title, fallback_alt=alt_clean).rstrip(".")
-    fig = (
-        f'<figure class="wp-block-image">'
+    img_tag = (
         f'<img src="{url}" alt="{alt_clean}" title="{title_clean}" loading="lazy" '
         f'onerror="this.closest(\'figure\').style.display=\'none\'" />'
-        f"</figure>"
     )
-    return fig
+    if href:
+        img_tag = f'<a href="{href}">{img_tag}</a>'
+    return f'<figure class="wp-block-image">{img_tag}</figure>'
 
 
 def _img_url(img) -> str:
@@ -250,6 +258,11 @@ def _img_is_featured(img) -> bool:
     return False
 
 
+_INTERNAL_IMG_HREFS = (
+    "https://zeorbit.com/website-designing",
+    "https://zeorbit.com/mobile-apps",
+    "https://zeorbit.com/contact",
+)
 _AI_PROMPT_Q = "ZeOrbit+-+Web+Designers+%26+Mobile+App+Developers."
 _AI_PLATFORMS = (
     ("ChatGPT", f"https://chatgpt.com/?q={_AI_PROMPT_Q}", "chatgpt.com", "#10A37F"),
@@ -260,11 +273,16 @@ _AI_PLATFORMS = (
     ("Grok", f"https://grok.com/?q={_AI_PROMPT_Q}", "grok.com", "#1A1A1A"),
     ("Perplexity", f"https://www.perplexity.ai/search/new?q={_AI_PROMPT_Q}", "perplexity.ai", "#20808D"),
 )
+_AI_HOSTED_ICONS = {
+    "chatgpt.com": "https://zeorbit.com/icons/chatgpt.png?v=2",
+    "copilot.microsoft.com": "https://zeorbit.com/icons/copilot.png?v=2",
+}
 _AI_BAR_STYLE = """<style>
 .ai-ask-bar{margin:32px 0 8px;padding:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .ai-ask-bar a{width:40px;height:40px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;box-shadow:0 1px 2px rgba(0,0,0,.12)}
 .ai-ask-bar a:hover{transform:translateY(-2px)}
-.ai-ask-bar img{width:22px;height:22px;border-radius:6px;object-fit:contain;background:#fff}
+.ai-ask-bar img{width:22px;height:22px;border-radius:6px;object-fit:contain}
+.ai-ask-bar svg{width:22px;height:22px;display:block}
 </style>"""
 
 
@@ -272,12 +290,16 @@ def _ai_platform_bar() -> str:
     """Icon row linking each AI assistant with the ZeOrbit prompt."""
     links = []
     for name, href, domain, color in _AI_PLATFORMS:
-        icon = f"https://www.google.com/s2/favicons?sz=64&domain={domain}"
+        hosted = _AI_HOSTED_ICONS.get(domain)
+        if hosted:
+            mark = f'<img src="{hosted}" alt="{name}" width="22" height="22" />'
+        else:
+            icon = f"https://www.google.com/s2/favicons?sz=64&domain={domain}"
+            mark = f'<img src="{icon}" alt="{name}" width="22" height="22" />'
         links.append(
             f'<a href="{href}" target="_blank" rel="noopener noreferrer" '
             f'aria-label="Ask {name} about ZeOrbit" title="{name}" '
-            f'style="background:{color}">'
-            f'<img src="{icon}" alt="{name}" width="22" height="22" /></a>'
+            f'style="background:{color}">{mark}</a>'
         )
     return (
         f'{_AI_BAR_STYLE}<nav class="ai-ask-bar" aria-label="Ask AI about ZeOrbit">'
@@ -290,7 +312,7 @@ def _build_content_html(block: SEOBlock) -> str:
     parts = []
 
     if block.intro:
-        parts.append(f'<p class="seo-intro">{block.intro}</p>')
+        parts.append(f'<p class="seo-intro">{_inline_md_links(block.intro)}</p>')
 
     # In-content images only — never re-show the hero/featured photo in the body.
     featured_key = (block.featured_image_url or "").split("?")[0]
@@ -330,7 +352,7 @@ def _build_content_html(block: SEOBlock) -> str:
     for i, h2 in enumerate(block.h2s or []):
         parts.append(f'<h2>{h2}</h2>')
         if i in img_positions:
-            fig = _figure_html(img_positions[i])
+            fig = _figure_html(img_positions[i], href=_INTERNAL_IMG_HREFS[i % len(_INTERNAL_IMG_HREFS)])
             if fig:
                 parts.append(fig)
         body = section_bodies[i] if i < len(section_bodies) else ""
@@ -380,14 +402,14 @@ def _build_content_html(block: SEOBlock) -> str:
                 f'itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">'
                 f'<summary itemprop="name">{faq.question}</summary>'
                 f'<div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">'
-                f'<p itemprop="text">{faq.answer}</p>'
+                f'<p itemprop="text">{_inline_md_links(faq.answer or "")}</p>'
                 f'</div></details>'
             )
         parts.append('</div></section>')
 
     # Soft end-note only — primary conversion lives in the contact band below.
     if block.cta:
-        parts.append(f'<p class="end-note">{block.cta}</p>')
+        parts.append(f'<p class="end-note">{_inline_md_links(block.cta)}</p>')
 
     schema = block.schema_markup
     if schema:

@@ -777,10 +777,12 @@
   transform: scale(0.97);
 }
 
-.zo-host-ai-link img {
+.zo-host-ai-link img,
+.zo-host-ai-link svg {
   width: 16px;
   height: 16px;
   display: block;
+  object-fit: contain;
 }
 
 .zo-host-footer-legal {

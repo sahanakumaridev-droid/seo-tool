@@ -77,6 +77,7 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
                 keyword_index=keyword_index,
                 existing_bodies=bodies_snapshot,
                 zip=zip_code or "",
+                image_keyword=getattr(req, "image_keyword", "") or "",
             )
         except Exception as e:
             print(f"[Jobs] {name} failed ({e}); writing a fallback page so none are skipped")
@@ -95,6 +96,7 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
                     audience=req.audience,
                     keyword_index=keyword_index,
                     zip=zip_code or "",
+                    image_keyword=getattr(req, "image_keyword", "") or "",
                 )
             except Exception as e2:
                 print(f"[Jobs] fallback also failed for {name}: {e2}")
@@ -124,7 +126,10 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
                             search_intent=getattr(block, "search_intent", "") or "",
                             image_concept_text=getattr(block, "image_concept", "") or "",
                             keyword_index=keyword_index,
+                            content_type="blog" if req.content_kind == "post" else "service",
+                            match_query=(getattr(req, "image_keyword", "") or "").strip() or (req.target_keywords[0] if req.target_keywords else req.business_type) or "",
                             audience=req.audience or "",
+                            image_keyword=(getattr(req, "image_keyword", "") or "").strip(),
                         )
                         if images:
                             from services.image_service import assign_canonical_images
@@ -141,35 +146,7 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
         except Exception as e:
             print(f"[Jobs] image uniqueness for {name} failed ({e}); keeping page")
         dumped = block.model_dump()
-        try:
-            from db import AsyncSessionLocal, PageRecord
-            from sqlalchemy import select
-            from datetime import datetime, timezone
-            slug = (dumped.get("slug") or "").strip()
-            if slug:
-                async with AsyncSessionLocal() as session:
-                    row = (
-                        await session.execute(select(PageRecord).where(PageRecord.slug == slug))
-                    ).scalar_one_or_none()
-                    if row:
-                        row.seo_block = dumped
-                        row.city = name
-                        row.state = state
-                        row.business_type = req.business_type
-                        row.base_location = req.base_location
-                        row.updated_at = datetime.now(timezone.utc)
-                    else:
-                        session.add(PageRecord(
-                            business_type=req.business_type,
-                            base_location=req.base_location or "",
-                            city=name,
-                            state=state,
-                            slug=slug,
-                            seo_block=dumped,
-                        ))
-                    await session.commit()
-        except Exception as e:
-            print(f"[Jobs] persist {name} to database failed ({e}); page still returned in job")
+        # Draft only — persist to PageRecord when the user clicks Publish to ZeOrbit.
         return dumped
 
     background_tasks.add_task(

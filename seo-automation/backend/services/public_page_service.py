@@ -383,6 +383,13 @@ def _short_nav_label(text: str) -> str:
 
 
 def render_public_html(block: SEOBlock, public_url: str = "") -> str:
+    from services.zeorbit_local_seo import apply_zip_faq_only
+    apply_zip_faq_only(
+        block,
+        getattr(block, "city", "") or "",
+        getattr(block, "state", "") or "",
+        getattr(block, "zip", "") or "",
+    )
     body = _build_content_html(block)
     # Old generated schema used example.com — rewrite to the real public page URL.
     if public_url:
@@ -460,7 +467,8 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
     canonical_tag = f'<link rel="canonical" href="{_esc(public_url)}" />' if public_url else ""
     hero = f'<div class="hero-wrap"><img src="{_esc(featured)}" alt="{hero_alt}" /></div>' if featured else ""
     footer_figure = (
-        f'<figure class="article-footer-image"><img src="{_esc(footer_img)}" alt="{footer_alt}" /></figure>'
+        f'<figure class="article-footer-image"><a href="{WEBSITE}/contact">'
+        f'<img src="{_esc(footer_img)}" alt="{footer_alt}" /></a></figure>'
         if footer_img and footer_img.split("?")[0] != (featured or "").split("?")[0]
         else ""
     )
@@ -689,7 +697,8 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
     text-decoration:none; box-shadow:0 1px 2px rgba(0,0,0,.12);
   }}
   .ai-ask-bar a:hover {{ transform:translateY(-2px); }}
-  .ai-ask-bar img {{ width:22px; height:22px; border-radius:6px; object-fit:contain; background:#fff; }}
+  .ai-ask-bar img {{ width:22px; height:22px; border-radius:6px; object-fit:contain; }}
+  .ai-ask-bar svg {{ width:22px; height:22px; display:block; }}
 
   .share-bar {{
     margin:36px 0 8px; padding:18px 0 6px; border-top:1px solid var(--line);

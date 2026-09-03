@@ -115,11 +115,13 @@ export const discoverCompetitors = (website, businessType, city) =>
 export const savePage = (businessType, city, state = 'CA') =>
   api.post('/pages/save', null, { params: { business_type: businessType, city, state } })
 
-export const saveEditedBlock = (block, { businessType = '', applyGlobally = true } = {}) =>
+export const saveEditedBlock = (block, { businessType = '', applyGlobally = true, siblingSlugs = [], siblingBlocks = [] } = {}) =>
   api.post('/pages/save-block', {
     block,
     business_type: businessType || block?.business_type || '',
     apply_globally: applyGlobally,
+    sibling_slugs: siblingSlugs,
+    sibling_blocks: siblingBlocks,
   })
 
 export const listPages = (skip = 0, limit = 20) =>

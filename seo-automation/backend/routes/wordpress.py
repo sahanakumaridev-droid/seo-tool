@@ -21,11 +21,14 @@ def _require_zip_for_location_page(block: SEOBlock):
     if not (getattr(block, "city", "") or "").strip():
         return
     from services.zeorbit_local_seo import copy_has_zip, digits_zip
-    blob = f"{block.intro or ''}\n{block.content or ''}"
-    if not digits_zip(getattr(block, "zip", "") or "") or not copy_has_zip(blob, getattr(block, "zip", "") or ""):
+    faq_blob = ""
+    if getattr(block, "faqs", None):
+        for faq in block.faqs:
+            faq_blob += f" {getattr(faq, 'question', '') or ''} {getattr(faq, 'answer', '') or ''}"
+    if not digits_zip(getattr(block, "zip", "") or "") or not copy_has_zip(faq_blob, getattr(block, "zip", "") or ""):
         raise HTTPException(
             status_code=400,
-            detail=f"ZIP is mandatory. '{block.city}' has no 5-digit ZIP in the page content.",
+            detail=f"ZIP is mandatory in FAQ answers. '{block.city}' must include a hyperlinked 5-digit ZIP in an FAQ.",
         )
 
 

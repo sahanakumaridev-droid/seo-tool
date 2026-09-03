@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, Navigate } from 'react-router-dom'
+import { useParams, Navigate, Link } from 'react-router-dom'
 import RevampHeader from '../components/revamp/RevampHeader'
 import SiteFooter from '../components/SiteFooter'
 import SeoHead from '../components/SeoHead'
@@ -65,6 +65,21 @@ function normalizeMarkdownBody(raw, h2s = []) {
   return text.trim()
 }
 
+const MD_LINK_RE = /\[[^\]]+\]\((?:https?:\/\/[^)\s]+|\/[^)\s]+)\)/g
+
+function stashMdLinks(text) {
+  const stash = []
+  const out = String(text || '').replace(MD_LINK_RE, (m) => {
+    stash.push(m)
+    return `\u0000MD${stash.length - 1}\u0000`
+  })
+  return { out, stash }
+}
+
+function restoreMdLinks(text, stash) {
+  return String(text || '').replace(/\u0000MD(\d+)\u0000/g, (_, i) => stash[Number(i)] || '')
+}
+
 /** Split walls of text into short, readable paragraphs (2–3 sentences). */
 function readableParagraphs(text) {
   const chunks = String(text || '')
@@ -81,11 +96,12 @@ function readableParagraphs(text) {
       out.push(cleaned)
       continue
     }
-    const sentences = cleaned.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g) || [cleaned]
+    const { out: protectedText, stash } = stashMdLinks(cleaned)
+    const sentences = protectedText.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g) || [protectedText]
     let buf = ''
     let count = 0
     for (const s of sentences) {
-      const piece = s.trim()
+      const piece = restoreMdLinks(s.trim(), stash)
       if (!piece) continue
       buf = buf ? `${buf} ${piece}` : piece
       count += 1
@@ -102,6 +118,74 @@ function readableParagraphs(text) {
 
 function paragraphs(text) {
   return readableParagraphs(text)
+}
+
+function ArticleLink({ href, children }) {
+  try {
+    const u = new URL(href, 'https://zeorbit.com')
+    const host = u.hostname.replace(/^www\./, '')
+    if (host === 'zeorbit.com') {
+      const path = `${u.pathname}${u.search}${u.hash}` || '/'
+      return <Link className="zo-article-link" to={path}>{children}</Link>
+    }
+  } catch {
+    /* fall through */
+  }
+  if (href.startsWith('/')) {
+    return <Link className="zo-article-link" to={href}>{children}</Link>
+  }
+  return <a className="zo-article-link" href={href}>{children}</a>
+}
+
+function MdInline({ text }) {
+  const s = String(text || '')
+  const re = /\[([^\]]+)\]\((https?:\/\/[^)\s]+|\/[^)\s]+)\)/g
+  const nodes = []
+  let last = 0
+  let m
+  let i = 0
+  while ((m = re.exec(s))) {
+    if (m.index > last) nodes.push(s.slice(last, m.index))
+    nodes.push(
+      <ArticleLink key={`md-${i}`} href={m[2]}>
+        {m[1]}
+      </ArticleLink>,
+    )
+    i += 1
+    last = m.index + m[0].length
+  }
+  if (last < s.length) nodes.push(s.slice(last))
+  return nodes.length ? nodes : s
+}
+
+const INTERNAL_LINKS_MD =
+  'See [ZeOrbit website design](https://zeorbit.com/website-designing), [mobile apps](https://zeorbit.com/mobile-apps), and [SEO & PPC](https://zeorbit.com/seo-ppc).'
+const EXTERNAL_LINKS_MD =
+  'You can also find ZeOrbit on [Thumbtack](https://www.thumbtack.com/ca/san-diego/website-designers), [GoodFirms](https://www.goodfirms.co/company/zeorbit), [DesignRush](https://www.designrush.com/agency/profile/zeorbit), and [Yelp](https://www.yelp.com/biz/zeorbit-san-diego-2).'
+
+function extractLinkBands(raw) {
+  let text = String(raw || '')
+  const internalMatch = text.match(/See \[ZeOrbit website design\][\s\S]*?seo-ppc\)\.?/i)
+  const externalMatch = text.match(/You can also find ZeOrbit on \[Thumbtack\][\s\S]*?zeorbit-san-diego-2\)\.?/i)
+  text = text
+    .replace(/See \[ZeOrbit website design\][\s\S]*?seo-ppc\)\.?/gi, '')
+    .replace(/You can also find ZeOrbit on \[Thumbtack\][\s\S]*?zeorbit-san-diego-2\)\.?/gi, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+  return {
+    text,
+    internal: internalMatch ? internalMatch[0] : INTERNAL_LINKS_MD,
+    external: externalMatch ? externalMatch[0] : EXTERNAL_LINKS_MD,
+  }
+}
+
+function LinkBand({ label, text, variant }) {
+  return (
+    <aside className={`zo-article-linkband is-${variant}`}>
+      <p className="zo-article-linkband-label">{label}</p>
+      <p><MdInline text={text} /></p>
+    </aside>
+  )
 }
 
 function layoutFor(slug, explicit) {
@@ -172,9 +256,17 @@ function parseMarkdownSections(raw, h2s, h3s) {
 
 function SectionCopy({ sec }) {
   if (sec.bullets) {
-    return <ul className="zo-article-list">{sec.bullets.map((b) => <li key={b.slice(0, 40)}>{b}</li>)}</ul>
+    return (
+      <ul className="zo-article-list">
+        {sec.bullets.map((b) => (
+          <li key={b.slice(0, 40)}><MdInline text={b} /></li>
+        ))}
+      </ul>
+    )
   }
-  return readableParagraphs(sec.text).map((p) => <p key={p.slice(0, 48)}>{p}</p>)
+  return readableParagraphs(sec.text).map((p) => (
+    <p key={p.slice(0, 48)}><MdInline text={p} /></p>
+  ))
 }
 
 function allocateSections(h2s, h3s, paras) {
@@ -201,6 +293,32 @@ function allocateSections(h2s, h3s, paras) {
   })
   return { sections, leftover: paras.slice(idx) }
 }
+
+function linkifyFaqZip(text, zip) {
+  const z = String(zip || '').replace(/\D/g, '').slice(0, 5)
+  if (!z) return String(text || '')
+  const href = `https://www.google.com/maps/search/?api=1&query=${z}`
+  let s = String(text || '')
+  if (s.includes(`[${z}](`)) {
+    return s.replace(new RegExp(`\\[${z}\\]\\([^)]*\\)`), `[${z}](${href})`)
+  }
+  return s.replace(new RegExp(`\\b${z}\\b`), `[${z}](${href})`)
+}
+
+function stripZipDisplay(text) {
+  return String(text || '')
+    .replace(/\[\d{5}\]\([^)]*\)/g, '')
+    .replace(/\b\d{5}(?:-\d{4})?\b/g, '')
+    .replace(/\s+,/g, ',')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
+}
+
+const IMG_PAGE_LINKS = [
+  'https://zeorbit.com/website-designing',
+  'https://zeorbit.com/mobile-apps',
+  'https://zeorbit.com/contact',
+]
 
 function photoKey(url) {
   const m = String(url || '').match(/photo-[a-zA-Z0-9_-]+/i)
@@ -231,16 +349,18 @@ function ArticleSections({ layout, h2s, h3s, body, rawContent, images, reservedK
       <>
         {img ? (
           <figure className="zo-article-inline">
-            <img
-              src={img.url}
-              alt={img.alt_text || sec.heading}
-              title={img.title || sec.heading}
-              loading="lazy"
-              onError={(e) => {
-                const fig = e.currentTarget.closest('figure')
-                if (fig) fig.style.display = 'none'
-              }}
-            />
+            <a href={IMG_PAGE_LINKS[i % IMG_PAGE_LINKS.length]}>
+              <img
+                src={img.url}
+                alt={img.alt_text || sec.heading}
+                title={img.title || sec.heading}
+                loading="lazy"
+                onError={(e) => {
+                  const fig = e.currentTarget.closest('figure')
+                  if (fig) fig.style.display = 'none'
+                }}
+              />
+            </a>
           </figure>
         ) : null}
         <SectionCopy sec={sec} />
@@ -276,7 +396,7 @@ function ArticleSections({ layout, h2s, h3s, body, rawContent, images, reservedK
             {withImage(sec, i)}
           </section>
         ))}
-        {leftover.map((p) => <p key={p.slice(0, 48)}>{p}</p>)}
+        {leftover.map((p) => <p key={p.slice(0, 48)}><MdInline text={p} /></p>)}
       </div>
     )
   }
@@ -290,7 +410,7 @@ function ArticleSections({ layout, h2s, h3s, body, rawContent, images, reservedK
           {withImage(sec, i)}
         </details>
       ))}
-      {leftover.map((p) => <p key={p.slice(0, 48)}>{p}</p>)}
+      {leftover.map((p) => <p key={p.slice(0, 48)}><MdInline text={p} /></p>)}
     </div>
   )
 }
@@ -324,14 +444,15 @@ export default function SeoArticlePage() {
   }
 
   const block = row?.seo_block || {}
-  const title = block.title || block.h1 || 'ZeOrbit'
-  const h1 = block.h1 || block.title || ''
-  const desc = block.meta_description || block.intro || ''
+  const title = stripZipDisplay(block.title || block.h1 || 'ZeOrbit')
+  const h1 = stripZipDisplay(block.h1 || block.title || '')
+  const desc = stripZipDisplay(block.meta_description || block.intro || '')
   const location = [row?.city, row?.state].filter(Boolean).join(', ')
   const faqs = Array.isArray(block.faqs) ? block.faqs : []
   const h2s = Array.isArray(block.h2s) ? block.h2s : []
   const h3s = Array.isArray(block.h3s) ? block.h3s : []
-  const normalized = normalizeMarkdownBody(block.content || '', h2s)
+  const linkBands = extractLinkBands(stripZipDisplay(block.content || ''))
+  const normalized = normalizeMarkdownBody(linkBands.text, h2s)
   const body = paragraphs(normalized.replace(/^##\s+.+$/gm, '').replace(/\n{3,}/g, '\n\n'))
   const layout = layoutFor(slug, block.layout_variant)
   const images = Array.isArray(block.in_content_images) ? block.in_content_images : []
@@ -379,7 +500,10 @@ export default function SeoArticlePage() {
                   <img src={hero} alt={heroAlt} />
                 </figure>
               ) : null}
-              {block.intro ? paragraphs(block.intro).map((p) => <p key={p.slice(0, 40)}>{p}</p>) : null}
+              {block.intro ? paragraphs(stripZipDisplay(block.intro)).map((p) => (
+                <p key={p.slice(0, 40)}><MdInline text={p} /></p>
+              )) : null}
+              <LinkBand label="On ZeOrbit" variant="internal" text={linkBands.internal} />
               <ArticleSections
                 layout={layout}
                 h2s={h2s}
@@ -389,12 +513,15 @@ export default function SeoArticlePage() {
                 images={block.in_content_images || []}
                 reservedKeys={[hero, footerImg]}
               />
+              <LinkBand label="Listed on" variant="external" text={linkBands.external} />
               {footerImg && footerKey && footerKey !== heroKey ? (
                 <figure className="zo-article-footer-image">
-                  <img src={footerImg} alt={footerAlt} />
+                  <a href="https://zeorbit.com/contact">
+                    <img src={footerImg} alt={footerAlt} />
+                  </a>
                 </figure>
               ) : null}
-              {block.cta ? <p className="zo-article-cta">{block.cta}</p> : null}
+              {block.cta ? <p className="zo-article-cta"><MdInline text={stripZipDisplay(block.cta)} /></p> : null}
               <p>
                 <a className="zo-article-call" href={`tel:${SITE_CONTACT.phoneTel}`}>
                   CALL NOW : {SITE_CONTACT.phone}
@@ -406,7 +533,7 @@ export default function SeoArticlePage() {
                   {faqs.map((faq, i) => (
                     <div key={i} className="zo-article-faq">
                       <h3>{faq.question || faq.q}</h3>
-                      <p>{faq.answer || faq.a}</p>
+                      <p><MdInline text={linkifyFaqZip(faq.answer || faq.a, block.zip)} /></p>
                     </div>
                   ))}
                 </div>

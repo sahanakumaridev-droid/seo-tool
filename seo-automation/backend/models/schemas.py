@@ -18,6 +18,10 @@ class GenerateRequest(BaseModel):
     )
     industry: str = Field(default="", example="Contractors")
     audience: str = Field(default="", description="Who the copy speaks to")
+    image_keyword: str = Field(
+        default="",
+        description="Stock-photo search phrase only (e.g. primary care doctor clinic). Does not change page copy.",
+    )
     content_kind: Literal["page", "post"] = Field(..., description="Mandatory: website page vs blog post")
     custom_requirements: str = Field(
         default="",
@@ -144,6 +148,7 @@ class SEOBlock(BaseModel):
     search_intent: str = ""
     customer_problem: str = ""
     image_concept: str = ""
+    image_keyword: str = ""
     quality_score: Optional[float] = None
     quality_breakdown: Dict[str, Any] = Field(default_factory=dict)
     publishable: bool = True

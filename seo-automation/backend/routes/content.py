@@ -435,6 +435,7 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             keyword_index=keyword_index,
             existing_bodies=existing_bodies,
             zip=getattr(city_info, "zip", "") or "",
+            image_keyword=getattr(req, "image_keyword", "") or "",
             )
         except Exception as e:
             print(f"[Generate] {city_info.name} failed ({e}); writing a fallback page so none are skipped")
@@ -452,6 +453,7 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
                 audience=req.audience,
                 keyword_index=keyword_index,
                 zip=getattr(city_info, "zip", "") or "",
+                image_keyword=getattr(req, "image_keyword", "") or "",
             )
             extra_attempts = 0
         if extra_attempts:
@@ -477,8 +479,9 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
                     image_concept_text=getattr(block, "image_concept", "") or "",
                     keyword_index=keyword_index,
                     content_type="blog" if req.content_kind == "post" else "service",
-                    match_query=focus if req.content_kind == "post" else "",
+                match_query=(getattr(req, "image_keyword", "") or "").strip() or (focus if req.content_kind == "post" else (focus or req.business_type or "")),
                     audience=req.audience or "",
+                    image_keyword=(getattr(req, "image_keyword", "") or "").strip(),
                 )
                 if images:
                     from services.image_service import assign_canonical_images
@@ -524,60 +527,10 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
                     existing = row
                     break
 
-        payload = block.model_dump()
-        if existing:
-            old_slug = (existing.slug or "").strip()
-            existing.seo_block = payload
-            existing.business_type = req.business_type
-            existing.base_location = req.base_location
-            existing.city = city_info.name
-            existing.state = city_info.state
-            # Only retarget slug when the new slug is free
-            if slug != old_slug and slug not in by_slug:
-                if old_slug in by_slug:
-                    by_slug.pop(old_slug, None)
-                existing.slug = slug
-                by_slug[slug] = existing
-            elif slug != old_slug and slug in by_slug and by_slug[slug] is not existing:
-                # Final slug already owned by another row — update that row instead
-                target = by_slug[slug]
-                target.seo_block = payload
-                target.business_type = req.business_type
-                target.base_location = req.base_location
-                target.city = city_info.name
-                target.state = city_info.state
-                target.updated_at = datetime.now(timezone.utc)
-            else:
-                existing.slug = old_slug or slug
-            existing.updated_at = datetime.now(timezone.utc)
-        else:
-            row = PageRecord(
-                business_type=req.business_type,
-                base_location=req.base_location,
-                city=city_info.name,
-                state=city_info.state,
-                slug=slug,
-                seo_block=payload,
-            )
-            session.add(row)
-            by_slug[slug] = row
-            existing_rows.append(row)
+        # Draft only — do not write PageRecord here. Live URLs / sitemap happen on Publish.
 
     if not pages:
-        await session.rollback()
         raise HTTPException(status_code=502, detail="Generation produced no pages. Try again.")
-
-    try:
-        await session.commit()
-    except Exception as e:
-        await session.rollback()
-        detail = str(e.orig) if getattr(e, "orig", None) else str(e)
-        if "UNIQUE" in detail.upper() or "unique" in detail.lower():
-            raise HTTPException(
-                status_code=409,
-                detail="A page with this URL slug already exists. Trash the old location page, or generate again — we will update it instead of duplicating.",
-            )
-        raise HTTPException(status_code=500, detail=f"Could not save generated pages: {detail[:240]}")
 
     dropped = max(0, requested_n - len(pages))
     msg = None
@@ -653,20 +606,7 @@ async def generate_articles_endpoint(req: ArticleRequest, session: AsyncSession 
                 feat = imgs[0].url
         if feat:
             used_featured.append(feat)
-        if existing:
-            existing.seo_block = block.model_dump()
-            existing.updated_at = datetime.now(timezone.utc)
-        else:
-            session.add(PageRecord(
-                business_type=req.primary_keyword,
-                base_location=req.location,
-                city=block.city or city.strip(),
-                state=block.state or "",
-                slug=slug,
-                seo_block=block.model_dump(),
-            ))
-    await session.commit()
-
+        block.slug = slug
     return BulkGenerateResponse(total=len(pages), pages=pages, job_id=str(uuid.uuid4()))
 
 
@@ -761,21 +701,27 @@ async def refresh_images(
             f"{business} {focus} {block.get('title') or ''} {block.get('industry') or ''}"
         )
         images = await generate_article_images(
-            focus, location, "", count=3,
+            focus or (block.get("title") or ""), location, "", count=3,
             angle_title=block.get("title") or "",
             exclude_urls=used_by_family[family],
-            industry="" if is_blog else (block.get("industry") or ""),
+            industry=block.get("industry") or "",
             niche=business,
             content_type="blog" if is_blog else "service",
-            match_query=focus if is_blog else "",
+            match_query=(block.get("title") or focus or ""),
             image_concept_text=block.get("image_concept") or "",
         )
         if not images:
             skipped.append(row.slug)
             continue
 
-        feat2, foot2, cleaned = assign_canonical_images(images)
         block = dict(block)
+        from services.zeorbit_local_seo import strip_zip_from_copy, ensure_zip_in_last_faq, digits_zip
+        z = digits_zip(block.get("zip") or "")
+        for field in ("title", "h1", "intro", "content", "meta_description", "cta"):
+            if block.get(field):
+                block[field] = strip_zip_from_copy(block[field], z)
+        block["faqs"] = ensure_zip_in_last_faq(block.get("faqs") or [], city, state, z)
+        feat2, foot2, cleaned = assign_canonical_images(images)
         block["featured_image_url"] = feat2 or images[0].url
         block["footer_image_url"] = foot2
         block["in_content_images"] = [img.model_dump() if hasattr(img, "model_dump") else img for img in cleaned]
@@ -816,13 +762,11 @@ async def repair_block_images(block: dict):
         stock_url_needs_replace,
         collect_image_urls_from_seo_block,
         assign_canonical_images,
-        normalize_image_key,
     )
 
     payload = dict(block or {})
     urls = collect_image_urls_from_seo_block(payload)
-    unique_keys = {normalize_image_key(u) for u in urls if u}
-    needs = (not urls) or any(stock_url_needs_replace(u) for u in urls) or len(unique_keys) < 3
+    needs = (not urls) or any(stock_url_needs_replace(u) for u in urls)
     if not needs:
         return block
 

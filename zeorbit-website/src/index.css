@@ -6954,6 +6954,58 @@ html.zo-a11y-dark body {
   margin: 0 0 1.05em;
 }
 
+.zo-article a.zo-article-link {
+  color: #1d4ed8;
+  font-weight: 550;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
+  text-decoration-color: rgba(29, 78, 216, 0.4);
+  transition: color 160ms ease, text-decoration-color 160ms ease;
+}
+
+.zo-article a.zo-article-link:hover {
+  color: #1e3a8a;
+  text-decoration-color: #1e3a8a;
+}
+
+.zo-article a.zo-article-link:active {
+  opacity: 0.82;
+}
+
+.zo-article-linkband {
+  margin: 4px 0 28px;
+  padding: 14px 16px 15px;
+  border-radius: 12px;
+  max-width: 40rem;
+}
+
+.zo-article-linkband.is-internal {
+  background: #f3f6fb;
+  border: 1px solid rgba(29, 78, 216, 0.14);
+}
+
+.zo-article-linkband.is-external {
+  margin-top: 32px;
+  margin-bottom: 8px;
+  background: #faf7f2;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.zo-article-linkband-label {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.zo-article-linkband p {
+  margin: 0;
+  max-width: none;
+}
+
 .zo-article-stack {
   margin: 28px 0 8px;
   display: grid;

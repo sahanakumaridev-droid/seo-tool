@@ -62,6 +62,32 @@ def _public_base(request: Request) -> str:
     return _reader_base(request)
 
 
+def _plain_excerpt(block: dict, title: str = "") -> str:
+    dummy = {"published live seo article.", "published live seo article"}
+    for key in ("meta_description", "intro", "content"):
+        raw = (block.get(key) or "").strip()
+        if not raw:
+            continue
+        raw = re.sub(r"^#+\s*", "", raw)
+        raw = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", raw)
+        raw = re.sub(r"<[^>]+>", " ", raw)
+        raw = re.sub(r"\s+", " ", raw).strip()
+        if raw.lower() in dummy:
+            continue
+        if len(raw) > 180:
+            raw = raw[:177].rstrip() + "…"
+        if raw:
+            return raw
+    t = (title or "").strip()
+    if t and t.lower() not in dummy:
+        return t if t.endswith(".") else f"{t}."
+    return ""
+
+
+def _is_blog_block(block: dict) -> bool:
+    return (block.get("content_type") or "service").lower() in ("blog", "post")
+
+
 def _rewrite_reader_url(url: str, slug: str = "") -> str:
     """Map SEO-tool / nip.io URLs onto the live website."""
     base = _reader_base()
@@ -197,15 +223,21 @@ async def publish_to_web(
     from services.publish_pipeline import track_public_publish, maybe_auto_create_ads
     from services.zeorbit_local_seo import MIN_PUBLISH_SCORE, MIN_KEYWORD_USE_SCORE, scores_meet_floor
 
+    from services.zeorbit_local_seo import apply_zip_faq_only
+    apply_zip_faq_only(block, getattr(block, "city", "") or "", getattr(block, "state", "") or "", getattr(block, "zip", "") or "")
+
     q = float(getattr(block, "quality_score", None) or getattr(block, "readability_score", None) or 0)
     kw = float(getattr(block, "keyword_density", None) or 0)
     if not force and getattr(block, "content_type", "service") == "service":
         from services.zeorbit_local_seo import copy_has_zip, digits_zip
-        blob = f"{block.intro or ''}\n{block.content or ''}\n{block.meta_description or ''}"
-        if not digits_zip(getattr(block, "zip", "") or "") or not copy_has_zip(blob, getattr(block, "zip", "") or ""):
+        faq_blob = ""
+        if block.faqs:
+            for faq in block.faqs:
+                faq_blob += f" {getattr(faq, 'question', '') or ''} {getattr(faq, 'answer', '') or ''}"
+        if not digits_zip(getattr(block, "zip", "") or "") or not copy_has_zip(faq_blob, getattr(block, "zip", "") or ""):
             raise HTTPException(
                 status_code=400,
-                detail="ZIP is mandatory. Location pages must include a 5-digit ZIP in the content before publish.",
+                detail="ZIP is mandatory in FAQ answers (as a hyperlink). Do not put the ZIP in the body. Generate again or add it to an FAQ before publish.",
             )
         if block.publishable is False or not scores_meet_floor(q, kw):
             raise HTTPException(
@@ -342,14 +374,17 @@ class SaveBlockRequest(BaseModel):
     block: SEOBlock
     apply_globally: bool = True
     business_type: str = ""
+    sibling_slugs: List[str] = []
+    sibling_blocks: List[SEOBlock] = []
 
 
-def _relocalize_text(text: str, src: SEOBlock, dest_city: str, dest_state: str, dest_zip: str) -> str:
+def _relocalize_text(text: str, src: SEOBlock, dest_city: str, dest_state: str, dest_zip: str, keep_zip: bool = False) -> str:
     if not text:
         return text
     out = text
     src_zip = (src.zip or "").strip()
-    if src_zip and dest_zip and src_zip != dest_zip:
+    # ZIP must never be copied into title/body — only FAQ answers keep it.
+    if src_zip and dest_zip and src_zip != dest_zip and keep_zip:
         out = out.replace(src_zip, dest_zip)
     src_city = (src.city or "").strip()
     if src_city and dest_city and src_city.lower() != dest_city.lower():
@@ -367,25 +402,34 @@ def _relocalize_block(src: SEOBlock, dest: dict, dest_city: str, dest_state: str
     for field in text_fields:
         src_val = getattr(src, field, None)
         if src_val:
-            out[field] = _relocalize_text(src_val, src, dest_city, dest_state, dest_zip)
+            out[field] = _relocalize_text(src_val, src, dest_city, dest_state, dest_zip, keep_zip=False)
     if src.h2s:
-        out["h2s"] = [_relocalize_text(h, src, dest_city, dest_state, dest_zip) for h in src.h2s]
+        out["h2s"] = [_relocalize_text(h, src, dest_city, dest_state, dest_zip, keep_zip=False) for h in src.h2s]
     if src.h3s:
-        out["h3s"] = [_relocalize_text(h, src, dest_city, dest_state, dest_zip) for h in src.h3s]
+        out["h3s"] = [_relocalize_text(h, src, dest_city, dest_state, dest_zip, keep_zip=False) for h in src.h3s]
     if src.faqs:
         faqs = []
         for faq in src.faqs:
             q = faq.question if hasattr(faq, "question") else (faq or {}).get("question", "")
             a = faq.answer if hasattr(faq, "answer") else (faq or {}).get("answer", "")
             faqs.append({
-                "question": _relocalize_text(q, src, dest_city, dest_state, dest_zip),
-                "answer": _relocalize_text(a, src, dest_city, dest_state, dest_zip),
+                "question": _relocalize_text(q, src, dest_city, dest_state, dest_zip, keep_zip=False),
+                "answer": _relocalize_text(a, src, dest_city, dest_state, dest_zip, keep_zip=True),
             })
         out["faqs"] = faqs
     out["city"] = dest_city
     out["state"] = dest_state
     if dest_zip:
         out["zip"] = dest_zip
+    from services.zeorbit_local_seo import strip_zip_from_copy, ensure_zip_in_last_faq
+    for field in text_fields:
+        if out.get(field):
+            out[field] = strip_zip_from_copy(out[field], dest_zip)
+    if out.get("h2s"):
+        out["h2s"] = [strip_zip_from_copy(h, dest_zip) for h in out["h2s"]]
+    if out.get("h3s"):
+        out["h3s"] = [strip_zip_from_copy(h, dest_zip) for h in out["h3s"]]
+    out["faqs"] = ensure_zip_in_last_faq(out.get("faqs") or [], dest_city, dest_state, dest_zip)
     return out
 
 
@@ -397,6 +441,11 @@ async def _upsert_block(session, business_type: str, city: str, state: str, bloc
     payload = block.model_dump()
     if existing:
         existing.seo_block = payload
+        try:
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(existing, "seo_block")
+        except Exception:
+            pass
         existing.updated_at = datetime.now(timezone.utc)
         existing.business_type = business_type or existing.business_type
         existing.city = city
@@ -421,9 +470,24 @@ async def save_block(req: SaveBlockRequest, session: AsyncSession = Depends(get_
     bt = (req.business_type or block.business_type or "").strip()
     saved = await _upsert_block(session, bt, block.city, block.state or "CA", block)
     updated = 1
-    if req.apply_globally and bt:
+    if req.sibling_blocks:
+        for sib in req.sibling_blocks:
+            if not (sib.city or "").strip():
+                continue
+            if (sib.slug or "").strip() == saved["slug"]:
+                continue
+            await _upsert_block(session, bt or (sib.business_type or ""), sib.city, sib.state or "CA", sib)
+            updated += 1
+    elif req.apply_globally:
         kind = (block.content_type or "service").lower()
-        rows = (await session.execute(select(PageRecord).where(PageRecord.business_type == bt))).scalars().all()
+        slug_set = {s.strip() for s in (req.sibling_slugs or []) if (s or "").strip()}
+        if slug_set:
+            rows = (await session.execute(select(PageRecord).where(PageRecord.slug.in_(slug_set)))).scalars().all()
+        elif bt:
+            rows = (await session.execute(select(PageRecord).where(PageRecord.business_type == bt))).scalars().all()
+        else:
+            rows = []
+        from sqlalchemy.orm.attributes import flag_modified
         for row in rows:
             if (row.slug or "") == saved["slug"]:
                 continue
@@ -437,6 +501,10 @@ async def save_block(req: SaveBlockRequest, session: AsyncSession = Depends(get_
             if not dest_city:
                 continue
             row.seo_block = _relocalize_block(block, dest, dest_city, dest_state, dest_zip)
+            try:
+                flag_modified(row, "seo_block")
+            except Exception:
+                pass
             row.updated_at = datetime.now(timezone.utc)
             updated += 1
         await session.commit()
@@ -460,28 +528,28 @@ async def list_blog_posts(
     skip = max(0, skip)
 
     page_result = await session.execute(
-        select(PageRecord).order_by(PageRecord.created_at.desc()).offset(0).limit(200)
+        select(PageRecord).order_by(PageRecord.created_at.desc()).limit(3000)
     )
     page_rows = page_result.scalars().all()
-    page_slugs = {r.slug for r in page_rows if r.slug}
+    by_slug = {r.slug: r for r in page_rows if r.slug}
 
     posts = []
+    seen_paths = set()
+
+    def _add_post(item: dict):
+        path = (item.get("url") or "").rstrip("/") or item.get("slug") or ""
+        key = path.lower()
+        if not key or key in seen_paths:
+            return
+        seen_paths.add(key)
+        posts.append(item)
+
     for r in page_rows:
         block = r.seo_block if isinstance(r.seo_block, dict) else {}
-        content_type = (block.get("content_type") or "service").lower()
-        # /blog is for blog posts only — service/location pages clutter the feed
-        # and often share the same website-stock photos.
-        if content_type not in ("blog", "post"):
+        if not _is_blog_block(block):
             continue
         title = (block.get("title") or block.get("h1") or r.business_type or "Untitled").strip()
-        excerpt = (
-            block.get("meta_description")
-            or block.get("intro")
-            or ""
-        ).strip()
-        if len(excerpt) > 220:
-            excerpt = excerpt[:217].rstrip() + "…"
-        # Prefer niche; never surface catch-all "Professional Services" as the blog category
+        excerpt = _plain_excerpt(block, title)
         raw_ind = (block.get("industry") or "").strip()
         if raw_ind.lower() in {
             "", "professional services", "other", "services", "local services", "digital services",
@@ -489,7 +557,7 @@ async def list_blog_posts(
             category = (r.business_type or block.get("business_type") or "SEO").strip()
         else:
             category = raw_ind
-        posts.append({
+        _add_post({
             "id": f"page-{r.id}",
             "source": "web",
             "title": title,
@@ -509,9 +577,8 @@ async def list_blog_posts(
             select(PublishedUrlRecord)
             .where(PublishedUrlRecord.status != "error")
             .order_by(PublishedUrlRecord.created_at.desc())
-            .limit(100)
+            .limit(400)
         )
-        # SEO-tool location / industry landing pages must not appear as "blog" posts.
         _test_landing = re.compile(
             r"^/(contractors|healthcare|web-design|plumbing|software-engineer|"
             r"local-service|website-redesign|education)[-/]",
@@ -522,45 +589,51 @@ async def list_blog_posts(
                 continue
             parsed = urlparse(u.url if "://" in u.url else f"https://{u.url}")
             host = (parsed.hostname or "").lower()
-            # Skip SEO-tool / test hosts — those duplicate or aren't the live marketing site.
             if "nip.io" in host or host.startswith("seo.") or host.endswith(".nip.io"):
                 continue
             path = (parsed.path or "").rstrip("/") or "/"
             if _test_landing.search(path):
                 continue
+            slug = ""
             if path.startswith("/p/"):
                 slug = path.rsplit("/", 1)[-1]
-                if slug in page_slugs:
-                    continue
                 if _test_landing.search(f"/{slug}"):
                     continue
                 live = _rewrite_reader_url(u.url, slug)
                 rel = f"/{slug}"
             else:
-                # Only keep real zeorbit.com article paths (not homepage / menu).
                 if host and "zeorbit.com" not in host:
                     continue
                 if path in ("", "/", "/blog", "/website-designing", "/mobile-apps", "/seo-ppc",
                             "/custom-software", "/portfolio", "/contact"):
                     continue
-                live = _rewrite_reader_url(u.url)
-                rel = live
-            posts.append({
+                slug = path.strip("/")
+                live = _rewrite_reader_url(u.url, slug)
+                rel = f"/{slug}" if slug else live
+            row = by_slug.get(slug) if slug else None
+            block = row.seo_block if row and isinstance(row.seo_block, dict) else {}
+            title = (u.title or (block.get("title") if block else "") or slug or u.url).strip()
+            excerpt = _plain_excerpt(block, title)
+            feat = (block.get("featured_image_url") if block else None) or None
+            category = "Published"
+            if block:
+                raw_ind = (block.get("industry") or "").strip()
+                category = raw_ind or (row.business_type if row else "Published") or "Published"
+            _add_post({
                 "id": f"wp-{u.id}",
                 "source": u.source or "wordpress",
-                "title": (u.title or u.url).strip(),
-                "excerpt": "Published live SEO article.",
-                "category": "Published",
-                "slug": "",
+                "title": title,
+                "excerpt": excerpt,
+                "category": category,
+                "slug": slug,
                 "url": rel,
                 "public_url": live,
-                "city": "",
-                "state": "",
-                "featured_image_url": None,
+                "city": (row.city if row else "") or "",
+                "state": (row.state if row else "") or "",
+                "featured_image_url": feat,
                 "published_at": u.created_at.isoformat() if u.created_at else None,
             })
     except Exception:
-        # Table may be empty / unavailable in some local setups — pages feed still works.
         pass
 
     posts.sort(key=lambda p: p.get("published_at") or "", reverse=True)

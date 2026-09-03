@@ -32,14 +32,9 @@ function isActive(pathname, href) {
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
-const COUNTRIES = [
-  { code: 'AU', label: 'Australia', flag: '🇦🇺' },
-  { code: 'BD', label: 'Bangladesh', flag: '🇧🇩' },
-  { code: 'CA', label: 'Canada', flag: '🇨🇦' },
-  { code: 'DE', label: 'Germany', flag: '🇩🇪' },
-  { code: 'IN', label: 'India', flag: '🇮🇳' },
-  { code: 'GB', label: 'United Kingdom', flag: '🇬🇧' },
-  { code: 'US', label: 'United States (Global)', flag: '🇺🇸' },
+const LANGUAGES = [
+  { code: 'EN', flagCode: 'us', label: 'English', flag: '🇺🇸' },
+  { code: 'ES', flagCode: 'es', label: 'Español', flag: '🇪🇸' },
 ]
 
 function CountryFlag({ code, label, emoji }) {
@@ -309,7 +304,7 @@ export default function RevampHeader() {
   const [open, setOpen] = useState(false)
   const [openMenu, setOpenMenu] = useState(null)
   const [utilityOpen, setUtilityOpen] = useState(null)
-  const [country, setCountry] = useState(COUNTRIES.find((c) => c.code === 'US'))
+  const [language, setLanguage] = useState(LANGUAGES.find((c) => c.code === 'EN'))
   const [mobilePanel, setMobilePanel] = useState(null)
   const headerRef = useRef(null)
   const { pathname, hash } = useLocation()
@@ -474,16 +469,16 @@ export default function RevampHeader() {
                 aria-haspopup="listbox"
                 onClick={() => toggleUtility('country')}
               >
-                <CountryFlag code={country.code} label={country.label} emoji={country.flag} />
-                <span className="zo-util-label">EN</span>
+                <CountryFlag code={language.flagCode} label={language.label} emoji={language.flag} />
+                <span className="zo-util-label">{language.code}</span>
                 <ChevronDown size={12} className="zo-util-caret" aria-hidden />
               </button>
               {utilityOpen === 'country' ? (
-                <div className="zo-util-dropdown zo-country-dropdown" role="listbox" aria-label="Select your country">
-                  <p className="zo-util-dropdown-kicker">Select your country</p>
+                <div className="zo-util-dropdown zo-country-dropdown" role="listbox" aria-label="Select your language">
+                  <p className="zo-util-dropdown-kicker">Select your language / Seleccione el idioma</p>
                   <ul className="zo-country-list">
-                    {COUNTRIES.map((item) => {
-                      const selected = item.code === country.code
+                    {LANGUAGES.map((item) => {
+                      const selected = item.code === language.code
                       return (
                         <li key={item.code}>
                           <button
@@ -492,11 +487,11 @@ export default function RevampHeader() {
                             aria-selected={selected}
                             className={`zo-country-option${selected ? ' is-selected' : ''}`}
                             onClick={() => {
-                              setCountry(item)
+                              setLanguage(item)
                               setUtilityOpen(null)
                             }}
                           >
-                            <CountryFlag code={item.code} label={item.label} emoji={item.flag} />
+                            <CountryFlag code={item.flagCode} label={item.label} emoji={item.flag} />
                             <span>{item.label}</span>
                             {selected ? <Check size={16} className="zo-country-check" aria-hidden /> : null}
                           </button>
@@ -505,7 +500,7 @@ export default function RevampHeader() {
                     })}
                   </ul>
                   <p className="zo-country-footer">
-                    Serving clients <strong>nationwide</strong>
+                    English / <strong>Español</strong>
                   </p>
                 </div>
               ) : null}

@@ -1,7 +1,8 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { ArrowLeft, RefreshCw, Save, CheckCircle, Upload, Globe, ExternalLink, Megaphone, AlertTriangle, Wand2 } from 'lucide-react'
-import { generateSingle, saveEditedBlock, publishToWordPress, publishToWeb, zeorbitBlogUrl, zeorbitArticleUrl, boostPageScores, repairBlockImages } from '../api'
+import { generateSingle, saveEditedBlock, publishToWordPress, publishToWeb, zeorbitBlogUrl, zeorbitArticleUrl, boostPageScores } from '../api'
+import { relocalizeBlock } from '../utils/locationCopy'
 
 const MIN_SCORE = 90
 
@@ -28,11 +29,39 @@ function ScoreRing({ value, color }) {
   )
 }
 
+function renderMdLinks(text) {
+  const s = String(text || '')
+  const re = /\[([^\]]+)\]\((https?:\/\/[^)\s]+|\/[^)\s]+)\)/g
+  const nodes = []
+  let last = 0
+  let m
+  let i = 0
+  while ((m = re.exec(s))) {
+    if (m.index > last) nodes.push(s.slice(last, m.index))
+    nodes.push(
+      <a
+        key={`md-${i}`}
+        href={m[2]}
+        target="_blank"
+        rel="noreferrer"
+        style={{ color: '#1d4ed8', fontWeight: 500, textDecoration: 'underline', textUnderlineOffset: '3px' }}
+      >
+        {m[1]}
+      </a>,
+    )
+    i += 1
+    last = m.index + m[0].length
+  }
+  if (last < s.length) nodes.push(s.slice(last))
+  return nodes.length ? nodes : s
+}
+
 function MetaRow({ label, value, multiline, onChange, hint }) {
   const fieldStyle = {
     width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'vertical',
     fontSize: 14, lineHeight: 1.6, color: 'var(--text-primary)', fontFamily: 'inherit', padding: 0,
   }
+  const showLinks = multiline && /\[[^\]]+\]\((https?:\/\/|\/)/.test(String(value || ''))
   return (
     <div className="rounded-xl p-4" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
       <div className="flex items-center justify-between mb-2">
@@ -44,6 +73,12 @@ function MetaRow({ label, value, multiline, onChange, hint }) {
       ) : (
         <input type="text" value={value || ''} onChange={e => onChange(e.target.value)} style={fieldStyle} />
       )}
+      {showLinks ? (
+        <div className="mt-3 pt-3 text-sm leading-relaxed" style={{ borderTop: '1px solid var(--border)', color: 'var(--text-primary)' }}>
+          <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Links as they appear</div>
+          {renderMdLinks(value)}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -103,21 +138,14 @@ export default function PagePreviewPage() {
   const [webError, setWebError] = useState('')
   const [boosting, setBoosting] = useState(false)
   const [boostError, setBoostError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   const businessType = state?.businessType || block?.business_type || ''
   const isPost = (state?.contentKind === 'post') || (block?.content_type === 'blog')
   const wpConfig = state?.wpConfig
-  const repairedRef = useRef(false)
-
-  useEffect(() => {
-    if (!block || repairedRef.current) return
-    repairedRef.current = true
-    repairBlockImages(block)
-      .then((res) => {
-        if (res?.data) setBlock(res.data)
-      })
-      .catch(() => {})
-  }, [block])
+  const editAll = Boolean(state?.editAll) && Array.isArray(state?.allBlocks) && state.allBlocks.length > 1
+  const allBlocks = editAll ? state.allBlocks : []
 
   const handlePublishWeb = async () => {
     const gate = scoreFails(block)
@@ -190,9 +218,80 @@ export default function PagePreviewPage() {
   }
 
   const handleSave = async () => {
-    await saveEditedBlock(block, { businessType, applyGlobally: true })
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+    const patchSession = (edited, list) => {
+      const pages = Array.isArray(list) && list.length
+        ? list
+        : (() => {
+            try {
+              const raw = JSON.parse(sessionStorage.getItem('seo_generated_pages') || '[]')
+              return Array.isArray(raw) ? raw : []
+            } catch {
+              return []
+            }
+          })()
+      const idx = state?.index
+      let matched = false
+      const next = (pages.length ? pages : [edited]).map((p, i) => {
+        if (typeof idx === 'number' && i === idx) {
+          matched = true
+          return { ...edited }
+        }
+        if (edited.slug && p.slug === edited.slug) {
+          matched = true
+          return { ...edited }
+        }
+        if (p.city === edited.city && (p.state || '') === (edited.state || '')) {
+          matched = true
+          return { ...edited }
+        }
+        return p
+      })
+      if (!matched && pages.length) next[typeof idx === 'number' ? idx : 0] = { ...edited }
+      try {
+        sessionStorage.setItem('seo_generated_pages', JSON.stringify(next))
+      } catch { /* quota */ }
+      return next
+    }
+
+    setSaving(true)
+    setSaveError('')
+    try {
+      if (editAll) {
+        const next = allBlocks.map((p) => {
+          if ((p.slug && p.slug === block.slug) || (p.city === block.city && p.state === block.state)) {
+            return { ...block }
+          }
+          return relocalizeBlock(block, p)
+        })
+        sessionStorage.setItem('seo_generated_pages', JSON.stringify(next))
+        await saveEditedBlock(block, {
+          businessType,
+          applyGlobally: true,
+          siblingSlugs: next.map((p) => p.slug).filter(Boolean),
+          siblingBlocks: next.filter((p) => p.slug !== block.slug),
+        })
+        setSaved(true)
+        setTimeout(() => {
+          navigate('/content', { state: { restoredPages: next } })
+        }, 400)
+        return
+      }
+      await saveEditedBlock(block, { businessType, applyGlobally: false })
+      const next = patchSession(block)
+      setSaved(true)
+      setTimeout(() => {
+        navigate('/content', { state: { restoredPages: next } })
+      }, 400)
+    } catch (e) {
+      const d = e.response?.data?.detail
+      setSaveError(
+        typeof d === 'string'
+          ? d
+          : (d?.message || e.message || 'Save failed. Try again.')
+      )
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handlePublish = async () => {
@@ -255,25 +354,31 @@ export default function PagePreviewPage() {
           </button>
           <div>
             <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
-              {isPost ? (block.h1 || block.title || 'Blog post') : `${block.city}${block.state ? `, ${block.state}` : ''}`}
+              {editAll
+                ? `Master copy · ${allBlocks.length} locations`
+                : isPost ? (block.h1 || block.title || 'Blog post') : `${block.city}${block.state ? `, ${block.state}` : ''}`}
             </h1>
             <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
-              {isPost ? 'Post · post-sitemap.xml' : 'Page · page-sitemap.xml'} · {block.slug}
+              {editAll
+                ? 'Edit once. Save applies this copy to every location (city names swap automatically). ZIP stays in FAQs only.'
+                : isPost ? 'Post · post-sitemap.xml' : 'Page · page-sitemap.xml'}{!editAll ? ` · ${block.slug}` : ''}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
+          {!editAll ? (
           <button onClick={handleRegen} disabled={loading}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
             style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Regenerate
           </button>
-          <button onClick={handleSave}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors"
+          ) : null}
+          <button onClick={handleSave} disabled={saving}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
             style={saved
               ? { background: 'var(--green-soft)', border: '1px solid rgba(23,128,61,0.3)', color: 'var(--green)' }
               : { background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-            {saved ? <><CheckCircle size={13} /> Saved</> : <><Save size={13} /> Save</>}
+            {saved ? <><CheckCircle size={13} /> Saved</> : <><Save size={13} /> {saving ? 'Saving…' : (editAll ? 'Save to all locations' : 'Save')}</>}
           </button>
           {wpConfig?.wp_url && (
             <button onClick={handlePublish} disabled={publishing || !scoresOk}
@@ -330,6 +435,12 @@ export default function PagePreviewPage() {
           ) : null}
         </div>
       </div>
+
+      {saveError ? (
+        <div className="alert alert-error">
+          <span>✗ {typeof saveError === 'string' ? saveError : 'Save failed'}</span>
+        </div>
+      ) : null}
 
       {/* ZeOrbit blog publish banner */}
       {(webUrl || webError) && (

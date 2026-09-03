@@ -116,6 +116,30 @@ def topic_image_family(text: str) -> str:
 # Blog-only: map the editor's search query to a visual category (platform / topic).
 # Example: "how to fix the wix website" → category "wix" → Wix-themed stock photos.
 _BLOG_PLATFORM_VISUALS = (
+    (r"primary[\s-]?care|physician|pediatric|doctors?|clinic|medical|healthcare|dentist", {
+        "category": "healthcare",
+        "topic": "doctor clinic patient medical office",
+        "modifiers": [
+            "doctor with patient",
+            "medical clinic reception",
+            "physician laptop clinic",
+            "healthcare office website",
+        ],
+        "concept": "Doctor and clinic website for a medical practice",
+        "label": "Healthcare",
+    }),
+    (r"gym|fitness|personal train", {
+        "category": "fitness",
+        "topic": "gym fitness training",
+        "modifiers": [
+            "gym training session",
+            "fitness studio",
+            "personal trainer",
+            "workout gym floor",
+        ],
+        "concept": "Gym and fitness studio",
+        "label": "Fitness",
+    }),
     ("wix", {
         "category": "wix",
         "topic": "wix website builder editor",
@@ -636,7 +660,8 @@ def build_image_metadata(
 # returns zero results on Openverse still resolves to a genuinely on-topic
 # photo instead of a random unrelated Flickr hit.
 _CATEGORY_FALLBACK_QUERIES = [
-    (("web design", "website", "web developer", "web development"), "web designer laptop ui mockup"),
+    (("medical", "clinic", "health", "doctor", "physician", "primary care"), "doctor with patient"),
+    (("gym", "fitness", "personal train"), "gym fitness training"),
     (("plumb",), "plumber repairing pipe"),
     (("hvac", "heating", "air condition"), "hvac technician repair"),
     (("roof",), "roofer working on roof"),
@@ -649,10 +674,8 @@ _CATEGORY_FALLBACK_QUERIES = [
     (("auto", "car repair", "mechanic"), "mechanic repairing car"),
     (("account", "bookkeep", "tax"), "accountant office desk"),
     (("financ", "bank", "fintech", "invest", "wealth"), "finance banking investment desk"),
-    (("gym", "fitness", "personal train"), "gym fitness training"),
     (("clean",), "professional cleaning service"),
     (("landscap", "lawn"), "landscaper gardening"),
-    (("market", "advertis", "seo", "digital"), "marketing team meeting"),
     (("photograph",), "photographer with camera"),
     (("insurance",), "insurance agent meeting client"),
     (("moving", "mover"), "movers loading truck"),
@@ -660,9 +683,10 @@ _CATEGORY_FALLBACK_QUERIES = [
     (("paint",), "painter painting wall"),
     (("floor", "carpet"), "flooring installation"),
     (("pet", "vet", "animal"), "veterinarian with pet"),
-    (("medical", "clinic", "health", "doctor"), "doctor with patient"),
     (("software", "app development", "custom software", "coding"), "software developer coding"),
     (("construction", "contractor", "remodel", "renovation"), "construction contractor at work"),
+    (("market", "advertis", "seo", "digital"), "marketing team meeting"),
+    (("web design", "website", "web developer", "web development"), "web designer laptop ui mockup"),
 ]
 
 # Topic-STRICT curated Unsplash photos only (no generic offices/meetings/abstract art).
@@ -705,6 +729,14 @@ def _is_banned_stock_key(key: str) -> bool:
     return False
 
 
+def _looks_like_camera_photo(url: str, alt: str = "") -> bool:
+    blob = f"{url or ''} {alt or ''}".lower()
+    return any(
+        x in blob
+        for x in ("camera", "dslr", "eos rebel", "canon eos", "nikon d", "photo studio", "tripod")
+    )
+
+
 def stock_url_needs_replace(url: str) -> bool:
     """True if this stored URL is empty, placeholder, or a known-404 Unsplash ID."""
     u = (url or "").strip().lower()
@@ -715,6 +747,8 @@ def stock_url_needs_replace(url: str) -> bool:
     if "live.staticflickr.com" in u or "flickr.com" in u:
         return True
     if "placeholder" in u:
+        return True
+    if any(x in u for x in ("camera", "dslr", "canon", "nikon", "tripod")):
         return True
     return _is_banned_stock_key(normalize_image_key(url))
 
@@ -1401,9 +1435,12 @@ def _curated_image_url(
         return _with_unsplash_params(candidates[0])
 
     topic_pool = _curated_pool_for_topic(topic)
-    # For website-design topics, never fall through to photography/education pools.
     fam = topic_image_family(topic)
-    if fam in ("web", "software", "general") or any(
+    if fam == "healthcare":
+        topic_pool = list(_HEALTHCARE_IMAGES)
+    elif fam in ("dental", "legal", "fitness"):
+        pass
+    elif fam in ("web", "software", "general") or any(
         w in (topic or "").lower() for w in ("website", "web design", "wordpress", "shopify", "wix", "squarespace", "webflow", "laptop")
     ):
         topic_pool = list(_WEB_DESIGN_IMAGES)
@@ -1440,16 +1477,16 @@ def _stock_result_score(result: dict, query: str) -> int:
     tag_txt = " ".join(
         (t.get("title") if isinstance(t, dict) else str(t)) for t in tags
     )
-    blob = " ".join([
+    photo_blob = " ".join([
         str(result.get("alt_description") or result.get("alt") or ""),
         str(result.get("description") or ""),
         str(result.get("title") or ""),
         tag_txt,
-        query,
     ]).lower()
+    blob = f"{photo_blob} {(query or '')}".lower()
     q = (query or "").lower()
     # Never pick consumer-app logos for web-design / local-business pages.
-    if any(m in blob for m in (
+    if any(m in photo_blob for m in (
         "netflix", "facebook", "messenger", "instagram", "tiktok", "whatsapp",
         "snapchat", "youtube logo", "social media icon",
     )) and not any(x in q for x in ("facebook ads", "instagram marketing", "social media marketing")):
@@ -1457,20 +1494,21 @@ def _stock_result_score(result: dict, query: str) -> int:
     wants_photo = any(x in q for x in ("photograph", "photographer", "camera"))
     wants_edu = any(x in q for x in ("school", "classroom", "tutor", "university"))
     # Hard reject camera / classroom stock unless the query explicitly asks for it.
-    if not wants_photo and any(m in blob for m in (
+    if not wants_photo and any(m in photo_blob for m in (
         "camera", "dslr", "photo studio", "softbox", "photographer with camera", "canon ",
+        "nikon ", "lens cap", "eos rebel",
     )):
         return 0
-    if not wants_edu and any(m in blob for m in (
+    if not wants_edu and any(m in photo_blob for m in (
         "classroom", "students sitting", "lecture hall", "school children",
     )):
         return 0
-    if any(m in blob for m in _OFFTOPIC_STOCK_MARKERS):
-        # Allow only if clearly tech/business / website related too
-        if not any(k in blob for k in (
+    if any(m in photo_blob for m in _OFFTOPIC_STOCK_MARKERS):
+        # Allow only if the PHOTO (not the search query) is clearly on-topic
+        if not any(k in photo_blob for k in (
             "website", "laptop", "computer", "code", "design", "ui", "ux",
             "office desk", "developer", "wordpress", "shopify", "mockup", "web design",
-            "responsive", "browser",
+            "responsive", "browser", "doctor", "clinic", "hospital", "patient", "medical",
         )):
             return 0
     # Prefer website-related hits; for website queries, require a visual match.
@@ -1640,6 +1678,7 @@ async def generate_article_images(
     content_type: str = "service",
     match_query: str = "",
     audience: str = "",
+    image_keyword: str = "",
 ) -> List[ImageAsset]:
     """Generate 1 featured + (count-1) in-content images with full SEO metadata.
 
@@ -1657,46 +1696,44 @@ async def generate_article_images(
         w for w in re.findall(r"[a-zA-Z]+", (location or "").lower()) if len(w) > 2
     }
     is_blog = (content_type or "").lower() in ("blog", "post")
-
-    # ── Blog: images follow the query category (Wix / Shopify / …) ──
-    if is_blog:
-        plan = blog_image_plan(match_query or focus_keyword or niche, niche=niche)
-        topic = plan["topic"]
-        modifiers = list(plan["modifiers"] or [])
-        fallback_topic = plan["category"]
-        if image_concept_text and "working title" not in image_concept_text.lower():
-            concept_for_meta = image_concept_text
-        else:
-            concept_for_meta = plan["concept"]
-        clean_focus = plan.get("focus") or plan["category"] or "website design"
-        print(
-            f"[Image] blog category={plan['category']} label={plan.get('label')} "
-            f"query={(match_query or focus_keyword or '')[:60]!r}"
-        )
-    else:
-        clean_focus = "website design"
-        # Location pages sell websites — never search "restaurant kitchen" / trade work.
-        # Query must describe the photo: industry + website on a laptop.
-        ind = (industry or "small business").strip()
-        topic = f"{ind} website on laptop"
+    seed_query = (image_keyword or match_query or focus_keyword or niche or industry or "").strip()
+    plan = blog_image_plan(seed_query, niche=f"{niche or ''} {industry or ''}")
+    topic = plan["topic"]
+    modifiers = list(plan["modifiers"] or [])
+    fallback_topic = plan["category"]
+    visual_fam = topic_image_family(f"{seed_query} {industry or ''} {niche or ''}")
+    if visual_fam == "healthcare":
+        topic = plan["topic"] if plan.get("category") == "healthcare" else "doctor clinic medical office"
         modifiers = [
-            "website mockup on laptop screen",
-            "small business website on computer",
-            "web designer working on laptop",
+            "doctor with patient",
+            "medical clinic reception",
+            "physician laptop clinic",
+            "healthcare office",
         ]
-        fallback_topic = "website design"
-        concept_for_meta = f"{ind} business website open on a laptop"
-        print(f"[Image] page query topic={topic!r}")
+        fallback_topic = "healthcare"
+    if image_concept_text and "working title" not in image_concept_text.lower():
+        concept_for_meta = image_concept_text
+    else:
+        concept_for_meta = plan["concept"]
+    clean_focus = plan.get("focus") or plan["category"] or focus_keyword or "website design"
+    print(
+        f"[Image] keyword-plan category={plan['category']} label={plan.get('label')} "
+        f"query={seed_query[:80]!r} kind={content_type} family={visual_fam}"
+    )
 
     # Featured must not reuse another page's header. Body/footer only need to be
     # unique *within this article* — excluding the whole library here left later
     # pages with a single image once the pool was exhausted.
     featured_taken: Set[str] = {normalize_image_key(u) for u in (exclude_urls or []) if u}
     used: Set[str] = set()
-    web_only_pool = list(dict.fromkeys(
-        list(_WEB_DESIGN_IMAGES) + list(_SOFTWARE_IMAGES) + list(_GENERIC_CURATED) + list(_all_curated_urls())
-    ))
-    prefer_hosted = bool(settings.UNSPLASH_ACCESS_KEY or settings.PEXELS_API_KEY)
+    if visual_fam == "healthcare":
+        web_only_pool = list(dict.fromkeys(list(_HEALTHCARE_IMAGES) + list(_WEB_DESIGN_IMAGES)))
+        prefer_hosted = False
+    else:
+        web_only_pool = list(dict.fromkeys(
+            list(_WEB_DESIGN_IMAGES) + list(_SOFTWARE_IMAGES) + list(_GENERIC_CURATED) + list(_all_curated_urls())
+        ))
+        prefer_hosted = bool(settings.UNSPLASH_ACCESS_KEY or settings.PEXELS_API_KEY)
 
     for i in range(count):
         pick_exclude: Set[str] = set(used)
@@ -1717,11 +1754,11 @@ async def generate_article_images(
         if prefer_hosted:
             hosted, hosted_alt = await _hosted_image_url(query, seed=seed, exclude=pick_exclude, location="")
             hkey = normalize_image_key(hosted)
-            if hosted and hkey and hkey not in pick_exclude and not _is_banned_stock_key(hkey):
+            if hosted and hkey and hkey not in pick_exclude and not _is_banned_stock_key(hkey) and not _looks_like_camera_photo(hosted, hosted_alt):
                 url, key, photo_alt = hosted, hkey, hosted_alt
         if not url:
             url = _curated_image_url(
-                fallback_topic if is_blog else "website design",
+                fallback_topic,
                 seed=seed,
                 exclude=pick_exclude,
             )
@@ -1730,13 +1767,13 @@ async def generate_article_images(
         if (not url or key in pick_exclude) and (settings.UNSPLASH_ACCESS_KEY or settings.PEXELS_API_KEY):
             hosted, hosted_alt = await _hosted_image_url(query, seed=seed, exclude=pick_exclude, location="")
             hkey = normalize_image_key(hosted)
-            if hosted and hkey and hkey not in pick_exclude and not _is_banned_stock_key(hkey):
+            if hosted and hkey and hkey not in pick_exclude and not _is_banned_stock_key(hkey) and not _looks_like_camera_photo(hosted, hosted_alt):
                 url, key, photo_alt = hosted, hkey, hosted_alt
         if key and key in pick_exclude:
             for attempt in range(16):
                 alt_seed = f"{seed}|retry|{attempt}|{keyword_index}"
                 alt = _curated_image_url(
-                    fallback_topic if is_blog else "website design",
+                    fallback_topic,
                     seed=alt_seed,
                     exclude=pick_exclude,
                 )
@@ -1753,7 +1790,7 @@ async def generate_article_images(
                         location="",
                     )
                     hkey = normalize_image_key(hosted)
-                    if hosted and hkey and hkey not in pick_exclude and not _is_banned_stock_key(hkey):
+                    if hosted and hkey and hkey not in pick_exclude and not _is_banned_stock_key(hkey) and not _looks_like_camera_photo(hosted, hosted_alt):
                         url, key, photo_alt = hosted, hkey, hosted_alt
                         break
         # Still colliding — rotate unused website pool first (unique within this article)
@@ -1787,7 +1824,7 @@ async def generate_article_images(
                     location="",
                 )
                 hkey = normalize_image_key(hosted)
-                if hosted and hkey and hkey not in used and not _is_banned_stock_key(hkey):
+                if hosted and hkey and hkey not in used and not _is_banned_stock_key(hkey) and not _looks_like_camera_photo(hosted, hosted_alt):
                     url, key, photo_alt = hosted, hkey, hosted_alt
                 else:
                     # Last resort: any unused curated photo so we still ship 3 images

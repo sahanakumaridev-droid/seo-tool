@@ -50,6 +50,12 @@ function withUniqueImages(items) {
   })
 }
 
+function cleanExcerpt(text) {
+  const t = (text || '').trim()
+  if (!t || /published live seo article/i.test(t)) return ''
+  return t
+}
+
 function formatDate(iso) {
   if (!iso) return ''
   const d = new Date(iso)
@@ -184,7 +190,7 @@ export default function BlogPage() {
                   <span>{formatDate(featured.published_at)}</span>
                 </div>
                 <h2>{featured.title}</h2>
-                {featured.excerpt ? <p>{featured.excerpt}</p> : null}
+                {cleanExcerpt(featured.excerpt) ? <p>{cleanExcerpt(featured.excerpt)}</p> : null}
                 <span className="zo-blog-card-cta">
                   Read article <ArrowRight size={16} strokeWidth={2.2} />
                 </span>
@@ -245,7 +251,7 @@ export default function BlogPage() {
                         <span>{formatDate(item.published_at)}</span>
                       </div>
                       <h3>{item.title}</h3>
-                      {item.excerpt ? <p>{item.excerpt}</p> : null}
+                      {cleanExcerpt(item.excerpt) ? <p>{cleanExcerpt(item.excerpt)}</p> : null}
                       <span className="zo-blog-card-cta">
                         Read article <ArrowRight size={14} strokeWidth={2.2} />
                       </span>
