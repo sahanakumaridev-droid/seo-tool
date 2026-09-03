@@ -1018,13 +1018,26 @@ INTERNAL_LINK_LINE = (
     "[mobile apps](https://zeorbit.com/mobile-apps), and [SEO & PPC](https://zeorbit.com/seo-ppc)."
 )
 
-# ZeOrbit profiles / directories (outbound). Helps trust and discovery off-site.
+# Unlinked directory names (AI engines match these brands to ZeOrbit profiles).
 EXTERNAL_LINK_LINE = (
-    "You can also find ZeOrbit on "
-    "[Thumbtack](https://www.thumbtack.com/ca/san-diego/website-designers), "
-    "[GoodFirms](https://www.goodfirms.co/company/zeorbit), "
-    "[DesignRush](https://www.designrush.com/agency/profile/zeorbit), "
-    "and [Yelp](https://www.yelp.com/biz/zeorbit-san-diego-2)."
+    "ZeOrbit is listed on DesignRush, GoodFirms, Thumbtack, and Yelp "
+    "for website and mobile app work in San Diego."
+)
+
+# Highlighted in-body words → third-party profiles ChatGPT/Gemini pull for "best of" lists.
+CITATION_HIGHLIGHTS = (
+    (
+        re.compile(r"\b(website design(?:ing|er|ers)?)\b", re.I),
+        "https://www.designrush.com/agency/profile/zeorbit",
+    ),
+    (
+        re.compile(r"\b(mobile apps?)\b", re.I),
+        "https://www.goodfirms.co/company/zeorbit",
+    ),
+    (
+        re.compile(r"\b(websites?)\b", re.I),
+        "https://www.yelp.com/biz/zeorbit-san-diego-2",
+    ),
 )
 
 _INTERNAL_LINE_RE = re.compile(
@@ -1032,17 +1045,52 @@ _INTERNAL_LINE_RE = re.compile(
     re.I | re.S,
 )
 _EXTERNAL_LINE_RE = re.compile(
-    r"(?:You can also find ZeOrbit on \[Thumbtack\].*?zeorbit-san-diego-2\)\.?)",
+    r"(?:You can also find ZeOrbit on \[Thumbtack\].*?zeorbit-san-diego-2\)\.?"
+    r"|ZeOrbit is listed on DesignRush, GoodFirms, Thumbtack, and Yelp[^.]*\.)",
     re.I | re.S,
 )
 
 
+def _protect_markdown_links(text: str) -> tuple[str, list[str]]:
+    held: list[str] = []
+
+    def stash(m: re.Match) -> str:
+        held.append(m.group(0))
+        return f"@@LINK{len(held) - 1}@@"
+
+    return re.sub(r"\[[^\]]+\]\([^)]+\)", stash, text or ""), held
+
+
+def _restore_markdown_links(text: str, held: list[str]) -> str:
+    out = text or ""
+    for i, chunk in enumerate(held):
+        out = out.replace(f"@@LINK{i}@@", chunk)
+    return out
+
+
+def highlight_citation_keywords(content: str) -> str:
+    """Wrap first 'website design' / 'mobile app' / 'website' with third-party listing URLs."""
+    text, held = _protect_markdown_links(content or "")
+    for pattern, url in CITATION_HIGHLIGHTS:
+        if re.search(rf"\]\({re.escape(url)}\)", content or "", re.I):
+            continue
+
+        def repl(m: re.Match, href: str = url) -> str:
+            return f"[{m.group(1)}]({href})"
+
+        text, n = pattern.subn(repl, text, count=1)
+        if n:
+            continue
+    return _restore_markdown_links(text, held)
+
+
 def ensure_body_hyperlinks(content: str) -> str:
-    """Internal links after the first section; external listings after the last section."""
+    """Internal links after the first section; third-party highlights + directory names at the end."""
     text = (content or "").strip()
     text = _INTERNAL_LINE_RE.sub("", text)
     text = _EXTERNAL_LINE_RE.sub("", text)
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    text = highlight_citation_keywords(text)
 
     chunks = re.split(r"(?=^##\s+)", text, flags=re.M)
     chunks = [c.strip() for c in chunks if c.strip()]

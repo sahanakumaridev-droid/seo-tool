@@ -1,8 +1,12 @@
 import { useEffect } from 'react'
 import { PAGE_SEO, DEFAULT_OG_IMAGE } from '../data/pageSeo'
 import { AREA_HUB, AREA_PAGES } from '../data/areas'
-
-export const SITE_URL = 'https://zeorbit.com'
+import {
+  SITE_URL,
+  buildFaqSchema,
+  buildLocalBusinessSchema,
+  buildOrganizationSchema,
+} from '../data/localBusiness'
 
 function upsertMeta(attr, key, content) {
   if (!content) return
@@ -60,6 +64,8 @@ export default function SeoHead({
   type = 'website',
   robots = 'index,follow,max-image-preview:large',
   noindex = false,
+  faqs = null,
+  localBusiness = true,
 }) {
   useEffect(() => {
     const url = absUrl(path)
@@ -85,32 +91,14 @@ export default function SeoHead({
     upsertMeta('name', 'twitter:image', absImg)
     upsertLink('canonical', url)
 
-    upsertJsonLd('zo-ld-org', {
-      '@context': 'https://schema.org',
-      '@type': 'Organization',
-      name: 'ZeOrbit',
-      url: SITE_URL,
-      logo: `${SITE_URL}/zeorbit-logo.png`,
-      email: 'info@zeorbit.com',
-      telephone: '+1-619-724-9517',
-      areaServed: 'US',
-      sameAs: [
-        'https://www.facebook.com/zeorbit.web.designers.mobileapp.developers',
-        'https://www.linkedin.com/company/zeorbit/',
-        'https://maps.apple/p/VA-_LREgJ5PzDV',
-        'https://maps.app.goo.gl/teVefHUc3yycwkcA7',
-        'https://www.yelp.com/biz/zeorbit-san-diego-2',
-        SITE_URL,
-      ],
-      address: {
-        '@type': 'PostalAddress',
-        streetAddress: '4231 Balboa Avenue, Suite 1340',
-        addressLocality: 'San Diego',
-        addressRegion: 'CA',
-        postalCode: '92117',
-        addressCountry: 'US',
-      },
-    })
+    upsertJsonLd('zo-ld-org', buildOrganizationSchema())
+
+    if (localBusiness) {
+      upsertJsonLd('zo-ld-local', buildLocalBusinessSchema({ pageUrl: url, description }))
+    } else {
+      const stale = document.getElementById('zo-ld-local')
+      if (stale) stale.remove()
+    }
 
     upsertJsonLd('zo-ld-website', {
       '@context': 'https://schema.org',
@@ -120,10 +108,17 @@ export default function SeoHead({
       potentialAction: {
         '@type': 'SearchAction',
         target: `${SITE_URL}/blog?q={search_term_string}`,
-        'query-input': 'required name:search_term_string',
+        'query-input': 'required name=search_term_string',
       },
     })
-  }, [title, description, path, image, type, robots, noindex])
+
+    if (faqs?.length) {
+      upsertJsonLd('zo-ld-faq', buildFaqSchema(faqs))
+    } else {
+      const stale = document.getElementById('zo-ld-faq')
+      if (stale) stale.remove()
+    }
+  }, [title, description, path, image, type, robots, noindex, faqs, localBusiness])
 
   return null
 }
@@ -148,4 +143,4 @@ export function seoForPath(pathname) {
   return null
 }
 
-export { PAGE_SEO, DEFAULT_OG_IMAGE }
+export { PAGE_SEO, DEFAULT_OG_IMAGE, SITE_URL }

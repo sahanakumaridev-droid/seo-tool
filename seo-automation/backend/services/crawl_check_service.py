@@ -49,6 +49,15 @@ async def check_url(url: str) -> dict:
         return result
 
     html = resp.text
+    robots_tag = (resp.headers.get("x-robots-tag") or "").lower()
+    if "noindex" in robots_tag:
+        result["has_noindex"] = True
+        result["error"] = "Response has X-Robots-Tag: noindex"
+        return result
+    if "us-only" in html.lower() and "available in the united states" in html.lower():
+        result["has_noindex"] = True
+        result["error"] = "URL served the US-only interstitial instead of the real page"
+        return result
 
     # robots.txt — is this path allowed for Googlebot?
     robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"

@@ -1,53 +1,103 @@
 """
-search_console_service.py — official Google Search Console API integration:
-Sitemaps API (tell Google to (re)fetch a sitemap) and URL Inspection API
-(check a URL's real indexing status). Both are self-serve, no special Google
-approval needed — unlike the Indexing API, which is NOT used here for blog
-content since Google restricts it to JobPosting/BroadcastEvent pages.
-
-Reuses the same service-account key file as indexing_service.py (already an
-Owner on the Search Console property) — just requested with the
-webmasters/searchconsole scope instead of the indexing scope.
+search_console_service.py — Search Console: sitemaps, URL Inspection, Search Analytics.
 """
-import os
 import logging
+from datetime import date, timedelta
+from pathlib import Path
 from urllib.parse import quote, urlparse, urlunparse
 
-from config import settings
+from config import settings, _BACKEND_ROOT
 
 logger = logging.getLogger(__name__)
 
 _SCOPES = ["https://www.googleapis.com/auth/webmasters"]
 _SITEMAPS_ENDPOINT = "https://www.googleapis.com/webmasters/v3/sites/{site}/sitemaps/{feed}"
 _INSPECT_ENDPOINT = "https://searchconsole.googleapis.com/v1/urlInspection/index:inspect"
+_ANALYTICS_ENDPOINT = "https://www.googleapis.com/webmasters/v3/sites/{site}/searchAnalytics/query"
+_SITES_ENDPOINT = "https://www.googleapis.com/webmasters/v3/sites"
 
 _session = None
-_loaded = False
+_auth_error = ""
+
+
+def resolve_key_file() -> str:
+    raw = (settings.GOOGLE_INDEXING_KEY_FILE or "").strip()
+    if not raw:
+        return ""
+    candidates = [Path(raw)]
+    if not Path(raw).is_absolute():
+        candidates.extend([
+            _BACKEND_ROOT / raw,
+            _BACKEND_ROOT / "secrets" / Path(raw).name,
+            Path("/opt/seo-tool/backend") / raw,
+        ])
+    for p in candidates:
+        try:
+            if p.is_file():
+                return str(p.resolve())
+        except OSError:
+            continue
+    return raw
 
 
 def _get_session():
-    global _session, _loaded
-    if _loaded:
+    global _session, _auth_error
+    if _session is not None:
         return _session
-    _loaded = True
-    keyfile = settings.GOOGLE_INDEXING_KEY_FILE
-    if not keyfile or not os.path.exists(keyfile):
-        logger.info("Search Console API: no key file configured — disabled.")
+    keyfile = resolve_key_file()
+    if not keyfile or not Path(keyfile).is_file():
+        _auth_error = f"Key file missing: {keyfile or '(empty GOOGLE_INDEXING_KEY_FILE)'}"
+        logger.info("Search Console API: %s", _auth_error)
         return None
     try:
         from google.oauth2 import service_account
         from google.auth.transport.requests import AuthorizedSession
         creds = service_account.Credentials.from_service_account_file(keyfile, scopes=_SCOPES)
         _session = AuthorizedSession(creds)
-        logger.info("Search Console API: authenticated.")
+        _auth_error = ""
+        logger.info("Search Console API: authenticated (%s)", keyfile)
     except Exception as e:
-        logger.error(f"Search Console API auth failed: {e}")
+        _auth_error = str(e)
+        logger.error("Search Console API auth failed: %s", e)
         _session = None
     return _session
 
 
 def is_configured() -> bool:
-    return _get_session() is not None and bool(settings.GSC_SITE_URL)
+    return _get_session() is not None and bool((settings.GSC_SITE_URL or "").strip())
+
+
+def connection_status() -> dict:
+    session = _get_session()
+    site = (settings.GSC_SITE_URL or "").strip()
+    key = resolve_key_file()
+    sites = []
+    probe = ""
+    if session is not None:
+        try:
+            r = session.get(_SITES_ENDPOINT, timeout=20)
+            if r.status_code == 200:
+                sites = [s.get("siteUrl") for s in (r.json().get("siteEntry") or []) if s.get("siteUrl")]
+            else:
+                probe = f"sites list HTTP {r.status_code}: {(r.text or '')[:180]}"
+        except Exception as e:
+            probe = str(e)
+    listed = True
+    if sites and site:
+        variants = {site, site.rstrip("/") + "/", site.rstrip("/")}
+        listed = any(v in sites for v in variants)
+    return {
+        "configured": bool(session is not None and site),
+        "gsc_site_url": site,
+        "key_file": key,
+        "key_exists": bool(key and Path(key).is_file()),
+        "auth_ok": session is not None,
+        "auth_error": _auth_error,
+        "sites": sites,
+        "property_listed": listed,
+        "probe": probe,
+        "note": "Search Analytics lags 2–3 days. This is Google Search traffic, not ChatGPT.",
+    }
 
 
 def _inspection_url(url: str) -> str:
@@ -160,3 +210,83 @@ def inspect_url(url: str) -> dict:
     except Exception as e:
         logger.error(f"URL Inspection error for {url}: {e}")
         return {"ok": False, "detail": str(e)}
+
+
+def _analytics_query(site_url: str, body: dict) -> dict:
+    session = _get_session()
+    if session is None or not site_url:
+        return {"ok": False, "detail": "Search Console not configured", "rows": []}
+    url = _ANALYTICS_ENDPOINT.format(site=quote(site_url, safe=""))
+    try:
+        r = session.post(url, json=body, timeout=45)
+        if r.status_code != 200:
+            return {"ok": False, "detail": f"HTTP {r.status_code}: {(r.text or '')[:300]}", "rows": []}
+        data = r.json()
+        return {"ok": True, "rows": data.get("rows") or [], "responseAggregationType": data.get("responseAggregationType")}
+    except Exception as e:
+        return {"ok": False, "detail": str(e), "rows": []}
+
+
+def fetch_performance(days: int = 28) -> dict:
+    """Clicks / impressions / CTR / position for the verified GSC property."""
+    days = max(7, min(int(days or 28), 90))
+    site = (settings.GSC_SITE_URL or "").strip()
+    # GSC Search Analytics is delayed ~2 days.
+    end = date.today() - timedelta(days=2)
+    start = end - timedelta(days=days - 1)
+    start_s, end_s = start.isoformat(), end.isoformat()
+    conn = connection_status()
+    if not conn.get("configured"):
+        return {
+            "ok": False,
+            "detail": conn.get("auth_error") or "Search Console not configured",
+            "connection": conn,
+            "start_date": start_s,
+            "end_date": end_s,
+            "totals": {"clicks": 0, "impressions": 0, "ctr": 0, "position": 0},
+            "by_date": [],
+            "queries": [],
+            "pages": [],
+        }
+
+    base_body = {"startDate": start_s, "endDate": end_s, "rowLimit": 250}
+
+    by_date = _analytics_query(site, {**base_body, "dimensions": ["date"]})
+    queries = _analytics_query(site, {**base_body, "dimensions": ["query"], "rowLimit": 50})
+    pages = _analytics_query(site, {**base_body, "dimensions": ["page"], "rowLimit": 50})
+
+    def rows_dim(result: dict, key: str) -> list:
+        out = []
+        for row in result.get("rows") or []:
+            keys = row.get("keys") or [""]
+            out.append({
+                key: keys[0],
+                "clicks": row.get("clicks") or 0,
+                "impressions": row.get("impressions") or 0,
+                "ctr": round((row.get("ctr") or 0) * 100, 2),
+                "position": round(row.get("position") or 0, 1),
+            })
+        return out
+
+    date_rows = rows_dim(by_date, "date")
+    date_rows.sort(key=lambda r: r["date"])
+    clicks = sum(r["clicks"] for r in date_rows)
+    imps = sum(r["impressions"] for r in date_rows)
+    ctr = round((clicks / imps * 100) if imps else 0, 2)
+    pos = round(
+        (sum(r["position"] * r["impressions"] for r in date_rows) / imps) if imps else 0,
+        1,
+    )
+    err = next((r.get("detail") for r in (by_date, queries, pages) if not r.get("ok") and r.get("detail")), "")
+    return {
+        "ok": by_date.get("ok") or queries.get("ok") or pages.get("ok"),
+        "detail": err,
+        "connection": conn,
+        "start_date": start_s,
+        "end_date": end_s,
+        "days": days,
+        "totals": {"clicks": clicks, "impressions": imps, "ctr": ctr, "position": pos},
+        "by_date": date_rows,
+        "queries": rows_dim(queries, "query"),
+        "pages": rows_dim(pages, "page"),
+    }

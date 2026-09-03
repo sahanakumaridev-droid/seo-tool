@@ -30,12 +30,33 @@ limiter = Limiter(key_func=get_remote_address)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup/shutdown."""
-    # Startup
+    import asyncio
+    from db import AsyncSessionLocal
+    from services import index_automation
+
     logger.info("Starting SEO Automation API v2.1")
     await init_db()
     logger.info("Database initialized")
+
+    stop = asyncio.Event()
+
+    async def _index_loop():
+        await asyncio.sleep(20)
+        while not stop.is_set():
+            try:
+                async with AsyncSessionLocal() as session:
+                    await index_automation.run_cycle(session, reason="schedule")
+            except Exception:
+                logger.exception("Index automation cycle failed")
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=index_automation.interval_seconds())
+            except asyncio.TimeoutError:
+                pass
+
+    task = asyncio.create_task(_index_loop())
     yield
-    # Shutdown
+    stop.set()
+    task.cancel()
     logger.info("Shutting down SEO Automation API")
 
 
@@ -150,6 +171,9 @@ app.include_router(seo_indexing.router, prefix="/api/seo-indexing", tags=["Googl
 
 from routes import rankings
 app.include_router(rankings.router, prefix="/api/rankings", tags=["Rankings"])
+
+from routes import top3_engine
+app.include_router(top3_engine.router, prefix="/api/top3", tags=["Top 3 Engine"])
 
 # Instagram auto-posting
 from routes import instagram
@@ -279,6 +303,7 @@ _SITE_MENU_PATHS = (
     "/contact",
     "/blog",
     "/areas",
+    "/web-designer-near-me",
     "/privacy-policy",
 )
 
@@ -289,6 +314,7 @@ _RESERVED_ARTICLE_SLUGS = {
     "blog", "contact", "portfolio", "areas", "privacy-policy",
     f"{_INDEXNOW_KEY}.txt" if _INDEXNOW_KEY else "indexnow.txt",
     "website-designing", "mobile-apps", "seo-ppc", "custom-software",
+    "web-designer-near-me",
     "us-only", "revamp-preview",
 }
 
@@ -375,9 +401,17 @@ async def _render_public_article(slug: str, request: Request, session):
     result = await session.execute(select(PageRecord).where(PageRecord.slug == slug))
     row = result.scalar_one_or_none()
     if not row:
-        dest = "/contact" if sum(ord(c) for c in (slug or "")) % 2 else "/"
-        from routes.pages import _reader_base
-        return RedirectResponse(url=f"{_reader_base(request).rstrip('/')}{dest}", status_code=301)
+        html = (
+            "<!doctype html><html lang='en'><head>"
+            "<meta charset='utf-8'/>"
+            "<meta name='robots' content='noindex,follow'/>"
+            "<title>Page not found — ZeOrbit</title>"
+            "</head><body><h1>Page not found</h1>"
+            "<p>This URL is not a published ZeOrbit page.</p>"
+            "<p><a href='https://zeorbit.com/'>ZeOrbit home</a></p>"
+            "</body></html>"
+        )
+        return HTMLResponse(html, status_code=404)
     block = SEOBlock(**row.seo_block)
     public_url = f"{_public_base(request)}/{slug}"
     return HTMLResponse(render_public_html(block, public_url))

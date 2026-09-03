@@ -1,4 +1,8 @@
+from pathlib import Path
 from pydantic_settings import BaseSettings
+
+_BACKEND_ROOT = Path(__file__).resolve().parent
+
 
 class Settings(BaseSettings):
     # ── Environment ──────────────────────────────────────────────
@@ -99,6 +103,8 @@ class Settings(BaseSettings):
     # must be served at https://zeorbit.com/{INDEXNOW_KEY}.txt
     INDEXNOW_KEY: str = "zeorbit-indexnow-7f3c9a2e4b1d"
     INDEXNOW_ENABLED: bool = True
+    # Hours between sitemap submit + inspect batches (default 6 → ~40 URLs/day).
+    INDEX_AUTOMATION_INTERVAL_HOURS: float = 6.0
 
     # ── Image APIs ───────────────────────────────────────────────
     UNSPLASH_ACCESS_KEY: str = ""
@@ -158,6 +164,6 @@ class Settings(BaseSettings):
     DEMO_MODE: bool = False
 
     class Config:
-        env_file = ".env"
+        env_file = str(_BACKEND_ROOT / ".env")
 
 settings = Settings()

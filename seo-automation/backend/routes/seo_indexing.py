@@ -588,3 +588,60 @@ async def submit_sitemaps_to_gsc(session: AsyncSession = Depends(get_session)):
         results.append({"url": search_console_service._inspection_url(u), "ok": r.get("ok"), "status": r.get("status"), "detail": r.get("detail")})
     ok = any(x.get("ok") for x in results)
     return {"ok": ok, "gsc_site_url": settings.GSC_SITE_URL, "results": results}
+
+
+@router.get("/gsc")
+async def gsc_connection():
+    from services.search_console_service import connection_status
+
+    return connection_status()
+
+
+@router.get("/performance")
+async def gsc_performance(days: int = 28):
+    from services.search_console_service import fetch_performance
+
+    return fetch_performance(days)
+
+
+@router.get("/automation")
+async def indexing_automation_status():
+    from services.index_automation import status_payload
+
+    return status_payload()
+
+
+@router.post("/automation/run")
+async def indexing_automation_run(session: AsyncSession = Depends(get_session)):
+    from services.index_automation import run_cycle
+
+    return await run_cycle(session, reason="manual")
+
+
+class HumanUrlBody(BaseModel):
+    url: str = ""
+
+
+class HumanBingBody(BaseModel):
+    done: bool = True
+
+
+@router.get("/human-10")
+async def human_ten_status():
+    from services.index_automation import human_ten_payload
+
+    return human_ten_payload()
+
+
+@router.post("/human-10/requested")
+async def human_ten_requested(body: HumanUrlBody):
+    from services.index_automation import mark_requested
+
+    return mark_requested(body.url)
+
+
+@router.post("/human-10/bing")
+async def human_ten_bing(body: HumanBingBody):
+    from services.index_automation import mark_bing_done
+
+    return mark_bing_done(body.done)

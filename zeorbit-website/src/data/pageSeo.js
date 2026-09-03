@@ -15,6 +15,12 @@ export const PAGE_SEO = {
       'Custom website design and development for U.S. businesses. WordPress, Shopify, Wix, Squarespace, redesigns, and Master Care from ZeOrbit in San Diego.',
     image: '/showcase/pro/web-wide.webp',
   },
+  '/web-designer-near-me': {
+    title: 'Best Web Designer Near Me in San Diego | ZeOrbit',
+    description:
+      'Looking for the best web designer near you in San Diego? ZeOrbit has a 5.0 Google rating, 20+ years experience, and builds WordPress, Shopify & custom websites. Call 619-724-9517.',
+    image: DEFAULT_OG_IMAGE,
+  },
   '/mobile-apps': {
     title: 'Mobile App Development — iOS & Android | ZeOrbit',
     description:

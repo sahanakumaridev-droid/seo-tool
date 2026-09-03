@@ -131,6 +131,13 @@ export const listPages = (skip = 0, limit = 20) =>
 export const listBlogPosts = (skip = 0, limit = 24) =>
   api.get('/pages/blog', { params: { skip, limit } })
 
+/** Admin: blogs already published on zeorbit.com */
+export const listPostedBlogs = (skip = 0, limit = 100) =>
+  api.get('/pages/posted-blogs', { params: { skip, limit } })
+
+export const getPage = (slug) =>
+  api.get(`/pages/${encodeURIComponent(slug)}`)
+
 /** Published SEO/WordPress URLs for Google Ads final URL picker */
 export const listLandingPagesForAds = (skip = 0, limit = 50) =>
   api.get('/pages/landing-pages', { params: { skip, limit } })
@@ -218,6 +225,27 @@ export const suggestGoogleAdsCopy = (data) =>
 // ── Google Search Automation (sitemap + Search Console) ───────────
 export const getSeoIndexingStatus = () =>
   api.get('/seo-indexing/status')
+
+export const getIndexAutomation = () =>
+  api.get('/seo-indexing/automation')
+
+export const runIndexAutomation = () =>
+  api.post('/seo-indexing/automation/run', null, { timeout: 180000 })
+
+export const getHumanTen = () =>
+  api.get('/seo-indexing/human-10')
+
+export const markHumanRequested = (url) =>
+  api.post('/seo-indexing/human-10/requested', { url })
+
+export const markHumanBing = (done = true) =>
+  api.post('/seo-indexing/human-10/bing', { done })
+
+export const getGscConnection = () =>
+  api.get('/seo-indexing/gsc')
+
+export const getGscPerformance = (days = 28) =>
+  api.get('/seo-indexing/performance', { params: { days }, timeout: 60000 })
 
 export const getSeoIndexingSetup = () =>
   api.get('/seo-indexing/setup')
@@ -346,3 +374,9 @@ export const mpAdminUsers = (params = {}) =>
 
 export const mpVerifyUser = (userId) =>
   api.patch(`/marketplace/admin/users/${userId}/verify`, {}, { headers: mpHeaders() })
+
+export const analyzeTop3 = (website, keyword) =>
+  api.post('/top3/analyze', { website, keyword }, { timeout: 90000 })
+
+export const inspectTop3Gsc = (url) =>
+  api.post('/top3/gsc-inspect', { url }, { timeout: 45000 })

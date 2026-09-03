@@ -11,6 +11,9 @@ import OnboardingPage from './pages/OnboardingPage'
 import SiteAuditPage from './pages/SiteAuditPage'
 import GoogleAdsPage from './pages/GoogleAdsPage'
 import IndexingStatusPage from './pages/IndexingStatusPage'
+import IndexAutomationPage from './pages/IndexAutomationPage'
+import HumanTenPage from './pages/HumanTenPage'
+import GscPerformancePage from './pages/GscPerformancePage'
 import SitemapsPage from './pages/SitemapsPage'
 import IntegrationsPage from './pages/IntegrationsPage'
 import ComingSoonPage from './pages/ComingSoonPage'
@@ -18,13 +21,15 @@ import SimpleDashboard from './pages/SimpleDashboard'
 import DashboardPage from './pages/DashboardPage'
 import PremiumDashboard from './pages/PremiumDashboard'
 import KeywordsPage from './pages/KeywordsPage'
+import RankingsPage from './pages/RankingsPage'
 import CompetitorsPage from './pages/CompetitorsPage'
 import ContentPage from './pages/ContentPage'
 import ArticlesPage from './pages/ArticlesPage'
-import RankingsPage from './pages/RankingsPage'
+import Top3EnginePage from './pages/Top3EnginePage'
 import ReportsPage from './pages/ReportsPage'
 import WordPressPage from './pages/WordPressPage'
 import PagePreviewPage from './pages/PagePreviewPage'
+import LiveBlogsPage from './pages/LiveBlogsPage'
 import SocialPage from './pages/SocialPage'
 import LeadsPage from './pages/LeadsPage'
 import LeadEnginePage from './pages/LeadEnginePage'
@@ -154,6 +159,12 @@ export default function App() {
           <DashboardLayout onLogout={logout}><ArticlesPage /></DashboardLayout>
         </RequireAuth>
       } />
+      <Route path="/posted-blogs" element={
+        <RequireAuth authed={authed}>
+          <DashboardLayout onLogout={logout}><LiveBlogsPage /></DashboardLayout>
+        </RequireAuth>
+      } />
+      <Route path="/live-blogs" element={<Navigate to="/posted-blogs" replace />} />
       <Route path="/keywords" element={
         <RequireAuth authed={authed}>
           <DashboardLayout onLogout={logout}><KeywordsPage /></DashboardLayout>
@@ -162,6 +173,11 @@ export default function App() {
       <Route path="/rankings" element={
         <RequireAuth authed={authed}>
           <DashboardLayout onLogout={logout}><RankingsPage /></DashboardLayout>
+        </RequireAuth>
+      } />
+      <Route path="/top3" element={
+        <RequireAuth authed={authed}>
+          <DashboardLayout onLogout={logout}><Top3EnginePage /></DashboardLayout>
         </RequireAuth>
       } />
       <Route path="/reports" element={
@@ -201,6 +217,21 @@ export default function App() {
       <Route path="/google-ads" element={
         <RequireAuth authed={authed}>
           <DashboardLayout onLogout={logout}><GoogleAdsPage /></DashboardLayout>
+        </RequireAuth>
+      } />
+      <Route path="/index-automation" element={
+        <RequireAuth authed={authed}>
+          <DashboardLayout onLogout={logout}><IndexAutomationPage /></DashboardLayout>
+        </RequireAuth>
+      } />
+      <Route path="/gsc" element={
+        <RequireAuth authed={authed}>
+          <DashboardLayout onLogout={logout}><GscPerformancePage /></DashboardLayout>
+        </RequireAuth>
+      } />
+      <Route path="/daily-10" element={
+        <RequireAuth authed={authed}>
+          <DashboardLayout onLogout={logout}><HumanTenPage /></DashboardLayout>
         </RequireAuth>
       } />
       <Route path="/indexing" element={

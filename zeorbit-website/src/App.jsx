@@ -9,11 +9,13 @@ const SiteDock = lazy(() => import('./components/SiteDock'))
 const SiteChat = lazy(() => import('./components/SiteChat'))
 const ServicePage = lazy(() => import('./pages/ServicePage'))
 const WebsiteDesignPage = lazy(() => import('./pages/WebsiteDesignPage'))
+const WebDesignerNearMePage = lazy(() => import('./pages/WebDesignerNearMePage'))
 const PortfolioPage = lazy(() => import('./pages/PortfolioPage'))
 const BlogPage = lazy(() => import('./pages/BlogPage'))
 const SeoArticlePage = lazy(() => import('./pages/SeoArticlePage'))
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'))
 const AreasPage = lazy(() => import('./pages/AreasPage'))
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 
 function DelayedChrome() {
   const [ready, setReady] = useState(false)
@@ -42,6 +44,7 @@ export default function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/blog" element={<BlogPage />} />
           <Route path="/website-designing" element={<WebsiteDesignPage />} />
+          <Route path="/web-designer-near-me" element={<WebDesignerNearMePage />} />
           <Route path="/mobile-apps" element={<ServicePage slug="mobile-apps" />} />
           <Route path="/custom-software" element={<ServicePage slug="custom-software" />} />
           <Route path="/seo-ppc" element={<ServicePage slug="seo-ppc" />} />
@@ -53,7 +56,7 @@ export default function App() {
           <Route path="/privacy" element={<PrivacyPolicyPage />} />
           <Route path="/revamp-preview" element={<LandingPage />} />
           <Route path="/:slug" element={<SeoArticlePage />} />
-          <Route path="*" element={<LandingPage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>
     </BrowserRouter>

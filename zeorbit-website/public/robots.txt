@@ -70,3 +70,8 @@ Allow: /
 Sitemap: https://zeorbit.com/sitemap.xml
 Sitemap: https://zeorbit.com/page-sitemap.xml
 Sitemap: https://zeorbit.com/post-sitemap.xml
+
+User-agent: *
+Disallow: /us-only.html
+Disallow: /revamp-preview
+

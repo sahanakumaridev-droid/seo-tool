@@ -648,6 +648,54 @@ async def list_blog_posts(
     }
 
 
+@router.get("/posted-blogs", response_model=dict)
+@router.get("/live-blogs", response_model=dict)
+async def list_posted_blogs(
+    request: Request,
+    skip: int = 0,
+    limit: int = 100,
+    session: AsyncSession = Depends(get_session),
+):
+    """Admin list: blog posts that are saved and live on zeorbit.com."""
+    limit = max(1, min(limit, 200))
+    skip = max(0, skip)
+    base = (_reader_base(request) or LIVE_SITE).rstrip("/")
+    tracked = (await session.execute(select(PublishedUrlRecord))).scalars().all()
+    status_by_slug: dict[str, str] = {}
+    for rec in tracked:
+        path = urlparse(rec.url or "").path or ""
+        slug = path.strip("/").split("/")[-1] if path.strip("/") else ""
+        if slug:
+            status_by_slug[slug] = rec.status or "published"
+
+    rows = (await session.execute(
+        select(PageRecord).order_by(PageRecord.updated_at.desc().nullslast(), PageRecord.created_at.desc())
+    )).scalars().all()
+    posts = []
+    for r in rows:
+        block = r.seo_block if isinstance(r.seo_block, dict) else {}
+        if not _is_blog_block(block):
+            continue
+        title = (block.get("title") or block.get("h1") or r.business_type or r.slug or "Untitled").strip()
+        live_url = f"{base}/{r.slug}"
+        st = status_by_slug.get(r.slug) or "live"
+        posts.append({
+            "id": r.id,
+            "slug": r.slug,
+            "title": title,
+            "excerpt": _plain_excerpt(block, title)[:220],
+            "city": r.city,
+            "state": r.state,
+            "public_url": live_url,
+            "featured_image_url": block.get("featured_image_url") or None,
+            "status": st,
+            "live": True,
+            "updated_at": (r.updated_at or r.created_at).isoformat() if (r.updated_at or r.created_at) else None,
+        })
+    total = len(posts)
+    return {"posts": posts[skip: skip + limit], "total": total, "skip": skip, "limit": limit}
+
+
 @router.post("/admin/dedupe-images", response_model=dict)
 async def dedupe_page_images(
     session: AsyncSession = Depends(get_session),

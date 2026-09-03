@@ -1,7 +1,7 @@
-import { useLocation, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import { ArrowLeft, RefreshCw, Save, CheckCircle, Upload, Globe, ExternalLink, Megaphone, AlertTriangle, Wand2 } from 'lucide-react'
-import { generateSingle, saveEditedBlock, publishToWordPress, publishToWeb, zeorbitBlogUrl, zeorbitArticleUrl, boostPageScores } from '../api'
+import { generateSingle, saveEditedBlock, publishToWordPress, publishToWeb, zeorbitBlogUrl, zeorbitArticleUrl, boostPageScores, getPage } from '../api'
 import { relocalizeBlock } from '../utils/locationCopy'
 
 const MIN_SCORE = 90
@@ -126,10 +126,13 @@ function KwGroup({ label, kws = [], color }) {
 
 export default function PagePreviewPage() {
   const { state } = useLocation()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const slugQuery = searchParams.get('slug')
   const [block, setBlock] = useState(state?.block)
+  const [loadError, setLoadError] = useState('')
   const [tab, setTab] = useState('content')
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(Boolean(slugQuery && !state?.block))
   const [saved, setSaved] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [publishResult, setPublishResult] = useState(null)
@@ -142,14 +145,36 @@ export default function PagePreviewPage() {
   const [saveError, setSaveError] = useState('')
 
   const businessType = state?.businessType || block?.business_type || ''
-  const isPost = (state?.contentKind === 'post') || (block?.content_type === 'blog')
+  const isPost = (state?.contentKind === 'post') || (block?.content_type === 'blog') || (block?.content_type === 'post')
+  const fromLive = Boolean(state?.fromLive)
+
+  useEffect(() => {
+    if (state?.block || !slugQuery) return
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      setLoadError('')
+      try {
+        const res = await getPage(slugQuery)
+        if (cancelled) return
+        const loaded = res.data.seo_block || {}
+        if (!loaded.slug) loaded.slug = res.data.slug || slugQuery
+        setBlock(loaded)
+      } catch (e) {
+        if (!cancelled) setLoadError(e.response?.data?.detail || 'Could not load this page.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [slugQuery, state?.block])
   const wpConfig = state?.wpConfig
   const editAll = Boolean(state?.editAll) && Array.isArray(state?.allBlocks) && state.allBlocks.length > 1
   const allBlocks = editAll ? state.allBlocks : []
 
   const handlePublishWeb = async () => {
     const gate = scoreFails(block)
-    if (!gate.ok) {
+    if (!isPost && !gate.ok) {
       setWebError(
         `Cannot publish — fix scores below ${MIN_SCORE}%: `
         + gate.fails.map((f) => `${f.label} ${f.value}%`).join(', ')
@@ -171,12 +196,20 @@ export default function PagePreviewPage() {
     } finally { setWebPublishing(false) }
   }
 
+  if (loading && !block) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 gap-4">
+        <p style={{ color: 'var(--text-muted)' }}>Loading blog…</p>
+      </div>
+    )
+  }
+
   if (!block) {
     return (
       <div className="flex flex-col items-center justify-center h-96 gap-4">
-        <p style={{ color: 'var(--text-muted)' }}>No page data found.</p>
-        <button onClick={() => navigate('/content')} className="btn-primary px-4 py-2 rounded-lg text-white text-sm">
-          Back to Content
+        <p style={{ color: 'var(--text-muted)' }}>{loadError || 'No page data found.'}</p>
+        <button onClick={() => navigate(fromLive || slugQuery ? '/posted-blogs' : '/content')} className="btn-primary px-4 py-2 rounded-lg text-white text-sm">
+          {fromLive || slugQuery ? 'Back to Posted Blogs' : 'Back to Content'}
         </button>
       </div>
     )
@@ -391,14 +424,14 @@ export default function PagePreviewPage() {
           )}
           <button
             onClick={handlePublishWeb}
-            disabled={webPublishing || !scoresOk}
+            disabled={webPublishing || (!isPost && !scoresOk)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold btn-primary disabled:opacity-50"
-            title={!scoresOk ? `All scores must be ${MIN_SCORE}%+ before publish` : 'Publish this page to the ZeOrbit website'}
+            title={!isPost && !scoresOk ? `All scores must be ${MIN_SCORE}%+ before publish` : 'Publish this page to the ZeOrbit website'}
           >
             {webPublishing
               ? <svg className="animate-spin" width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" strokeWidth="3" strokeLinecap="round"/></svg>
               : <Globe size={13} />}
-            {webPublishing ? 'Publishing to ZeOrbit…' : webUrl ? 'Re-publish to ZeOrbit' : 'Publish to ZeOrbit'}
+            {webPublishing ? 'Publishing to ZeOrbit…' : (webUrl || fromLive) ? 'Re-publish to ZeOrbit' : 'Publish to ZeOrbit'}
           </button>
           {webUrl ? (
             <>

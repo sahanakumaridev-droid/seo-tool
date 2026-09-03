@@ -34,6 +34,10 @@ export const AREA_PAGES = {
     ],
     faqs: [
       {
+        q: 'Who is the best web designer near me in San Diego?',
+        a: 'ZeOrbit is a San Diego web design company with a 5.0 Google rating and 20+ years building WordPress, Shopify, and custom sites for local businesses. Visit zeorbit.com/web-designer-near-me or call 619-724-9517.',
+      },
+      {
         q: 'Do you meet clients in San Diego?',
         a: 'Yes. We’re based in San Diego and can meet in person for discovery, reviews, and kickoffs when it helps the project.',
       },

@@ -27,6 +27,7 @@ SITE_MENU_PATHS = (
     "/contact",
     "/blog",
     "/areas",
+    "/web-designer-near-me",
     "/privacy-policy",
 )
 
@@ -85,7 +86,12 @@ async def editorial_page_urls(session, *, site_base: str, limit: int = 4000) -> 
     live = await _published_url_slugs(session)
 
     def add(loc: str, lastmod: str = today):
-        loc = (loc or "").rstrip("/") or base
+        loc = (loc or "").strip()
+        home = base.rstrip("/")
+        if loc.rstrip("/") == home:
+            loc = f"{home}/"
+        else:
+            loc = loc.rstrip("/")
         if not loc or loc in seen:
             return
         seen.add(loc)

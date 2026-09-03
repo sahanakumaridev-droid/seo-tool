@@ -1,0 +1,165 @@
+.zo-near-me-page {
+  background: #fafafa;
+}
+
+.zo-near-me-shell {
+  width: min(1120px, calc(100% - 2rem));
+  margin: 0 auto;
+}
+
+.zo-near-me-hero {
+  padding: clamp(3rem, 8vw, 5.5rem) 0 3rem;
+  background: linear-gradient(180deg, #fff 0%, #f5f5f7 100%);
+}
+
+.zo-near-me-hero h1 {
+  max-width: 16ch;
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  margin: 0.75rem 0 1rem;
+}
+
+.zo-near-me-lead {
+  max-width: 62ch;
+  font-size: 1.05rem;
+  line-height: 1.65;
+  color: #444;
+  margin: 0 0 1.5rem;
+}
+
+.zo-near-me-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem 1rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.zo-near-me-phone {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 600;
+  color: #0a0a0a;
+  text-decoration: none;
+}
+
+.zo-near-me-trust {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.65rem;
+  align-items: center;
+  font-size: 0.92rem;
+  color: #555;
+}
+
+.zo-near-me-trust a {
+  color: #0a0a0a;
+  font-weight: 600;
+}
+
+.zo-near-me-block {
+  padding: 3rem 0;
+}
+
+.zo-near-me-block h2 {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  letter-spacing: -0.02em;
+  margin: 0 0 1rem;
+}
+
+.zo-near-me-sub {
+  color: #555;
+  line-height: 1.6;
+  margin: 0 0 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.zo-near-me-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.zo-near-me-card {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  padding: 1.25rem;
+}
+
+.zo-near-me-card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.zo-near-me-card p {
+  margin: 0;
+  color: #555;
+  line-height: 1.55;
+  font-size: 0.95rem;
+}
+
+.zo-near-me-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+}
+
+.zo-near-me-tags li {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.9rem;
+}
+
+.zo-near-me-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: #0a0a0a;
+  text-decoration: none;
+}
+
+.zo-near-me-faq-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.zo-near-me-faq-item {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  padding: 0.25rem 1rem;
+}
+
+.zo-near-me-faq-item summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.85rem 0;
+}
+
+.zo-near-me-faq-item p {
+  margin: 0 0 1rem;
+  color: #555;
+  line-height: 1.6;
+}
+
+.zo-near-me-contact {
+  padding-bottom: 4rem;
+}
+
+@media (max-width: 640px) {
+  .zo-near-me-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

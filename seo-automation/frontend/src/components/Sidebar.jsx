@@ -3,6 +3,7 @@ import {
   LayoutDashboard, Search, Newspaper, TrendingUp, BarChart2,
   HelpCircle, Share2, Users, Shield,
   UserPlus, Target, ChevronDown, Megaphone, Activity, ScanSearch, Plug, Rocket, Globe2,
+  Trophy, Bot, Hand, LineChart, Rss,
 } from 'lucide-react'
 import Logo from './Logo'
 import useProjectInfo from '../hooks/useProjectInfo'
@@ -13,17 +14,22 @@ const CRM_NAV = [
 ]
 
 const SEO_NAV = [
+  { to: '/top3',       icon: Trophy,          label: 'Top 3 Engine' },
   { to: '/content',    icon: LayoutDashboard, label: 'SEO Content' },
   { to: '/keywords',   icon: Search,          label: 'Keyword Research' },
   { to: '/site-audit', icon: Target,          label: 'Site Audit' },
   { to: '/sitemaps',   icon: Globe2,          label: 'Sitemaps' },
+  { to: '/gsc',        icon: LineChart,       label: 'Search Console' },
   { to: '/rankings',   icon: TrendingUp,      label: 'Rankings' },
   { to: '/competitors',icon: Users,           label: 'Competitors' },
   { to: '/reports',    icon: BarChart2,       label: 'Reports' },
 ]
 
 const CONTENT_AUTOMATION_NAV = [
+  { to: '/posted-blogs', icon: Rss,            label: 'Posted Blogs' },
   { to: '/articles',    icon: Newspaper,       label: 'Articles' },
+  { to: '/index-automation', icon: Bot,            label: 'Index Automation' },
+  { to: '/daily-10',         icon: Hand,           label: 'Daily 10%' },
   { to: '/indexing',    icon: ScanSearch,      label: 'Search Indexing' },
   { to: '/social',      icon: Share2,          label: 'Social Media' },
   { to: '/google-ads',  icon: Megaphone,       label: 'Google Ads' },
