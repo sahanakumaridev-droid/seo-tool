@@ -2,6 +2,7 @@ import { Link, Navigate, useParams } from 'react-router-dom'
 import { ArrowRight, MapPin, Phone } from 'lucide-react'
 import RevampHeader from '../components/revamp/RevampHeader'
 import SiteFooter from '../components/SiteFooter'
+import SiteContactFinale from '../components/premium/SiteContactFinale'
 import SeoHead from '../components/SeoHead'
 import ContactForm from '../components/revamp/ContactForm'
 import { Reveal } from '../components/premium/Reveal'
@@ -102,6 +103,7 @@ function AreasHub() {
         </div>
       </section>
 
+      <SiteContactFinale />
       <SiteFooter />
     </div>
   )

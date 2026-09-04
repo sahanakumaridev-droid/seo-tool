@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Search } from 'lucide-react'
 import RevampHeader from '../components/revamp/RevampHeader'
 import SiteFooter from '../components/SiteFooter'
+import SiteContactFinale from '../components/premium/SiteContactFinale'
 import { listBlogPosts } from '../api'
 import { ZEORBIT_BLOG } from '../data/zeorbitBlog'
-import { isOffsiteBlogHref, toSiteBlogHref } from '../lib/blogUrls'
+import { blogArticleClickProps } from '../lib/blogUrls'
+import { visibleBlogPosts } from '../lib/blogListing'
 
 const STOCK_FALLBACKS = [
   'https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?auto=format&fit=crop&w=1400&q=80',
@@ -79,11 +81,7 @@ function PostImage({ src, alt, className = '' }) {
 }
 
 function postLinkProps(item) {
-  const href = toSiteBlogHref(item)
-  if (isOffsiteBlogHref(href)) {
-    return { href, target: '_blank', rel: 'noopener noreferrer' }
-  }
-  return { href }
+  return blogArticleClickProps(item)
 }
 
 export default function BlogPage() {
@@ -91,14 +89,19 @@ export default function BlogPage() {
   const [query, setQuery] = useState('')
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [total, setTotal] = useState(0)
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
-        const { data } = await listBlogPosts(0, 60)
-        const apiPosts = Array.isArray(data?.posts) ? data.posts : []
-        if (!cancelled) setPosts(apiPosts)
+        const { data } = await listBlogPosts(0, 80)
+        const apiPosts = visibleBlogPosts(Array.isArray(data?.posts) ? data.posts : [])
+        if (!cancelled) {
+          setPosts(apiPosts)
+          setTotal(Number(data?.total) || apiPosts.length)
+        }
       } catch {
         if (!cancelled) setPosts([])
       } finally {
@@ -107,6 +110,51 @@ export default function BlogPage() {
     })()
     return () => { cancelled = true }
   }, [])
+
+  useEffect(() => {
+    if (loading || loadingMore) return undefined
+    if (posts.length >= total && total > 0) return undefined
+
+    const onScroll = () => {
+      const nearBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 900
+      if (!nearBottom) return
+      setLoadingMore(true)
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [loading, loadingMore, posts.length, total])
+
+  useEffect(() => {
+    if (!loadingMore) return undefined
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data } = await listBlogPosts(posts.length, 80)
+        const next = visibleBlogPosts(Array.isArray(data?.posts) ? data.posts : [])
+        if (!cancelled) {
+          setPosts((prev) => {
+            const seen = new Set(prev.map((p) => p.id || p.slug || p.url))
+            const merged = [...prev]
+            next.forEach((p) => {
+              const key = p.id || p.slug || p.url
+              if (key && !seen.has(key)) {
+                seen.add(key)
+                merged.push(p)
+              }
+            })
+            return merged
+          })
+          setTotal(Number(data?.total) || total)
+        }
+      } catch {
+        /* keep what we have */
+      } finally {
+        if (!cancelled) setLoadingMore(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [loadingMore])
 
   const topics = useMemo(() => {
     const set = new Set(posts.map((p) => p.category).filter(Boolean))
@@ -259,11 +307,13 @@ export default function BlogPage() {
                   </a>
                 ))}
               </div>
+              {loadingMore ? <p className="zo-blog-empty">Loading older posts…</p> : null}
             </section>
           ) : null}
         </div>
       </main>
 
+      <SiteContactFinale />
       <SiteFooter />
     </div>
   )

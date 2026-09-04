@@ -43,7 +43,7 @@ export const SITE_CONTACT = {
     reviewsUrl: 'https://maps.app.goo.gl/teVefHUc3yycwkcA7',
     writeReviewUrl: 'https://search.google.com/local/writereview?placeid=ChIJpd4HFaVZ2YARFUApQxHkD30',
     rating: '5.0',
-    reviewCount: 28,
+    reviewCount: 41,
     businessName: 'ZeOrbit - Website Designer & Mobile App Development',
   },
 }

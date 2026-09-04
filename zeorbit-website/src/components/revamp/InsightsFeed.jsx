@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { listBlogPosts } from '../../api'
 import { ZEORBIT_BLOG_POSTS } from '../../data/zeorbitBlog'
-import { isOffsiteBlogHref, toSiteBlogHref } from '../../lib/blogUrls'
+import { blogArticleClickProps } from '../../lib/blogUrls'
+import { visibleBlogPosts } from '../../lib/blogListing'
 
 const FALLBACK_IMAGES = [
   '/from-zeorbit/blog/small-business-website-cost-in-san-diego.jpg',
@@ -82,8 +83,7 @@ function PostImage({ src, alt }) {
 }
 
 function PostCard({ item, index, featured = false, usedKeys }) {
-  const href = toSiteBlogHref(item)
-  const offsite = isOffsiteBlogHref(href)
+  const hrefProps = blogArticleClickProps(item)
   const image = resolveImage(item, index, usedKeys || new Set())
   const dateLabel = formatDate(item.published_at) || (item.source === 'fallback' ? 'Guide' : 'Live')
   const place = [item.city, item.state].filter(Boolean).join(', ')
@@ -91,8 +91,7 @@ function PostCard({ item, index, featured = false, usedKeys }) {
   return (
     <a
       className={`zo-blog-card${featured ? ' is-featured' : ''}`}
-      href={href}
-      {...(offsite ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+      {...hrefProps}
     >
       <div className="zo-blog-card-media">
         <PostImage src={image} alt="" />
@@ -141,9 +140,9 @@ export default function InsightsFeed({
           }
           return
         }
-        const { data } = await listBlogPosts(0, limit)
+        const { data } = await listBlogPosts(0, Math.max(limit + 24, 24))
         if (cancelled) return
-        const apiPosts = Array.isArray(data?.posts) ? data.posts : []
+        const apiPosts = visibleBlogPosts(Array.isArray(data?.posts) ? data.posts : []).slice(0, limit)
         setPosts(apiPosts.length ? apiPosts : (emptyUseFallback ? ZEORBIT_BLOG_POSTS.slice(0, limit) : []))
       } catch (err) {
         if (cancelled) return

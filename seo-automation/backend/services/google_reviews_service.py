@@ -10,7 +10,9 @@ from config import settings
 _PLACE_ID = "ChIJpd4HFaVZ2YARFUApQxHkD30"
 _PLACE_URL = f"https://places.googleapis.com/v1/places/{_PLACE_ID}"
 _FIELD_MASK = "id,displayName,rating,userRatingCount,googleMapsUri,reviews"
-_CACHE_TTL = 60 * 60 * 6  # 6 hours
+_CACHE_TTL = 60 * 30  # 30 minutes so Maps count catches up quickly
+# Google Maps listing currently shows 41; Places API userRatingCount often lags.
+_MAPS_REVIEW_FLOOR = 41
 
 _cache: dict[str, Any] = {"at": 0.0, "payload": None}
 
@@ -64,7 +66,7 @@ async def fetch_google_reviews() -> dict:
         "live": True,
         "name": ((data.get("displayName") or {}).get("text") or "ZeOrbit"),
         "rating": f"{float(rating):.1f}" if rating is not None else "5.0",
-        "reviewCount": int(data.get("userRatingCount") or 0),
+        "reviewCount": max(int(data.get("userRatingCount") or 0), _MAPS_REVIEW_FLOOR),
         "reviewsUrl": data.get("googleMapsUri")
         or "https://maps.app.goo.gl/teVefHUc3yycwkcA7",
         "placeId": _PLACE_ID,

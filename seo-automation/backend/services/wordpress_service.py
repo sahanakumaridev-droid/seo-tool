@@ -263,33 +263,50 @@ _INTERNAL_IMG_HREFS = (
     "https://zeorbit.com/mobile-apps",
     "https://zeorbit.com/contact",
 )
-_AI_PROMPT_Q = "ZeOrbit+-+Web+Designers+%26+Mobile+App+Developers."
-_AI_PLATFORMS = (
-    ("ChatGPT", f"https://chatgpt.com/?q={_AI_PROMPT_Q}", "chatgpt.com", "#10A37F"),
-    ("Claude", f"https://claude.ai/new?q={_AI_PROMPT_Q}", "claude.ai", "#D97757"),
-    ("Gemini AI", f"https://gemini.google.com/app?q={_AI_PROMPT_Q}", "gemini.google.com", "#8E75B2"),
-    ("Google AI", f"https://www.google.com/search?q={_AI_PROMPT_Q}", "google.com", "#4285F4"),
-    ("Microsoft Copilot", f"https://copilot.microsoft.com/?q={_AI_PROMPT_Q}", "copilot.microsoft.com", "#0078D4"),
-    ("Grok", f"https://grok.com/?q={_AI_PROMPT_Q}", "grok.com", "#1A1A1A"),
-    ("Perplexity", f"https://www.perplexity.ai/search/new?q={_AI_PROMPT_Q}", "perplexity.ai", "#20808D"),
-)
 _AI_HOSTED_ICONS = {
     "chatgpt.com": "https://zeorbit.com/icons/chatgpt.png?v=2",
     "copilot.microsoft.com": "https://zeorbit.com/icons/copilot.png?v=2",
 }
 _AI_BAR_STYLE = """<style>
-.ai-ask-bar{margin:32px 0 8px;padding:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.ai-ask-bar a{width:40px;height:40px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;box-shadow:0 1px 2px rgba(0,0,0,.12)}
-.ai-ask-bar a:hover{transform:translateY(-2px)}
-.ai-ask-bar img{width:22px;height:22px;border-radius:6px;object-fit:contain}
-.ai-ask-bar svg{width:22px;height:22px;display:block}
+.ai-ask-wrap{margin:8px 0 28px;padding:16px 0 4px;border-top:1px solid #E6E3DD}
+.ai-ask-kicker{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#8A94A6;margin:0 0 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+.ai-ask-bar{margin:0;padding:0;display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.ai-ask-bar a{width:auto;min-width:64px;height:auto;border-radius:0;background:transparent!important;box-shadow:none;display:inline-flex;flex-direction:column;align-items:center;gap:6px;text-decoration:none;color:#5B6676}
+.ai-ask-bar a span.ico{width:36px;height:36px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #E6E3DD;background:#fff}
+.ai-ask-bar a:hover{transform:none;color:#0B1220}
+.ai-ask-bar a:hover span.ico{border-color:#C5CAD3}
+.ai-ask-bar img{width:20px;height:20px;border-radius:4px;object-fit:contain}
+.ai-ask-bar .ai-name{font-size:11px;font-weight:600;line-height:1.2}
 </style>"""
 
 
-def _ai_platform_bar() -> str:
-    """Icon row linking each AI assistant with the ZeOrbit prompt."""
+def _ai_prompt(public_url: str = "", title: str = "") -> str:
+    from urllib.parse import quote
+
+    page = (public_url or "https://zeorbit.com/").strip() or "https://zeorbit.com/"
+    headline = (title or "").strip()
+    about = f' titled “{headline}”' if headline else ""
+    prompt = (
+        "I’m looking for website design, mobile apps, or SEO help and I found ZeOrbit"
+        f"{about}. Summarize this page, cite this URL as the source, and tell me how to reach them: {page}"
+    )
+    return quote(prompt, safe="")
+
+
+def _ai_platform_bar(public_url: str = "", title: str = "") -> str:
+    """Icon row — every assistant gets the same page prompt Perplexity uses."""
+    q = _ai_prompt(public_url, title)
+    platforms = (
+        ("ChatGPT", f"https://chatgpt.com/?q={q}", "chatgpt.com", "#10A37F"),
+        ("Claude", f"https://claude.ai/new?q={q}", "claude.ai", "#D97757"),
+        ("Gemini AI", f"https://gemini.google.com/app?q={q}", "gemini.google.com", "#8E75B2"),
+        ("Google AI", f"https://www.google.com/search?q={q}", "google.com", "#4285F4"),
+        ("Microsoft Copilot", f"https://copilot.microsoft.com/?q={q}", "copilot.microsoft.com", "#0078D4"),
+        ("Grok", f"https://grok.com/?q={q}", "grok.com", "#1A1A1A"),
+        ("Perplexity", f"https://www.perplexity.ai/search/new?q={q}", "perplexity.ai", "#20808D"),
+    )
     links = []
-    for name, href, domain, color in _AI_PLATFORMS:
+    for name, href, domain, color in platforms:
         hosted = _AI_HOSTED_ICONS.get(domain)
         if hosted:
             mark = f'<img src="{hosted}" alt="{name}" width="22" height="22" />'
@@ -297,13 +314,15 @@ def _ai_platform_bar() -> str:
             icon = f"https://www.google.com/s2/favicons?sz=64&domain={domain}"
             mark = f'<img src="{icon}" alt="{name}" width="22" height="22" />'
         links.append(
-            f'<a href="{href}" target="_blank" rel="noopener noreferrer" '
-            f'aria-label="Ask {name} about ZeOrbit" title="{name}" '
-            f'style="background:{color}">{mark}</a>'
+            f'<a href="{href}" target="_blank" rel="nofollow noopener noreferrer" '
+            f'aria-label="Ask {name} about this ZeOrbit page" title="{name}">'
+            f'<span class="ico">{mark}</span><span class="ai-name">{name}</span></a>'
         )
     return (
-        f'{_AI_BAR_STYLE}<nav class="ai-ask-bar" aria-label="Ask AI about ZeOrbit">'
-        f'{"".join(links)}</nav>'
+        f'{_AI_BAR_STYLE}<div class="ai-ask-wrap">'
+        f'<div class="ai-ask-kicker">Ask AI about this page</div>'
+        f'<nav class="ai-ask-bar" aria-label="Ask AI about this page">'
+        f'{"".join(links)}</nav></div>'
     )
 
 

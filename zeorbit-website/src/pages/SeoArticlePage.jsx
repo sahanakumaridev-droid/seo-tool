@@ -1,20 +1,12 @@
 import { useEffect, useState } from 'react'
-import { useParams, Navigate, Link } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import RevampHeader from '../components/revamp/RevampHeader'
 import SiteFooter from '../components/SiteFooter'
 import SeoHead from '../components/SeoHead'
-import ContactForm from '../components/revamp/ContactForm'
 import { getPublishedPage } from '../api'
 import { SITE_CONTACT } from '../data/revampContent'
 
 const LAYOUTS = ['qa', 'steps', 'story', 'cards', 'split', 'timeline']
-
-function unpublishedDest(slug) {
-  const s = String(slug || '')
-  let h = 0
-  for (let i = 0; i < s.length; i += 1) h = (h + s.charCodeAt(i)) % 2
-  return h === 0 ? '/' : '/contact'
-}
 
 const INSTRUCTION_MARKERS = [
   'focus each page on the specific',
@@ -440,7 +432,19 @@ export default function SeoArticlePage() {
   }, [slug])
 
   if (!loading && (error || !row)) {
-    return <Navigate to={unpublishedDest(slug)} replace />
+    return (
+      <div className="rv-page">
+        <RevampHeader />
+        <main className="rv-shell" style={{ padding: '72px 0 96px', maxWidth: 640 }}>
+          <h1 style={{ fontSize: 32, margin: '0 0 12px' }}>Article not found</h1>
+          <p style={{ margin: '0 0 20px', color: 'var(--text-2, #4b5563)' }}>
+            This blog URL is not live. Open the blog listing to continue reading.
+          </p>
+          <Link className="cz-btn-solid" to="/blog">Back to blog</Link>
+        </main>
+        <SiteFooter />
+      </div>
+    )
   }
 
   const block = row?.seo_block || {}
@@ -542,14 +546,6 @@ export default function SeoArticlePage() {
           )}
         </div>
       </main>
-
-      {!error && row ? (
-        <section className="zo-article-contact" id="contact">
-          <div className="rv-shell">
-            <ContactForm />
-          </div>
-        </section>
-      ) : null}
 
       <SiteFooter />
     </div>

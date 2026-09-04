@@ -428,15 +428,39 @@ def _strip_instruction_leak(text: str, brief: str = "") -> str:
     return "\n\n".join(keep)
 
 
+def _looks_like_template_filler(text: str) -> bool:
+    t = (text or "").lower()
+    hits = (
+        "treat the words in that search as the whole job",
+        "practical us-english guide",
+        "name the tool, browser, or product in the query",
+        "say what the reader should see on screen",
+        "do not switch the topic to an unrelated service",
+    )
+    if any(m in t for m in hits):
+        return True
+    if "common mix-ups" in t and "when to get help" in t and "what to do next" in t:
+        return True
+    return False
+
+
 def _looks_like_search_query(text: str) -> bool:
+    """True when the keyword is a question, comparison, or sentence — not a 2-word SEO phrase."""
     t = (text or "").strip()
     if not t:
         return False
     if "?" in t:
         return True
+    words = t.split()
+    if ":" in t and len(words) >= 5:
+        return True
+    if re.search(r"\b(or|vs\.?|versus|compared to|instead of)\b", t, re.I) and len(words) >= 5:
+        return True
+    if re.search(r"\b(what does|what do|do you need|really need|should i|should you)\b", t, re.I):
+        return True
     if re.match(r"^(how|what|why|when|which|who|where|should|is|are|can|do|does|will)\b", t, re.I):
         return True
-    return len(t.split()) >= 4
+    return len(words) >= 6
 
 
 def article_topic(brief: str, target_keywords: list, business_type: str) -> str:
@@ -1430,35 +1454,143 @@ def _blog_query_copy(primary: str) -> dict:
         ]
         return {"intro": intro, "content": content, "h2s": h2s, "faqs": faqs, "h3s": []}
 
+    if re.search(r"\b(outdated|old|legacy)\b.{0,40}\bwebsite\b|\bwebsite\b.{0,40}\b(outdated|old)\b", ql):
+        intro = (
+            "An outdated website is usually slow, hard to use on a phone, missing HTTPS, or still "
+            "selling last year’s offer. Fix the public-facing issues first (speed, mobile layout, "
+            "contact paths), then plan a redesign if the structure itself cannot keep up."
+        )
+        content = (
+            f"## Direct answer: {pretty}\n\n"
+            "Audit the live site this week: load it on a phone, check Core Web Vitals or a free speed test, "
+            "confirm forms submit, and see whether the design still matches the business. If visitors bounce "
+            "or you cannot edit pages without breaking them, you are stuck with an outdated site — not just "
+            "an old logo.\n\n"
+            "## Signs the site is holding you back\n\n"
+            "Slow load, tiny tap targets, Flash-era layouts, mixed HTTP/HTTPS warnings, broken plugins, "
+            "or copy that never mentions current services. Search listings that still show a former city "
+            "or phone number are another flag.\n\n"
+            "## What to do next (in order)\n\n"
+            "1. Backup hosting, files, and the database.\n"
+            "2. Update CMS, theme, and plugins on staging — not live.\n"
+            "3. Make the homepage and contact path mobile-friendly.\n"
+            "4. Redirect dead URLs (301), keep titles that already rank.\n"
+            "5. If the theme cannot be saved, plan a rebuild on WordPress or Shopify instead of stacking hacks.\n\n"
+            "## Redesign vs repair\n\n"
+            "Repair when the CMS is healthy and only plugins, SSL, or CSS are wrong. Redesign when the "
+            "information architecture, branding, and conversion paths all need to change. ZeOrbit typically "
+            "handles both — a repair is cheaper than a full site.\n\n"
+            "## Mistakes that make an old site worse\n\n"
+            "Editing live without a backup, changing domains mid-redesign, or launching a new theme that "
+            "drops indexed URLs. Do not hide the old site behind a coming-soon page if those URLs still rank.\n\n"
+            "## When to get a specialist\n\n"
+            "If DNS, SSL, or a custom theme is involved, get help. ZeOrbit can migrate, redesign, or "
+            "stabilize WordPress/Shopify so the next version is fast and easy to update."
+        )
+        h2s = [
+            f"Direct answer: {pretty}",
+            "Signs the site is holding you back",
+            "What to do next (in order)",
+            "Redesign vs repair",
+            "Mistakes that make an old site worse",
+            "When to get a specialist",
+        ]
+        faqs = [
+            FAQItem(question="How do I know my website is outdated?", answer="If it is slow on mobile, hard to edit, missing HTTPS, or no longer matches the business, it is outdated."),
+            FAQItem(question="Can I just update the theme?", answer="Sometimes. If the CMS and content are sound, a theme refresh is enough. If the structure is broken, rebuild."),
+            FAQItem(question="Will a redesign hurt my Google rankings?", answer="Not if you keep URLs, use 301s, and preserve titles. Dropping old slugs is what usually hurts."),
+            FAQItem(question="How long does a refresh take?", answer="A repair can be days. A full redesign is typically weeks, depending on pages and integrations."),
+            FAQItem(question="Should I move to a new platform?", answer="Move only if the current CMS cannot be maintained. WordPress and Shopify cover most small-business needs."),
+            FAQItem(question="What should I do this week?", answer="Backup, speed/mobile check, fix contact forms, then decide repair vs redesign with a specialist if you are unsure."),
+        ]
+        return {"intro": intro, "content": content, "h2s": h2s, "faqs": faqs, "h3s": []}
+
+    if re.search(r"\b(website|web site|web app).{0,40}\b(or|vs\.?|versus).{0,40}\b(app|mobile)\b", ql) or re.search(
+        r"\b(app|mobile).{0,40}\b(or|vs\.?|versus).{0,40}\b(website|web site)\b", ql
+    ):
+        intro = (
+            "Most businesses need a website first. Add a native mobile app only when customers must log in often, "
+            "use device features (camera, GPS, push), or when the product itself is an app. A brochure or lead-gen "
+            "business almost never needs both on day one."
+        )
+        content = (
+            f"## Direct answer: {pretty}\n\n"
+            "Choose a website if you need to be found on Google, explain services, collect inquiries, or sell "
+            "without an App Store listing. Choose a mobile app if the core product lives on the phone (repeat "
+            "orders, member dashboards, field tools, or real-time alerts). Many teams start with a mobile-friendly "
+            "website, then add an app once usage and budget justify it.\n\n"
+            "A “web app” (software in the browser) sits in the middle: it can feel like an app without App Store "
+            "reviews. That is often the right middle path before a native iOS/Android build.\n\n"
+            "## When a website is enough\n\n"
+            "Use a website when the job is trust, SEO, contact forms, booking, or e-commerce. Customers type a "
+            "URL or find you in search. You can update copy, photos, and offers without waiting on store approval. "
+            "Cost and time are usually lower than a native app.\n\n"
+            "## When a mobile app is the better fit\n\n"
+            "Build an app when users return weekly (or daily), need offline access, push notifications, or hardware "
+            "APIs. If the business model is the software — not a marketing site — the app is the product, not a "
+            "nice-to-have. Do not build an app only to “look modern.”\n\n"
+            "## How to decide for your business\n\n"
+            "1. Write the one job the customer must complete (call, book, buy, log a visit, track a job).\n"
+            "2. Ask whether that job requires the phone’s unique features. If not, start with the website.\n"
+            "3. Check budget: a solid small-business site is typically in a lower range than a native app pair.\n"
+            "4. Plan a path: site now, PWA or native later if retention data supports it.\n\n"
+            "## Mistakes that waste money\n\n"
+            "Shipping an empty app that only wraps the website, skipping a mobile-friendly site, or delaying "
+            "launch for “both at once” are the usual traps. Search engines still send most new customers to a "
+            "website, not an App Store listing.\n\n"
+            "## A practical next step\n\n"
+            "If you are still unsure, start with a fast, mobile-friendly website that answers the customer’s "
+            "question and captures leads. ZeOrbit can map website vs app vs web app against your audience and "
+            "budget so you do not pay for the wrong build."
+        )
+        h2s = [
+            f"Direct answer: {pretty}",
+            "When a website is enough",
+            "When a mobile app is the better fit",
+            "How to decide for your business",
+            "Mistakes that waste money",
+            "A practical next step",
+        ]
+        faqs = [
+            FAQItem(question="Do I need both a website and an app?", answer="Usually no. Start with a website unless the product is the app or users need device features daily."),
+            FAQItem(question="Can a mobile-friendly website replace an app?", answer="For marketing, booking, and many portals, yes. Native apps win on push, offline, and heavy repeat use."),
+            FAQItem(question="What is a web app?", answer="Software that runs in the browser. It can feel like an app without App Store installs."),
+            FAQItem(question="Which is cheaper?", answer="A marketing website is typically cheaper and faster than native iOS plus Android."),
+            FAQItem(question="Will Google rank my app?", answer="Search still favors websites. Apps are found mainly in stores and from people who already know you."),
+            FAQItem(question="What should I do first?", answer="Ship a clear website that answers the customer’s question, then add an app only if usage data supports it."),
+        ]
+        return {"intro": intro, "content": content, "h2s": h2s, "faqs": faqs, "h3s": []}
+
     # Q&A / other topics — still answer the query, not web-design filler
     intro = (
-        f"You searched “{q}”. This post answers that in direct language, then explains what to check "
-        "and what to skip."
+        f"Here is a straight answer to “{q}”. Use the checks below so you can act on it, "
+        "not a generic agency template."
     )
     content = (
         f"## Direct answer: {pretty}\n\n"
-        f"The practical answer to “{q}” is to treat the words in that search as the whole job. "
-        f"If the query is about {task}, explain {task}, show how to verify it, and do not switch the topic "
-        "to an unrelated service.\n\n"
-        f"## What “{task}” involves\n\n"
-        "Name the tool, browser, or product in the query. Say what the reader should see on screen. "
-        "Give one way to confirm they are done. Keep examples inside that topic.\n\n"
-        "## What to do next\n\n"
-        "1. Restate the question in your own words.\n"
-        "2. Do the smallest action that would prove the answer (open the app, load the page, toggle the setting).\n"
-        "3. If it fails, change one thing and retry.\n\n"
-        "## Common mix-ups\n\n"
-        "Swapping in a different product, following an ad instead of the official site, or stopping at a login wall "
-        "are the usual reasons this still feels unsolved.\n\n"
+        f"People type “{q}” when they need a decision or a fix, not a sales page. "
+        f"Start with {task}: say what success looks like, what to compare, and what to ignore. "
+        "Keep every section on that topic — examples should match the words in the query.\n\n"
+        f"## What {task} actually involves\n\n"
+        f"Break “{q}” into the real-world pieces: who it is for, what tool or channel it uses, "
+        "and the one outcome that would prove you are done. If the query is about a website, talk websites. "
+        "If it is about an account, a setting, or a product, stay there.\n\n"
+        "## A working sequence\n\n"
+        "1. Restate the question in one sentence.\n"
+        "2. Do the smallest test that would prove the answer.\n"
+        "3. If it fails, change one variable and retry.\n\n"
+        "## Mistakes that send you off-topic\n\n"
+        "Following a random ad, mixing up similar products, or rewriting the article as “web design in [city]” "
+        "when that is not the query. Stay on the sentence someone typed.\n\n"
         "## When to get help\n\n"
-        "If the official page will not load, or you are changing a live website rather than an account setting, "
-        "get a specialist. ZeOrbit helps with websites — not with replacing the answer to this query."
+        "Get a specialist if you are changing a live website, DNS, or a paid account you cannot restore. "
+        "ZeOrbit can help when the next step is a site or app build — after you have a clear answer to this query."
     )
     h2s = [
         f"Direct answer: {pretty}",
-        f"What “{task}” involves",
-        "What to do next",
-        "Common mix-ups",
+        f"What {task} actually involves",
+        "A working sequence",
+        "Mistakes that send you off-topic",
         "When to get help",
     ]
     faqs = [
@@ -1522,6 +1654,8 @@ async def generate_seo_block(
     zip: str = "",
     image_keyword: str = "",
 ) -> SEOBlock:
+    if not llm_provider:
+        llm_provider = "gemini"
     from services.image_service import resolve_campaign_niche
     from services.zeorbit_local_seo import (
         pick_search_intent,
@@ -1550,7 +1684,10 @@ async def generate_seo_block(
     # Blog section only: always use the query/keyword article path (never location-page engine).
     kind = "blog" if requested_kind == "blog" else "service"
     content_type_out = "blog" if requested_kind == "blog" else "service"
-    if kind != "blog" and (city or "").strip():
+    early_query = requested_kind == "blog" or any(
+        _looks_like_search_query(str(k)) for k in (target_keywords or []) if k
+    )
+    if kind != "blog" and not early_query and (city or "").strip():
         from services.location_service import lookup_place_zip
         from services.zeorbit_local_seo import digits_zip
         zip = digits_zip(zip) or await lookup_place_zip(city, state, zip)
@@ -1586,20 +1723,25 @@ async def generate_seo_block(
                 if i.id == forced:
                     intent = i
                     break
+    clean_kws = [
+        k for k in (target_keywords or [])
+        if k and not _looks_like_writing_brief(str(k))
+    ]
+    sentence_kw = any(_looks_like_search_query(str(k)) for k in clean_kws) or _looks_like_search_query(
+        extract_brief_topic(custom_requirements, target_keywords, business_type)
+    )
     primary_kw = (
         article_topic(custom_requirements, target_keywords, business_type)
-        if requested_kind == "blog"
+        if requested_kind == "blog" or sentence_kw
         else pick_primary_keyword(
-            [
-                k for k in (target_keywords or [])
-                if k and not _looks_like_writing_brief(str(k))
-            ] or [extract_brief_topic(custom_requirements, target_keywords, business_type)],
+            clean_kws or [extract_brief_topic(custom_requirements, target_keywords, business_type)],
             business_type, city, keyword_index, industry=industry or "",
         )
     )
-    if requested_kind != "blog":
+    if requested_kind != "blog" and not _looks_like_search_query(primary_kw):
         primary_kw = strip_generic_industry_prefix(primary_kw)
-    if kind == "blog":
+    query_mode = kind == "blog" or _looks_like_search_query(primary_kw)
+    if query_mode:
         layout = blog_layout_for_query(primary_kw, custom_requirements or "")
     else:
         layout = pick_layout_variant(city, f"{primary_kw or business_type}|{(intent.id if intent else '')}", kind)
@@ -1627,12 +1769,18 @@ async def generate_seo_block(
     else:
         block = await _generate_template_block(**gen_kwargs)
 
-    if kind == "blog" and len((block.content or "").split()) < 80:
-        print("[SEO] Blog body too thin — using query-shaped template")
-        block = await _generate_template_block(**gen_kwargs)
+    if query_mode and (
+        len((block.content or "").split()) < 80 or _looks_like_template_filler(f"{block.intro} {block.content}")
+    ):
+        print("[SEO] Query body thin or template-like — retry Gemini then topic-shaped template")
+        try:
+            gen_kwargs["llm_provider"] = "gemini"
+            block = await _generate_ai_block(llm_provider="gemini", **{k: v for k, v in gen_kwargs.items() if k != "llm_provider"})
+        except Exception:
+            block = await _generate_template_block(**gen_kwargs)
 
     # Soft uniqueness retry for location pages that are near-duplicates.
-    if kind != "blog" and existing_bodies and is_too_similar(
+    if kind != "blog" and not query_mode and existing_bodies and is_too_similar(
         f"{block.intro}\n{block.content}", existing_bodies
     ):
         print(f"[SEO] Duplicate risk for {city} — regenerating with shifted intent")
@@ -2076,15 +2224,16 @@ async def _generate_ai_block(
     primary_kw = (primary_keyword or pick_primary_keyword(
         target_keywords, business_type, city, keyword_index, industry=industry or "",
     )).strip()
+    query_mode = content_kind == "blog" or _looks_like_search_query(primary_kw)
     layout = layout_variant if layout_variant in LAYOUT_INSTRUCTIONS else (
-        blog_layout_for_query(primary_kw, brief) if content_kind == "blog"
+        blog_layout_for_query(primary_kw, brief) if query_mode
         else pick_layout_variant(city, business_type, content_kind)
     )
     layout_note = LAYOUT_INSTRUCTIONS[layout]
     provider_key = (llm_provider or "").lower().strip()
     provider_note = PROVIDER_STYLE_NOTES.get(provider_key, "Write at the quality level of ChatGPT, Claude, or Gemini — specific and human.")
 
-    if content_kind == "blog":
+    if query_mode:
         from services.zeorbit_local_seo import master_voice_rules
         # BLOG-ONLY RULE: the editor's keyword/query is the article subject.
         topic = (article_topic(brief, target_keywords, business_type) or primary_kw or "").strip()
@@ -2120,18 +2269,21 @@ async def _generate_ai_block(
                 "(Editor style notes — follow these as writing guidance ONLY; "
                 "do NOT quote or paste them into the article.)\n" + brief
             )
-        prompt = f"""You are a US content writer creating ONE blog post for ZeOrbit.com.
+        surface = "blog post" if content_kind == "blog" else "page"
+        prompt = f"""You are a US content writer creating ONE {surface} for ZeOrbit.com.
 Model style: {provider_note}
 
-═══ BLOG QUERY RULE (blog section only — mandatory) ═══
-The editor's search query / keyword is the ONLY subject of this article:
+═══ QUERY ANSWER RULE (blogs AND pages — mandatory) ═══
+The editor's search query / keyword is the ONLY subject of this {surface}:
 SEARCH QUERY: "{topic}"
 
 - Title, H1, intro, every H2, body paragraphs, and FAQs MUST directly answer or teach that query.
+- If the query is "Website or Mobile App: What Does Your Business Really Need?", write a real comparison and decision guide — not a "practical US-English guide to…" template and not generic web design in a city.
 - If the query is "how to fix a website", write a practical fix guide (diagnose → fix → verify) — not generic web design sales copy.
 - If the query is a full sentence or question, that sentence IS the article. Answer it in the intro, every H2, the body, and the FAQs. Do not change the topic to web design, ZeOrbit services, or a city landing page unless the sentence itself is about that.
+- Sections, examples, and recommendations must be unique to THIS query. Never reuse the same body skeleton as other posts.
 - If the query is a problem ("broken website", "site not loading"), diagnose and solve that problem.
-- Niche / industry may color EXAMPLES only — they must NOT replace the query as the topic.
+- Niche / industry / location may color EXAMPLES only — they must NOT replace the query as the topic.
 - Do NOT write a location landing page, city SEO page, or "web design in San Diego" article unless the query itself is that.
 
 Custom notes from the editor (guidance only — NEVER paste into the published body):
@@ -2277,7 +2429,22 @@ Customer problem to keep central: {customer_problem or intent.customer_problem}
 
 Return ONLY valid JSON, no markdown fences."""
 
-    data = await chat_json(prompt, temperature=0.72 if content_kind == "blog" else 0.78, max_tokens=4500, provider=llm_provider)
+    data = None
+    from services.llm_service import available_providers
+    have = available_providers()
+    try_order = []
+    if llm_provider:
+        try_order.append((llm_provider or "").lower().strip())
+    if have.get("gemini") and "gemini" not in try_order:
+        try_order.insert(0, "gemini")
+    if not try_order:
+        try_order = [None]
+    for prov in try_order:
+        data = await chat_json(prompt, temperature=0.72 if content_kind == "blog" else 0.78, max_tokens=4500, provider=prov)
+        blob = f"{data.get('intro','') if data else ''} {data.get('content','') if data else ''} {' '.join(data.get('h2s') or []) if data else ''}"
+        if data and not _looks_like_template_filler(blob):
+            break
+        data = None
     if not data:
         raise RuntimeError("LLM generation failed or returned no data")
     bt = business_type.title()
@@ -2289,8 +2456,8 @@ Return ONLY valid JSON, no markdown fences."""
             faqs.append(FAQItem(question=_as_text(f.get("question")), answer=_as_text(f.get("answer"))))
     schema = _build_schema(bt, city, state, faqs)
 
-    # Pages: lock SEO title + H1 to intent-varied pattern (do not trust LLM drift).
-    if content_kind == "blog":
+    # Query-mode (sentence keywords): keep the LLM title/H1. Location pages: lock SEO title.
+    if content_kind == "blog" or query_mode:
         title = _as_text(data.get("title")) or pretty_keyword(primary_kw)[:60]
         h1 = _as_text(data.get("h1")) or pretty_keyword(primary_kw)
         search_intent_id = ""
@@ -2313,15 +2480,15 @@ Return ONLY valid JSON, no markdown fences."""
         image_concept_out = image_concept_text or ""
     meta = _strip_instruction_leak(_as_text(data.get("meta_description")), brief)
     h2s = [_as_text(h) for h in (data.get("h2s") or []) if _as_text(h)]
-    if content_kind == "blog" and len(h2s) < 3:
+    if (content_kind == "blog" or query_mode) and len(h2s) < 3:
         pretty_h = pretty_keyword(primary_kw)
         h2s = [
             f"Direct answer: {pretty_h}",
-            f"What “{primary_kw}” is really asking",
-            "How to act on this answer",
-            "Mistakes to avoid",
+            "What this actually means in practice",
+            "How to decide what to do next",
+            "Mistakes that waste time or money",
         ]
-    if content_kind != "blog" and len(h2s) < 3:
+    if content_kind != "blog" and not query_mode and len(h2s) < 3:
         from services.zeorbit_local_seo import pick_search_intent, SEARCH_INTENTS, intent_h2_set
         intent_obj = pick_search_intent(city, keyword_index, industry=industry or "", brief=brief, keywords=target_keywords or [])
         if search_intent:
@@ -2390,7 +2557,8 @@ async def _generate_template_block(
     **_kwargs,
 ) -> SEOBlock:
     brief = (custom_requirements or "").strip()
-    if content_kind == "blog":
+    _pk = (primary_keyword or "").strip()
+    if content_kind == "blog" or _looks_like_search_query(_pk):
         topic = article_topic(brief, target_keywords, business_type)
         primary = (primary_keyword or topic).strip()
         slug = _slugify(primary)
@@ -2571,12 +2739,14 @@ async def _generate_template_block(
         seo_score = _seo_score(intro + " " + content, title, "", h2s, faqs, primary, city or "", slug, h1=h1)
         return SEOBlock(
             city=city, state=state, business_type=business_type.title(), industry=industry,
-            slug=slug, title=title, meta_description=f"A practical US-English guide to {primary.lower()}. Clear steps, fewer mistakes, and a next step if you need help.",
+            slug=slug, title=title, meta_description=(
+                f"Answer: {pretty_keyword(primary)[:110]}. Practical decision points, examples, and a clear next step — not generic filler."
+            )[:160],
             h1=h1, h2s=h2s, h3s=h3s, intro=intro, content=content, faqs=faqs,
             cta="Not sure where to start? ZeOrbit is here to help you turn this into a working plan.",
             keywords=kw, schema_markup=schema, readability_score=seo_score,
             keyword_density=_keyword_density(intro + " " + content, primary),
-            content_type="blog",
+            content_type="blog" if content_kind == "blog" else "service",
             focus_keyword=primary.lower(),
         )
 

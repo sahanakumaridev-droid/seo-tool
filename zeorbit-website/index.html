@@ -98,7 +98,7 @@
       "aggregateRating": {
         "@type": "AggregateRating",
         "ratingValue": 5,
-        "reviewCount": 28,
+        "reviewCount": 41,
         "bestRating": 5,
         "worstRating": 1
       },
@@ -138,6 +138,22 @@
         events.forEach(function (name) { window.addEventListener(name, onFirstInput, { once: true, passive: true }); });
         setTimeout(loadMarketing, 12000);
       });
+    </script>
+    <style id="zo-hide-ask-ai-rail">.zo-ask-ai-rail,.ai-rail{display:none!important}</style>
+    <script>
+      (function () {
+        function killAskAiRail() {
+          document.querySelectorAll('.zo-ask-ai-rail,.ai-rail').forEach(function (el) { el.remove(); });
+        }
+        killAskAiRail();
+        document.addEventListener('DOMContentLoaded', killAskAiRail);
+        var obs = new MutationObserver(killAskAiRail);
+        obs.observe(document.documentElement, { childList: true, subtree: true });
+        window.addEventListener('load', function () {
+          killAskAiRail();
+          setTimeout(function () { obs.disconnect(); }, 8000);
+        });
+      })();
     </script>
   </head>
   <body>

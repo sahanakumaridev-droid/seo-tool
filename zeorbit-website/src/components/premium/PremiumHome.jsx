@@ -28,11 +28,10 @@ import {
 } from 'lucide-react'
 import RevampHeader from '../revamp/RevampHeader'
 import SiteFooter from '../SiteFooter'
-import { Reveal } from './Reveal'
+import { Reveal, WhenVisible } from './Reveal'
 import SeoOrbit from './SeoOrbit'
 import { useHashScroll } from '../../hooks/useHashScroll'
 import {
-  FINAL_CTA,
   HERO,
   INDUSTRIES,
   PORTFOLIO,
@@ -40,8 +39,8 @@ import {
 } from '../../data/premiumHome'
 import { SITE_CONTACT } from '../../data/revampContent'
 
-const ContactForm = lazy(() => import('../revamp/ContactForm'))
 const PremiumGoogleReviews = lazy(() => import('./PremiumGoogleReviews'))
+const SiteContactFinale = lazy(() => import('./SiteContactFinale'))
 
 const INDUSTRY_ICONS = {
   UtensilsCrossed,
@@ -109,37 +108,6 @@ function useDeferredMotion(enabled, delayMs = 2800) {
   }, [enabled, delayMs])
 
   return go
-}
-
-function WhenVisible({ children, rootMargin = '480px', minHeight }) {
-  const ref = useRef(null)
-  const [show, setShow] = useState(false)
-
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return undefined
-    if (typeof IntersectionObserver === 'undefined') {
-      setShow(true)
-      return undefined
-    }
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setShow(true)
-          io.disconnect()
-        }
-      },
-      { rootMargin },
-    )
-    io.observe(el)
-    return () => io.disconnect()
-  }, [rootMargin])
-
-  return (
-    <div ref={ref} style={minHeight && !show ? { minHeight } : undefined}>
-      {show ? children : null}
-    </div>
-  )
 }
 
 function useAutoPlayVideo(enabled) {
@@ -362,57 +330,6 @@ function IndustriesExplorer() {
   )
 }
 
-function FinaleMaps() {
-  const maps = [
-    {
-      key: 'sanDiego',
-      title: 'San Diego HQ',
-      lines: [SITE_CONTACT.address.line1, SITE_CONTACT.address.line2],
-      mapsUrl: SITE_CONTACT.address.mapsUrl,
-      embed: SITE_CONTACT.address.streetEmbed,
-    },
-    {
-      key: 'elCajon',
-      title: SITE_CONTACT.offices[0].label,
-      lines: SITE_CONTACT.offices[0].lines,
-      mapsUrl: SITE_CONTACT.offices[0].mapsUrl,
-      embed: SITE_CONTACT.offices[0].streetEmbed,
-    },
-  ]
-
-  return (
-    <div className="cz-finale-maps" aria-label="Office locations">
-      {maps.map((map) => (
-        <article key={map.key} className="cz-finale-map-card">
-          <WhenVisible rootMargin="240px" minHeight={180}>
-            <div className="cz-finale-map-stage">
-              <iframe
-                className="cz-finale-map-iframe"
-                title={`${map.title} map`}
-                src={map.embed}
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                tabIndex={-1}
-              />
-            </div>
-          </WhenVisible>
-          <div className="cz-finale-map-pin">
-            <a className="cz-finale-map-callout" href={map.mapsUrl} target="_blank" rel="noreferrer">
-              <strong>{map.title}</strong>
-              {map.lines.map((line) => (
-                <span key={line}>{line}</span>
-              ))}
-            </a>
-            <span className="cz-finale-map-marker" aria-hidden="true">
-              <MapPin size={14} strokeWidth={2.6} />
-            </span>
-          </div>
-        </article>
-      ))}
-    </div>
-  )
-}
-
 export default function PremiumHome() {
   const preferHeroVideo = usePreferMotionVideo({ allowNarrow: true })
   useHashScroll()
@@ -541,34 +458,11 @@ export default function PremiumHome() {
         </Suspense>
       </WhenVisible>
 
-      {/* 9. CONTACT — inquiry form on the home screen */}
-      <section className="cz-finale" aria-label="Contact">
-        <div className="cz-finale-inner">
-          <div className="cz-finale-left">
-            <Reveal className="cz-finale-copy">
-              <h2>{FINAL_CTA.headline}</h2>
-              <p className="cz-whisper is-light">{FINAL_CTA.line}</p>
-              <a className="cz-finale-quick" href={`tel:${SITE_CONTACT.phoneTel}`}>
-                <Phone size={16} strokeWidth={2.2} />
-                Prefer to talk? {SITE_CONTACT.phone}
-              </a>
-            </Reveal>
-            <FinaleMaps />
-          </div>
-
-          <div id="contact" className="cz-finale-form-card">
-            <div className="cz-finale-form-head">
-              <p>Project inquiry</p>
-              <h3>Send a short brief</h3>
-            </div>
-            <WhenVisible minHeight={360}>
-              <Suspense fallback={null}>
-                <ContactForm hideIntro submitLabel="Send message" variant="contactPage" />
-              </Suspense>
-            </WhenVisible>
-          </div>
-        </div>
-      </section>
+      <WhenVisible minHeight={520}>
+        <Suspense fallback={null}>
+          <SiteContactFinale />
+        </Suspense>
+      </WhenVisible>
 
       <SiteFooter />
     </div>

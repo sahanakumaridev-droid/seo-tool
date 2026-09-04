@@ -33,7 +33,7 @@ def active_provider() -> Optional[str]:
     }
     if pref in have:
         return pref if have[pref] else None
-    for p in ("groq", "gemini", "openai", "anthropic"):  # auto order: free first
+    for p in ("gemini", "groq", "openai", "anthropic"):  # Gemini first for query-relevant copy
         if have[p]:
             return p
     return None

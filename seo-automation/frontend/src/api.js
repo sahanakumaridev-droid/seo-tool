@@ -259,6 +259,9 @@ export const refreshSeoIndexing = (id) =>
 export const inspectSeoIndexingUrl = (data) =>
   api.post('/seo-indexing/inspect', data)
 
+export const requestSeoIndex = (data) =>
+  api.post('/seo-indexing/request-index', data)
+
 export const notifyBingIndexing = () =>
   api.post('/seo-indexing/notify-bing', null, { timeout: 60000 })
 

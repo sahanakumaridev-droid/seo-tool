@@ -266,6 +266,19 @@ async def inspect_url(req: InspectUrlRequest, session: AsyncSession = Depends(ge
     }
 
 
+@router.post("/request-index")
+async def request_index(req: InspectUrlRequest, session: AsyncSession = Depends(get_session)):
+    """Add a URL, inspect Google coverage, and ping IndexNow (Bing/Yahoo)."""
+    inspected = await inspect_url(req, session)
+    live = (inspected.get("url") or {}).get("url") or req.url
+    ping = {"ok": False, "detail": "skipped"}
+    try:
+        ping = indexnow_service.submit_urls([live])
+    except Exception as e:
+        ping = {"ok": False, "detail": str(e)}
+    return {**inspected, "indexnow": ping}
+
+
 @router.post("/refresh")
 async def refresh_status(id: Optional[int] = None, session: AsyncSession = Depends(get_session)):
     """Re-run free crawl checks (+ GSC inspect when configured)."""

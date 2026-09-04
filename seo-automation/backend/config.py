@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-1.5-flash"
     # Which provider to prefer: auto | groq | gemini | openai
-    LLM_PROVIDER: str = "auto"
+    LLM_PROVIDER: str = "gemini"
     
     # ── WordPress integration ────────────────────────────────────
     WP_URL: str = ""

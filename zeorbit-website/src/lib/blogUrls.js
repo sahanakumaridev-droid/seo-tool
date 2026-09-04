@@ -35,3 +35,29 @@ export function isOffsiteBlogHref(href) {
     return false
   }
 }
+
+/** Force a real document load so nginx serves the published article, not the SPA contact shell. */
+export function blogArticleClickProps(item) {
+  const href = toSiteBlogHref(item)
+  if (isOffsiteBlogHref(href)) {
+    return { href, target: '_blank', rel: 'noopener noreferrer' }
+  }
+  const go = (event) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    const path = href.startsWith('/') ? href : `/${href}`
+    const here = window.location.pathname.replace(/\/$/, '') || '/'
+    const there = path.replace(/\/$/, '') || '/'
+    if (here === there) {
+      window.location.reload()
+      return
+    }
+    window.location.href = `${window.location.origin}${path}`
+  }
+  return {
+    href,
+    onClickCapture: go,
+    onClick: go,
+  }
+}

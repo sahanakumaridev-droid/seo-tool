@@ -87,3 +87,35 @@ export function useScrollProgress() {
 
   return [ref, progress]
 }
+
+/** Load heavy embeds/forms only when they approach the viewport. */
+export function WhenVisible({ children, rootMargin = '480px', minHeight }) {
+  const ref = useRef(null)
+  const [show, setShow] = useState(false)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return undefined
+    if (typeof IntersectionObserver === 'undefined') {
+      setShow(true)
+      return undefined
+    }
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setShow(true)
+          io.disconnect()
+        }
+      },
+      { rootMargin },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [rootMargin])
+
+  return (
+    <div ref={ref} style={minHeight && !show ? { minHeight } : undefined}>
+      {show ? children : null}
+    </div>
+  )
+}

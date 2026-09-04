@@ -92,7 +92,7 @@ export default function PremiumGoogleReviews() {
         setProfile((prev) => ({
           ...prev,
           rating: data.rating || prev.rating,
-          reviewCount: data.reviewCount || prev.reviewCount,
+          reviewCount: Math.max(Number(data.reviewCount) || 0, prev.reviewCount),
           reviewsUrl: data.reviewsUrl || prev.reviewsUrl,
           name: data.name || prev.name,
         }))
@@ -171,12 +171,12 @@ export default function PremiumGoogleReviews() {
               href={profile.reviewsUrl}
               target="_blank"
               rel="noreferrer"
-              aria-label={`${profile.rating} on Google`}
+              aria-label={`${profile.rating} from ${profile.reviewCount} Google reviews`}
             >
               <GoogleMark size={18} />
               <strong>{profile.rating}</strong>
               <Stars size={16} />
-              <span>on Google</span>
+              <span>{profile.reviewCount} Google reviews</span>
             </a>
           </div>
           <div className="cz-gr-head-side">

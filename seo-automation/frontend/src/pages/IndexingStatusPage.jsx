@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { ScanSearch, RefreshCw, ExternalLink, CheckCircle2, AlertTriangle, Clock, XCircle, HelpCircle, Rocket } from 'lucide-react'
-import { getSeoIndexingStatus, getSeoIndexingSetup, pushAllSeoIndexing, refreshSeoIndexing, inspectSeoIndexingUrl, notifyBingIndexing } from '../api'
+import { getSeoIndexingStatus, getSeoIndexingSetup, pushAllSeoIndexing, refreshSeoIndexing, notifyBingIndexing, requestSeoIndex } from '../api'
+
+const INDEXED = new Set(['indexed'])
 
 const STATUS_META = {
   published:              { label: 'Submitted',     color: 'var(--text-3)',  bg: 'var(--bg-raised)',   icon: Clock },
@@ -45,6 +47,9 @@ export default function IndexingStatusPage() {
   const [inspecting, setInspecting] = useState(false)
   const [inspectError, setInspectError] = useState('')
   const [error, setError] = useState('')
+  const [tab, setTab] = useState('not_indexed')
+  const [keyword, setKeyword] = useState('')
+  const [requesting, setRequesting] = useState('')
 
   const load = async () => {
     setLoading(true)
@@ -117,7 +122,7 @@ export default function IndexingStatusPage() {
     setInspectError('')
     setInspecting(true)
     try {
-      const res = await inspectSeoIndexingUrl({ url: inspectUrl.trim() })
+      const res = await requestSeoIndex({ url: inspectUrl.trim() })
       if (res.data?.url) {
         setRows(prev => {
           const next = prev.filter(r => r.url !== res.data.url.url)
@@ -125,21 +130,51 @@ export default function IndexingStatusPage() {
         })
         setMode(res.data.mode || mode)
         setInspectUrl('')
+        setPushNote(
+          res.data.indexnow?.ok
+            ? 'URL added, inspected, and sent to IndexNow (Bing / Yahoo). Google coverage is in the list below.'
+            : 'URL added and inspected. IndexNow ping may have failed — check Search Console.'
+        )
       }
     } catch (err) {
-      setInspectError(err.response?.data?.detail || 'Could not inspect URL.')
+      setInspectError(err.response?.data?.detail || 'Could not add / index this URL.')
     } finally {
       setInspecting(false)
     }
   }
 
+  const requestOne = async (url) => {
+    setRequesting(url)
+    setInspectError('')
+    try {
+      const res = await requestSeoIndex({ url })
+      if (res.data?.url) {
+        setRows(prev => prev.map(r => r.url === res.data.url.url ? res.data.url : r))
+      }
+    } catch (err) {
+      setInspectError(err.response?.data?.detail || 'Request indexing failed.')
+    } finally {
+      setRequesting('')
+    }
+  }
+
+  const q = keyword.trim().toLowerCase()
+  const indexedRows = rows.filter(r => INDEXED.has(r.status))
+  const notIndexedRows = rows.filter(r => !INDEXED.has(r.status))
+  const googleQuery = `${keyword.trim() || 'zeorbit'} site:zeorbit.com`
+  const googleHref = `https://www.google.com/search?q=${encodeURIComponent(googleQuery)}`
+  const visible = (tab === 'indexed' ? indexedRows : tab === 'not_indexed' ? notIndexedRows : rows).filter((r) => {
+    if (!q) return true
+    return `${r.title || ''} ${r.url || ''}`.toLowerCase().includes(q)
+  })
+
   return (
     <div className="space-y-6 fade-in">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="font-display" style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-1)' }}>Search Indexing</h1>
+          <h1 className="font-display" style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-1)' }}>Indexing</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--text-3)' }}>
-            Get published blogs into <strong>Google</strong>, <strong>Bing</strong>, and Yahoo (Yahoo uses Bing). Safari / iPhone search mostly uses Google + Bing.
+            Indexed vs not indexed on Google, keyword checks with <code>site:zeorbit.com</code>, then add any missing URL to request indexing.
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -313,30 +348,75 @@ export default function IndexingStatusPage() {
         </div>
       )}
 
+      <div className="grid grid-cols-2 gap-3">
+        <div className="card p-4">
+          <div className="text-2xl font-bold" style={{ color: 'var(--green)' }}>{indexedRows.length}</div>
+          <div className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>Indexed</div>
+        </div>
+        <div className="card p-4">
+          <div className="text-2xl font-bold" style={{ color: 'var(--amber)' }}>{notIndexedRows.length}</div>
+          <div className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>Not indexed</div>
+        </div>
+      </div>
+
+      <form onSubmit={(e) => { e.preventDefault(); window.open(googleHref, '_blank', 'noopener') }} className="card p-4 flex gap-3 items-end" style={{ flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--text-2)', marginBottom: 6 }}>
+            Keyword + Google <code>site:zeorbit.com</code>
+          </label>
+          <input
+            value={keyword}
+            onChange={e => setKeyword(e.target.value)}
+            placeholder="Real estate California"
+            style={{ width: '100%', padding: '10px 12px' }}
+          />
+        </div>
+        <a href={googleHref} target="_blank" rel="noreferrer" className="btn btn-primary flex items-center gap-2">
+          <ExternalLink size={14} /> Search Google
+        </a>
+      </form>
+
       <form onSubmit={handleInspect} className="card p-4 flex gap-3 items-end" style={{ flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 220 }}>
           <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--text-2)', marginBottom: 6 }}>
-            Inspect any public URL
+            Add a URL that is not indexed
           </label>
           <input
             type="url"
             required
             value={inspectUrl}
             onChange={e => setInspectUrl(e.target.value)}
-            placeholder="https://zeorbit.com/web-design-san-diego"
+            placeholder="https://zeorbit.com/your-page"
             style={{ width: '100%', padding: '10px 12px' }}
           />
         </div>
-        <button type="submit" disabled={inspecting || !inspectUrl.trim()} className="btn btn-secondary">
-          <ScanSearch size={14} /> {inspecting ? 'Checking…' : 'Inspect'}
+        <button type="submit" disabled={inspecting || !inspectUrl.trim()} className="btn btn-primary">
+          <ScanSearch size={14} /> {inspecting ? 'Submitting…' : 'Request indexing'}
         </button>
         {inspectError && <div className="alert alert-error" style={{ width: '100%', margin: 0 }}>⚠ {inspectError}</div>}
       </form>
 
+      <div className="flex gap-2 flex-wrap">
+        {[
+          { id: 'not_indexed', label: `Not indexed (${notIndexedRows.length})` },
+          { id: 'indexed', label: `Indexed (${indexedRows.length})` },
+          { id: 'all', label: `All (${rows.length})` },
+        ].map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className={tab === t.id ? 'btn btn-primary' : 'btn btn-secondary'}
+            onClick={() => setTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       <div className="card">
         {loading ? (
           <div className="flex items-center justify-center py-16 text-sm" style={{ color: 'var(--text-4)' }}>Loading...</div>
-        ) : rows.length === 0 ? (
+        ) : visible.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16" style={{ color: 'var(--text-4)' }}>
             <ScanSearch size={32} className="mb-3" style={{ opacity: 0.3 }} />
             <p className="text-sm">No URLs yet — click <strong>Push all to Google</strong> or publish via Articles.</p>
@@ -352,10 +432,11 @@ export default function IndexingStatusPage() {
                 <th>Noindex</th>
                 <th>Canonical</th>
                 <th>Last Checked</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(row => (
+              {visible.map(row => (
                 <tr key={row.id}>
                   <td>
                     <div style={{ fontWeight: 600, color: 'var(--text-1)' }}>{row.title || '—'}</div>
@@ -377,6 +458,18 @@ export default function IndexingStatusPage() {
                   <td>{row.canonical_ok ? '✓' : '—'}</td>
                   <td style={{ color: 'var(--text-4)', fontSize: 12 }}>
                     {row.last_inspected_at ? new Date(row.last_inspected_at).toLocaleString() : '—'}
+                  </td>
+                  <td>
+                    {!INDEXED.has(row.status) ? (
+                      <button
+                        type="button"
+                        className="btn btn-secondary text-xs"
+                        disabled={requesting === row.url}
+                        onClick={() => requestOne(row.url)}
+                      >
+                        {requesting === row.url ? '…' : 'Index'}
+                      </button>
+                    ) : null}
                   </td>
                 </tr>
               ))}

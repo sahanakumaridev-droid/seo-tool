@@ -14,6 +14,7 @@ server {
     index index.html;
     error_page 404 /404.html;
 
+    include /etc/nginx/snippets/zeorbit-geo-rewrite.conf;
     include /etc/nginx/snippets/zeorbit-security.conf;
     include /etc/nginx/snippets/zeorbit-geo-us.conf;
 
@@ -107,6 +108,13 @@ server {
     location = /404.html {
         add_header Cache-Control "no-store" always;
         add_header X-Robots-Tag "noindex, follow" always;
+    }
+
+    # Marketing routes must boot the SPA even when public/{route}/index.html
+    # exists as a crawler stub. Without this, /blog/ never loads React.
+    location ~ ^/(blog|contact|portfolio|mobile-apps|custom-software|seo-ppc|website-designing|web-designer-near-me|privacy-policy|areas)(/.*)?$ {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+        try_files /index.html =404;
     }
 
     # Unique static HTML in public/{route}/index.html. Unknown URLs must 404

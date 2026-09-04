@@ -88,6 +88,54 @@ def _is_blog_block(block: dict) -> bool:
     return (block.get("content_type") or "service").lower() in ("blog", "post")
 
 
+_HIDDEN_BLOG_SLUGS = {
+    "restaurants-website-redesign-downtown",
+    "restaurants-custom-website-design-san-diego",
+}
+
+_MARKETING_SLUGS = {
+    "blog",
+    "contact",
+    "portfolio",
+    "mobile-apps",
+    "custom-software",
+    "seo-ppc",
+    "website-designing",
+    "web-designer-near-me",
+    "privacy-policy",
+    "privacy",
+    "areas",
+    "revamp-preview",
+    "us-only",
+    "business-directories",
+    "llms.txt",
+}
+
+
+def _is_site_chrome_listing(slug: str = "", path: str = "", title: str = "") -> bool:
+    """Hide marketing/area pages from the public blog feed."""
+    s = (slug or "").strip("/").lower()
+    p = (path or "").strip().lower()
+    if p.startswith("http"):
+        try:
+            p = (urlparse(p).path or "").lower()
+        except Exception:
+            p = ""
+    p = p.strip("/")
+    key = s or p
+    if not key:
+        t = (title or "").strip().lower()
+        return t in _MARKETING_SLUGS or t.startswith("areas/")
+    if key in _MARKETING_SLUGS or key in _HIDDEN_BLOG_SLUGS:
+        return True
+    if key == "areas" or key.startswith("areas/"):
+        return True
+    t = (title or "").strip().lower()
+    if t in _MARKETING_SLUGS or t.startswith("areas/"):
+        return True
+    return False
+
+
 def _rewrite_reader_url(url: str, slug: str = "") -> str:
     """Map SEO-tool / nip.io URLs onto the live website."""
     base = _reader_base()
@@ -524,7 +572,7 @@ async def list_blog_posts(
     Lists SEO content published to this app (/p/{slug}) plus tracked live WordPress URLs.
     """
     base = _public_base(request)
-    limit = max(1, min(limit, 100))
+    limit = max(1, min(limit, 200))
     skip = max(0, skip)
 
     page_result = await session.execute(
@@ -540,6 +588,8 @@ async def list_blog_posts(
         path = (item.get("url") or "").rstrip("/") or item.get("slug") or ""
         key = path.lower()
         if not key or key in seen_paths:
+            return
+        if _is_site_chrome_listing(item.get("slug") or "", path, item.get("title") or ""):
             return
         seen_paths.add(key)
         posts.append(item)
@@ -599,15 +649,22 @@ async def list_blog_posts(
                 slug = path.rsplit("/", 1)[-1]
                 if _test_landing.search(f"/{slug}"):
                     continue
+                if _is_site_chrome_listing(slug, path, u.title or ""):
+                    continue
                 live = _rewrite_reader_url(u.url, slug)
                 rel = f"/{slug}"
             else:
                 if host and "zeorbit.com" not in host:
                     continue
                 if path in ("", "/", "/blog", "/website-designing", "/mobile-apps", "/seo-ppc",
-                            "/custom-software", "/portfolio", "/contact"):
+                            "/custom-software", "/portfolio", "/contact", "/areas",
+                            "/web-designer-near-me", "/privacy-policy", "/privacy"):
+                    continue
+                if path.startswith("/areas/") or path.startswith("areas/"):
                     continue
                 slug = path.strip("/")
+                if _is_site_chrome_listing(slug, path, u.title or ""):
+                    continue
                 live = _rewrite_reader_url(u.url, slug)
                 rel = f"/{slug}" if slug else live
             row = by_slug.get(slug) if slug else None
@@ -686,6 +743,8 @@ async def list_posted_blogs(
             "excerpt": _plain_excerpt(block, title)[:220],
             "city": r.city,
             "state": r.state,
+            "industry": (block.get("industry") or r.business_type or "").strip(),
+            "focus_keyword": (block.get("focus_keyword") or "").strip(),
             "public_url": live_url,
             "featured_image_url": block.get("featured_image_url") or None,
             "status": st,

@@ -12,7 +12,6 @@ const WebsiteDesignPage = lazy(() => import('./pages/WebsiteDesignPage'))
 const WebDesignerNearMePage = lazy(() => import('./pages/WebDesignerNearMePage'))
 const PortfolioPage = lazy(() => import('./pages/PortfolioPage'))
 const BlogPage = lazy(() => import('./pages/BlogPage'))
-const SeoArticlePage = lazy(() => import('./pages/SeoArticlePage'))
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'))
 const AreasPage = lazy(() => import('./pages/AreasPage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
@@ -55,7 +54,6 @@ export default function App() {
           <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
           <Route path="/privacy" element={<PrivacyPolicyPage />} />
           <Route path="/revamp-preview" element={<LandingPage />} />
-          <Route path="/:slug" element={<SeoArticlePage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>

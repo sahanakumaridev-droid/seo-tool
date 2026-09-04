@@ -86,30 +86,178 @@ _MAP_ICONS = [
 ]
 
 
-def _social_bar() -> str:
-    # Match live zeorbit.com React topbar: email + brand socials (no phone here).
-    icons = "".join(
-        f'<a class="tb-social" href="{url}" target="_blank" rel="noreferrer" aria-label="social" '
-        f'style="background:{c}">'
-        f'<svg width="13" height="13" viewBox="0 0 24 24" fill="#fff"><path d="{d}"/></svg></a>'
-        for url, d, c in _SOCIALS
+def _footer_social_items() -> list:
+    """Same networks, order, and glyphs as zeorbit.com SiteFooter + SocialBrandIcon."""
+    def svg(path: str, view="0 0 24 24") -> str:
+        return (
+            f'<svg width="15" height="15" viewBox="{view}" fill="currentColor" aria-hidden="true">'
+            f'<path d="{path}"/></svg>'
+        )
+
+    google_maps = (
+        '<svg class="zo-social-logo" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">'
+        '<path fill="#34A853" d="M12 22S5.8 14.4 5.8 9.7A6.2 6.2 0 0 1 12 3.5V22z"/>'
+        '<path fill="#FBBC04" d="M12 22s6.2-7.6 6.2-12.3A6.2 6.2 0 0 0 12 3.5V22z"/>'
+        '<path fill="#4285F4" d="M12 3.5a6.2 6.2 0 0 0-6.2 6.2H12V3.5z"/>'
+        '<path fill="#EA4335" d="M12 3.5a6.2 6.2 0 0 1 6.2 6.2H12V3.5z"/>'
+        '<circle fill="#ffffff" cx="12" cy="9.5" r="2.55"/>'
+        "</svg>"
     )
-    # Extra map / review icons (same set as RevampHeader)
-    extra = "".join([
-        f'<a class="tb-social" href="{_URL_APPLE_MAPS}" target="_blank" rel="noreferrer" aria-label="Apple Maps" '
-        f'style="background:#3A3A3C"><svg width="13" height="13" viewBox="0 0 24 24" fill="#fff"><path d="{_APPLE_PATH}"/></svg></a>',
-        f'<a class="tb-social" href="{_URL_GOOGLE_MAPS}" target="_blank" rel="noreferrer" aria-label="Google Maps" '
-        f'style="background:#fff;border:1px solid #ddd">'
-        f'<svg width="13" height="13" viewBox="0 0 24 24"><path fill="#4285F4" d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5c-1.4 0-2.5-1.1-2.5-2.5S10.6 6.5 12 6.5s2.5 1.1 2.5 2.5S13.4 11.5 12 11.5z"/></svg></a>',
-        f'<a class="tb-social" href="{_URL_YELP}" target="_blank" rel="noreferrer" aria-label="Yelp" '
-        f'style="background:#D32323"><svg width="13" height="13" viewBox="0 0 24 24" fill="#fff">'
-        f'<path d="M12.2 2.1c-.5-.2-1 .2-1.1.7L9.8 9.3c-.1.4.2.8.6.9l6.2 1.5c.5.1.9-.3.8-.8l-1.3-7.5c-.1-.5-.5-.9-1-.9l-2.9-.4z"/></svg></a>',
-    ])
-    return (f'<div class="topbar">'
-            f'<div class="topbar-l">'
-            f'<a class="mail" href="mailto:{EMAIL}">{EMAIL}</a>'
-            f'</div>'
-            f'<div class="socials">{icons}{extra}</div></div>')
+    # Paths match zeorbit-website/src/components/SocialBrandIcon.jsx
+    fb = "M14 13.5h2.5l1-4H14v-2c0-1.03 0-2 2-2h1.5V2.14c-.326-.043-1.557-.14-2.857-.14C11.928 2 10 3.657 10 6.7v2.8H7v4h3V22h4z"
+    ig = (
+        "M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5zm10 2H7a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3zm-5 3.5A4.5 4.5 0 1 1 7.5 12 4.5 4.5 0 0 1 12 7.5zm0 2A2.5 2.5 0 1 0 14.5 12 2.5 2.5 0 0 0 12 9.5zM17.5 6.75a1.25 1.25 0 1 1-1.25 1.25A1.25 1.25 0 0 1 17.5 6.75z"
+    )
+    yt = "M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2 31.5 31.5 0 0 0 0 12a31.5 31.5 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1A31.5 31.5 0 0 0 24 12a31.5 31.5 0 0 0-.5-5.8zM9.8 15.5v-7l6.2 3.5z"
+    x = "M18.244 2H21.5l-7.23 8.26L22.5 22h-6.59l-5.16-6.74L5.2 22H1.94l7.73-8.83L1.5 2h6.75l4.66 6.16L18.244 2zm-1.16 18h1.82L7.08 3.94H5.12L17.084 20z"
+    li = "M6.94 6.5a1.94 1.94 0 1 1-1.94-1.94A1.94 1.94 0 0 1 6.94 6.5zM7 9.25H3V21h4zm6.5 0h-3.8V21h3.8v-6.1c0-2.3 2.9-2.5 2.9 0V21H20v-7.1c0-5.1-5.5-4.9-6.5-2.4z"
+    pin = "M12 2C6.48 2 2 6.27 2 11.64c0 4.1 2.56 7.62 6.17 8.96-.09-.76-.16-1.93.03-2.76.18-.76 1.14-4.84 1.14-4.84s-.29-.58-.29-1.44c0-1.35.78-2.36 1.76-2.36.83 0 1.23.62 1.23 1.37 0 .83-.53 2.08-.8 3.24-.23.97.48 1.76 1.43 1.76 1.72 0 3.04-1.81 3.04-4.43 0-2.32-1.67-3.94-4.05-3.94-2.76 0-4.38 2.07-4.38 4.21 0 .83.32 1.72.72 2.2.08.1.09.18.07.28l-.27 1.1c-.04.18-.14.22-.32.13-1.2-.56-1.95-2.32-1.95-3.74 0-3.05 2.22-5.85 6.39-5.85 3.35 0 5.96 2.39 5.96 5.58 0 3.33-2.1 6.01-5.01 6.01-.98 0-1.9-.51-2.21-1.11l-.6 2.29c-.22.84-.81 1.89-1.21 2.53A9.9 9.9 0 0 0 12 21.28c5.52 0 10-4.27 10-9.64C22 6.27 17.52 2 12 2z"
+    be = "M8.16 11.2c.92-.4 1.4-1.08 1.4-2.08 0-1.84-1.36-2.72-3.44-2.72H0v11.2h6.4c2.24 0 3.84-1.12 3.84-3.12 0-1.4-.8-2.4-2.08-2.88zM3.04 8.08h2.08c.88 0 1.36.4 1.36 1.12S6 10.32 5.12 10.32H3.04V8.08zm2.4 7.52H3.04v-3.04h2.48c1.04 0 1.6.48 1.6 1.44s-.64 1.6-1.68 1.6zM24 7.6h-6.08V6h6.08v1.6zM20.96 8.8c-2.72 0-4.56 1.84-4.56 4.4s1.84 4.4 4.64 4.4c1.92 0 3.44-.88 4.08-2.4l-1.84-.72c-.4.88-1.2 1.36-2.24 1.36-1.2 0-2.08-.72-2.32-1.92h6.72c.08-.4.08-.72.08-1.04 0-2.64-1.6-4.08-4.56-4.08zm-2.24 3.36c.24-1.12 1.04-1.76 2.16-1.76 1.2 0 1.92.64 2.08 1.76h-4.24z"
+    apple = "M16.37 12.86c-.03-2.54 2.07-3.76 2.16-3.81-1.18-1.73-3.01-1.97-3.66-1.99-1.56-.16-3.04.92-3.83.92-.79 0-2.01-.9-3.31-.87-1.7.03-3.27.99-4.15 2.52-1.77 3.07-.45 7.62 1.27 10.11.84 1.22 1.85 2.59 3.17 2.54 1.27-.05 1.75-.82 3.29-.82s1.96.82 3.3.8c1.36-.03 2.23-1.24 3.06-2.47.97-1.41 1.36-2.78 1.38-2.85-.03-.01-2.66-1.02-2.69-4.08zm-2.53-7.47c.7-.85 1.17-2.04 1.04-3.22-1.01.04-2.23.67-2.96 1.52-.65.75-1.22 1.96-1.07 3.12 1.13.09 2.28-.57 2.99-1.42z"
+    yelp = "M42.9 240.32l99.62 48.61c19.2 9.4 16.2 37.51-4.5 42.71L30.5 358.45a22.79 22.79 0 0 1-28.21-19.6 197.16 197.16 0 0 1 9-85.32 22.8 22.8 0 0 1 31.61-13.21zm44 239.25a199.4 199.4 0 0 0 79.42 32.11A22.78 22.78 0 0 0 192.94 490l3.9-110.82c.7-21.3-25.5-31.91-39.81-16.1l-74.21 82.4a22.82 22.82 0 0 0 4.09 34.09zm145.34-109.92l52.7 120.4a22.94 22.94 0 0 0 34.64 10.57 200.67 200.67 0 0 0 46-105.34c6.2-20.8-14.4-38.5-34.8-31.8l-98.54 33.79c-19.04 6.5-26.24 27.1 0 27.38zm148.33-132.23a197.57 197.57 0 0 0-50.41-101.22 22.85 22.85 0 0 0-34.75 16.67l-26.56 106.34c-5.79 21.5 15.29 38.62 34.91 31.46l76.81-26.17a22.92 22.92 0 0 0 14-27.08zM67.54 27.74c-13.84 7-21.37 21.68-17.29 37.47l42.31 166.03c6.39 25.07 38.52 26.3 44.63 1.9l45.46-180.25c6.48-25.71-20.41-48.5-44.55-35.86z"
+    return [
+        ("Facebook", _URL_FACEBOOK, svg(fb)),
+        ("Instagram", _URL_INSTAGRAM, svg(ig)),
+        ("LinkedIn", _URL_LINKEDIN, svg(li)),
+        ("YouTube", _URL_YOUTUBE, svg(yt)),
+        ("X", _URL_X, svg(x)),
+        ("Pinterest", _URL_PINTEREST, svg(pin)),
+        ("Behance", "https://www.behance.net/zeorbitappdev", svg(be)),
+        ("Apple Maps", _URL_APPLE_MAPS, svg(apple)),
+        ("Google Maps", _URL_GOOGLE_MAPS, google_maps),
+        ("Yelp", _URL_YELP, svg(yelp, "0 0 384 512")),
+    ]
+
+
+def _site_header() -> str:
+    """Same structure as zeorbit.com RevampHeader: black topbar + logo nav + actions."""
+    nav_items = [
+        ("Home", f"{WEBSITE}/", ()),
+        (
+            "Websites",
+            f"{WEBSITE}/website-designing",
+            (
+                ("Custom Websites", f"{WEBSITE}/website-designing#business"),
+                ("Shopify & Ecommerce", f"{WEBSITE}/website-designing#ecommerce"),
+                ("Landing Pages", f"{WEBSITE}/website-designing#landing"),
+                ("Website Redesign", f"{WEBSITE}/website-designing#redesign"),
+                ("UI / UX Design", f"{WEBSITE}/website-designing#ux"),
+                ("Care & Maintenance", f"{WEBSITE}/website-designing#care"),
+            ),
+        ),
+        (
+            "Mobile Apps",
+            f"{WEBSITE}/mobile-apps",
+            (
+                ("iOS & Android", f"{WEBSITE}/mobile-apps#native"),
+                ("Cross-Platform", f"{WEBSITE}/mobile-apps#cross"),
+                ("App Timeline", f"{WEBSITE}/mobile-apps#timeline"),
+                ("Mobile UX / UI", f"{WEBSITE}/mobile-apps#ux"),
+            ),
+        ),
+        (
+            "SEO & Ads",
+            f"{WEBSITE}/seo-ppc",
+            (
+                ("Technical SEO", f"{WEBSITE}/seo-ppc#seo"),
+                ("Local SEO", f"{WEBSITE}/seo-ppc#local"),
+                ("Content SEO", f"{WEBSITE}/seo-ppc#content"),
+                ("Google Ads", f"{WEBSITE}/seo-ppc#ads"),
+                ("Social Ads", f"{WEBSITE}/seo-ppc#social-ads"),
+                ("Pricing", f"{WEBSITE}/seo-ppc#pricing"),
+            ),
+        ),
+        (
+            "Custom Software",
+            f"{WEBSITE}/custom-software",
+            (
+                ("Dashboards", f"{WEBSITE}/custom-software#platforms"),
+                ("CRM & Workflows", f"{WEBSITE}/custom-software#crm"),
+                ("API Integrations", f"{WEBSITE}/custom-software#integrations"),
+                ("Automation", f"{WEBSITE}/custom-software#automation"),
+            ),
+        ),
+        ("Work", f"{WEBSITE}/portfolio", ()),
+    ]
+    caret = (
+        '<svg class="zo-nav-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6"/></svg>'
+    )
+    phone_ico = (
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        'stroke-width="2.2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 '
+        '19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.7 '
+        '2.34a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.74.34 1.53.57 '
+        '2.34.7A2 2 0 0 1 22 16.92z"/></svg>'
+    )
+    user_ico = (
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        'stroke-width="2.2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>'
+        '<circle cx="12" cy="7" r="4"/></svg>'
+    )
+    menu_ico = (
+        '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        'stroke-width="2.6"><path d="M4 6h16M4 12h16M4 18h16"/></svg>'
+    )
+    desk_nav = []
+    mobile_nav = []
+    for label, href, children in nav_items:
+        if children:
+            drops = "".join(f'<a href="{h}">{_esc(n)}</a>' for n, h in children)
+            desk_nav.append(
+                f'<div class="zo-nav-item has-children">'
+                f'<a class="zo-nav-trigger" href="{href}"><span>{_esc(label)}</span>{caret}</a>'
+                f'<div class="zo-simple-drop">{drops}</div></div>'
+            )
+            kids = "".join(f'<a href="{h}">{_esc(n)}</a>' for n, h in children)
+            mobile_nav.append(f'<a href="{href}">{_esc(label)}</a>{kids}')
+        else:
+            desk_nav.append(f'<div class="zo-nav-item"><a href="{href}">{_esc(label)}</a></div>')
+            mobile_nav.append(f'<a href="{href}">{_esc(label)}</a>')
+    return f"""
+<header class="zo-site-header zo-host-header is-scrolled" id="zoArticleHeader">
+  <div class="zo-topbar">
+    <div class="zo-topbar-inner">
+      <a class="zo-topbar-email" href="mailto:{EMAIL}">{EMAIL}</a>
+      <a class="zo-topbar-phone" href="tel:{PHONE}" aria-label="Call {PHONE_DISPLAY}">
+        {phone_ico}<span>619-724-9517</span>
+      </a>
+    </div>
+  </div>
+  <div class="zo-host-bar">
+    <div class="zo-host-bar-inner">
+      <div class="zo-brand">
+        <a class="zo-logo" href="{WEBSITE}/" aria-label="ZeOrbit home">
+          <img src="{WEBSITE}/zeorbit-logo-official.webp?v=9" alt="ZeOrbit" height="36" />
+        </a>
+      </div>
+      <nav class="zo-nav" aria-label="Primary">
+        {"".join(desk_nav)}
+      </nav>
+      <div class="zo-host-actions">
+        <div class="zo-util-item">
+          <span class="zo-util-trigger zo-lang-trigger" aria-hidden="true">
+            <span class="zo-util-flag"><img class="zo-util-flag-img" src="https://flagcdn.com/w40/us.png" alt="" width="20" height="15" /></span>
+            <span class="zo-util-label">EN</span>
+          </span>
+        </div>
+        <a class="zo-nav-icon-btn" href="tel:{PHONE}" aria-label="Call 619-724-9517">{phone_ico}</a>
+        <a class="zo-nav-icon-btn" href="{WEBSITE}/contact" aria-label="Contact ZeOrbit">{user_ico}</a>
+        <button type="button" class="zo-mobile-toggle" id="zoMobileToggle" aria-label="Open menu">{menu_ico}</button>
+      </div>
+    </div>
+  </div>
+  <nav class="zo-mobile-nav" id="zoMobileNav" aria-label="Mobile">
+    {"".join(mobile_nav)}
+    <a class="zo-mobile-call" href="tel:{PHONE}">Call 619-724-9517</a>
+    <a class="zo-mobile-call" href="{WEBSITE}/contact">Contact us</a>
+  </nav>
+</header>
+"""
+
+
+def _social_bar() -> str:
+    return _site_header()
 
 
 def _share_bar(public_url: str, title: str, image_url: str = "") -> str:
@@ -215,115 +363,276 @@ def _adsense_in_article_unit() -> str:
 
 
 def _footer() -> str:
-    """Premium multi-section footer: CTA → trust → nav grid → legal bar."""
+    """Match zeorbit.com SiteFooter: brand, 6 columns, socials, legal."""
+    cols = [
+        (
+            "Websites",
+            [
+                ("Custom Websites", f"{WEBSITE}/website-designing#business"),
+                ("Shopify & Ecommerce", f"{WEBSITE}/website-designing#ecommerce"),
+                ("Landing Pages", f"{WEBSITE}/website-designing#landing"),
+                ("Website Redesign", f"{WEBSITE}/website-designing#redesign"),
+                ("UI / UX Design", f"{WEBSITE}/website-designing#ux"),
+                ("Care & Maintenance", f"{WEBSITE}/website-designing#care"),
+            ],
+        ),
+        (
+            "Mobile Apps",
+            [
+                ("iOS & Android", f"{WEBSITE}/mobile-apps#native"),
+                ("Cross-Platform", f"{WEBSITE}/mobile-apps#cross"),
+                ("App Timeline", f"{WEBSITE}/mobile-apps#timeline"),
+                ("Mobile UX / UI", f"{WEBSITE}/mobile-apps#ux"),
+            ],
+        ),
+        (
+            "SEO & Ads",
+            [
+                ("Technical SEO", f"{WEBSITE}/seo-ppc#seo"),
+                ("Local SEO", f"{WEBSITE}/seo-ppc#local"),
+                ("Content SEO", f"{WEBSITE}/seo-ppc#content"),
+                ("Google Ads", f"{WEBSITE}/seo-ppc#ads"),
+                ("Social Ads", f"{WEBSITE}/seo-ppc#social-ads"),
+                ("Pricing", f"{WEBSITE}/seo-ppc#pricing"),
+            ],
+        ),
+        (
+            "Software",
+            [
+                ("Dashboards", f"{WEBSITE}/custom-software#platforms"),
+                ("CRM & Workflows", f"{WEBSITE}/custom-software#crm"),
+                ("API Integrations", f"{WEBSITE}/custom-software#integrations"),
+                ("Automation", f"{WEBSITE}/custom-software#automation"),
+            ],
+        ),
+        (
+            "Resources",
+            [
+                ("Blog", f"{WEBSITE}/blog"),
+                ("Portfolio", f"{WEBSITE}/portfolio"),
+                ("Areas We Serve", f"{WEBSITE}/areas"),
+                ("Get a Free Quote", f"{WEBSITE}/contact"),
+            ],
+        ),
+        (
+            "Company",
+            [
+                ("About ZeOrbit", f"{WEBSITE}/"),
+                ("Contact", f"{WEBSITE}/contact"),
+                ("Privacy Policy", f"{WEBSITE}/privacy-policy"),
+                ("Let's Talk", f"{WEBSITE}/contact"),
+            ],
+        ),
+    ]
+    col_html = []
+    for title, items in cols:
+        lis = "".join(f'<li><a href="{u}">{_esc(n)}</a></li>' for n, u in items)
+        col_html.append(f'<div class="zo-host-footer-col"><h4>{_esc(title)}</h4><ul>{lis}</ul></div>')
     socials = "".join(
-        f'<a class="ft-social" href="{url}" target="_blank" rel="noreferrer" aria-label="social" '
-        f'style="background:{c};border-color:{c};color:#fff">'
-        f'<svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="{d}"/></svg></a>'
-        for url, d, c in _SOCIALS
+        f'<a class="zo-host-social is-{label.lower().replace(" ", "-")}" href="{url}" '
+        f'target="_blank" rel="noreferrer" aria-label="{_esc(label)}">{inner}</a>'
+        for label, url, inner in _footer_social_items()
     )
-
-    # Reuse existing ZeOrbit destinations — remapped into clearer nav groups.
-    services = [
-        ("Custom Websites", f"{WEBSITE}/website-designing"),
-        ("Shopify & Ecommerce", f"{WEBSITE}/website-designing#ecommerce"),
-        ("Mobile Apps", f"{WEBSITE}/mobile-apps"),
-        ("SEO & Ads", f"{WEBSITE}/seo-ppc"),
-        ("API Integrations", f"{WEBSITE}/custom-software#integrations"),
-        ("Automation & Copilots", f"{WEBSITE}/custom-software#automation"),
-    ]
-    resources = [
-        ("Blog", f"{WEBSITE}/blog"),
-        ("Portfolio", f"{WEBSITE}/portfolio"),
-        ("Areas We Serve", f"{WEBSITE}/contact#areas"),
-        ("App Timeline", f"{WEBSITE}/mobile-apps#timeline"),
-        ("Website Care", f"{WEBSITE}/website-designing#care"),
-    ]
-    company = [
-        ("About ZeOrbit", WEBSITE),
-        ("Contact", f"{WEBSITE}/contact"),
-        ("Privacy Policy", f"{WEBSITE}/privacy-policy"),
-        ("Let's Talk", f"{WEBSITE}/contact"),
-    ]
-
-    def _links(items):
-        return "".join(
-            f'<li><a href="{url}" target="_blank" rel="noreferrer">{label}</a></li>'
-            for label, url in items
-        )
-
     return f"""
-  <section class="prefoot" aria-label="Get started">
-    <div class="ft-shell prefoot-inner">
-      <div class="prefoot-copy">
-        <p class="prefoot-kicker">Next step</p>
-        <h2 class="prefoot-h">Want a clearer plan for your site?</h2>
-        <p class="prefoot-p">Talk with ZeOrbit about web design, SEO, and local visibility — no pressure, just a practical next step.</p>
-      </div>
-      <div class="prefoot-actions">
-        <a class="call-now-btn" href="tel:6197249517">CALL NOW : 619-724-9517</a>
-        <button type="button" class="prefoot-btn prefoot-btn-ghost" id="ccOpenDialogFooter">Get a Free Quote</button>
+<footer id="about" class="zo-site-footer zo-host-footer">
+  <div class="zo-host-footer-accent" aria-hidden="true"></div>
+  <div class="zo-host-footer-brand">
+    <div class="rv-shell zo-host-footer-brand-inner">
+      <a class="zo-host-footer-logo" href="{WEBSITE}/" aria-label="ZeOrbit home">
+        <img src="{WEBSITE}/zeorbit-logo-official.webp?v=9" alt="ZeOrbit" height="48" />
+      </a>
+      <p class="zo-host-footer-tagline">Websites, apps, SEO, and custom software for ambitious U.S. brands.</p>
+    </div>
+  </div>
+  <div class="zo-host-footer-main">
+    <div class="rv-shell zo-host-footer-grid">
+      {"".join(col_html)}
+    </div>
+  </div>
+  <div class="zo-host-footer-socials-block">
+    <div class="rv-shell zo-host-footer-social-row" role="group" aria-label="Social media">
+      <div class="zo-host-footer-social">{socials}</div>
+    </div>
+  </div>
+  <div class="zo-host-footer-legal">
+    <div class="rv-shell zo-host-footer-legal-inner">
+      <p>© 2026 ZeOrbit — Websites, apps, SEO, and custom software for ambitious U.S. brands.</p>
+      <div class="zo-host-footer-legal-links">
+        <a href="mailto:{EMAIL}">{EMAIL}</a>
+        <a href="tel:{PHONE}">619-724-9517</a>
+        <a href="{WEBSITE}/contact">Contact</a>
       </div>
     </div>
-  </section>
+  </div>
+</footer>"""
 
-  <footer class="site-footer">
-    <div class="ft-shell">
-      <div class="ft-trust" aria-label="What we help with">
-        <span class="ft-trust-label">Trusted by businesses looking to improve</span>
-        <ul class="ft-trust-list">
-          <li>SEO</li>
-          <li>Performance</li>
-          <li>Web Design</li>
-          <li>Digital Growth</li>
-        </ul>
+
+def _contact_finale() -> str:
+    """Same homepage closer: left-aligned maps + Send message form, then SiteFooter."""
+    sd_embed = "https://maps.google.com/maps?ll=32.80964,-117.20147&z=16&t=m&hl=en&iwloc=&output=embed"
+    sd_maps = "https://www.google.com/maps/search/?api=1&query=4231+Balboa+Avenue+Suite+1340+San+Diego+CA+92117"
+    ec_embed = "https://maps.google.com/maps?ll=32.8192,-116.9628&z=16&t=m&hl=en&iwloc=&output=embed"
+    ec_maps = "https://www.google.com/maps/search/?api=1&query=1860+Greenfield+Dr+El+Cajon+CA+92021"
+    pin = (
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        'stroke-width="2.6" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0z"/>'
+        '<circle cx="12" cy="10" r="3"/></svg>'
+    )
+    return f"""
+<section class="cz-finale" aria-label="Contact">
+  <div class="cz-finale-inner">
+    <div class="cz-finale-left">
+      <div class="cz-finale-copy">
+        <h2>Contact Us</h2>
+        <p class="cz-whisper is-light">Our main focus is to achieve a good reputation amongst our clients. We work on Website Design, software development and marketing projects.</p>
+        <a class="cz-finale-quick" href="tel:{PHONE}">Prefer to talk? {PHONE_DISPLAY}</a>
       </div>
-
-      <div class="ft-grid">
-        <div class="ft-brand">
-          <a class="ft-logo" href="{WEBSITE}" target="_blank" rel="noreferrer">
-            <img src="{WEBSITE}/zeorbit-logo-nav.webp?v=8" alt="ZeOrbit" width="180" height="52" />
-          </a>
-          <p class="ft-brand-p">Helping businesses improve their visibility, websites, and digital growth with smarter SEO tools and strategies.</p>
-          <div class="ft-socials">{socials}</div>
-          <div class="ft-contact-mini">
-            <a href="tel:{PHONE}">{PHONE_DISPLAY}</a>
-            <a href="mailto:{EMAIL}">{EMAIL}</a>
-            <span>{ADDRESS}</span>
+      <div class="cz-finale-maps" aria-label="Office locations">
+        <article class="cz-finale-map-card">
+          <div class="cz-finale-map-stage">
+            <iframe class="cz-finale-map-iframe" title="San Diego HQ map" src="{sd_embed}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" tabindex="-1"></iframe>
           </div>
-        </div>
-
-        <details class="ft-col" open>
-          <summary class="ft-h">Services</summary>
-          <ul>{_links(services)}</ul>
-        </details>
-
-        <details class="ft-col" open>
-          <summary class="ft-h">Resources</summary>
-          <ul>{_links(resources)}</ul>
-        </details>
-
-        <details class="ft-col" open>
-          <summary class="ft-h">Company</summary>
-          <ul>{_links(company)}</ul>
-        </details>
+          <div class="cz-finale-map-pin">
+            <a class="cz-finale-map-callout" href="{sd_maps}" target="_blank" rel="noreferrer">
+              <strong>San Diego HQ</strong>
+              <span>4231 Balboa Avenue, Suite 1340</span>
+              <span>San Diego, CA 92117</span>
+            </a>
+            <span class="cz-finale-map-marker" aria-hidden="true">{pin}</span>
+          </div>
+        </article>
+        <article class="cz-finale-map-card">
+          <div class="cz-finale-map-stage">
+            <iframe class="cz-finale-map-iframe" title="El Cajon map" src="{ec_embed}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" tabindex="-1"></iframe>
+          </div>
+          <div class="cz-finale-map-pin">
+            <a class="cz-finale-map-callout" href="{ec_maps}" target="_blank" rel="noreferrer">
+              <strong>El Cajon</strong>
+              <span>1860 Greenfield Dr</span>
+              <span>El Cajon, CA 92021, USA</span>
+            </a>
+            <span class="cz-finale-map-marker" aria-hidden="true">{pin}</span>
+          </div>
+        </article>
       </div>
     </div>
-
-    <div class="ft-bottom">
-      <div class="ft-shell ft-bottom-inner">
-        <div class="ft-copy">© 2026 ZeOrbit. All rights reserved.</div>
-        <nav class="ft-legal" aria-label="Legal">
-          <a href="{WEBSITE}/privacy-policy/" target="_blank" rel="noreferrer">Privacy Policy</a>
-          <a href="{WEBSITE}/privacy-policy/" target="_blank" rel="noreferrer">Terms of Service</a>
-          <a href="{WEBSITE}/privacy-policy/" target="_blank" rel="noreferrer">Cookie Policy</a>
-        </nav>
+    <div id="contact" class="cz-finale-form-card">
+      <div class="cz-finale-form-head">
+        <p>Project inquiry</p>
+        <h3>Send a short brief</h3>
       </div>
-      <div class="ft-shell ft-disclaimer">
-        <p>All images and content are the property of their respective owners. All referenced content is sourced from its original creators.</p>
+      <div class="rv-contact-card is-contact-page" role="region" aria-label="Contact ZeOrbit">
+        <form class="rv-contact-form" id="zoArticleLeadForm" novalidate>
+          <div class="rv-form-grid is-contact-page">
+            <label class="rv-label"><span class="rv-label-row">Full Name <em class="rv-req">*</em></span>
+              <input class="rv-input" name="name" autocomplete="name" placeholder="Full Name" required></label>
+            <label class="rv-label"><span class="rv-label-row">Your Email <em class="rv-req">*</em></span>
+              <input class="rv-input" name="email" type="email" autocomplete="email" placeholder="Your Email" required></label>
+            <label class="rv-label"><span class="rv-label-row">Your Number <em class="rv-req">*</em></span>
+              <input class="rv-input" name="phone" autocomplete="tel" inputmode="tel" placeholder="Your Number" required></label>
+            <label class="rv-label"><span class="rv-label-row">Service Need</span>
+              <div class="rv-select-wrap"><select class="rv-input rv-select" name="service">
+                <option value="">Service Need</option>
+                <option>Master Care</option>
+                <option>Web Designing</option>
+                <option>Digital Advertising</option>
+                <option>SEO</option>
+                <option>Logo Designs</option>
+                <option>Content Marketing</option>
+                <option>Mobile App Development</option>
+                <option>Custom Software Development</option>
+              </select></div></label>
+          </div>
+          <label class="rv-label rv-label-full"><span class="rv-label-row">Additional Message <em class="rv-req">*</em></span>
+            <textarea class="rv-textarea" name="message" rows="4" placeholder="Additional Message" required></textarea></label>
+          <div class="rv-hp" aria-hidden="true"><label>Website <input tabindex="-1" autocomplete="off" name="website_url"></label></div>
+          <div class="rv-captcha">
+            <div class="rv-captcha-image">
+              <img id="zoCaptchaImg" alt="Captcha code" width="188" height="58">
+              <button type="button" class="rv-captcha-refresh" id="zoCaptchaRefresh" aria-label="Refresh captcha">↻</button>
+            </div>
+            <label class="rv-label rv-captcha-field"><span class="rv-label-row">Type the code <em class="rv-req">*</em></span>
+              <input class="rv-input" name="captcha_answer" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8" placeholder="5-character code" required></label>
+          </div>
+          <p class="rv-status" id="zoLeadStatus" hidden></p>
+          <div class="rv-contact-actions">
+            <button type="submit" class="rv-submit-btn" id="zoLeadSubmit">Send message</button>
+            <p class="rv-contact-privacy">By submitting, you agree to be contacted about this request. No spam.</p>
+          </div>
+        </form>
       </div>
     </div>
-  </footer>"""
+  </div>
+</section>"""
+
+
+def _contact_form_script() -> str:
+    return """
+<script>
+(function(){
+  var form=document.getElementById('zoArticleLeadForm');
+  if(!form) return;
+  var started=Date.now();
+  var captchaId='';
+  var img=document.getElementById('zoCaptchaImg');
+  var statusEl=document.getElementById('zoLeadStatus');
+  var btn=document.getElementById('zoLeadSubmit');
+  function api(path){ return '/api/leads' + path; }
+  function loadCaptcha(){
+    fetch(api('/captcha')).then(function(r){ return r.json(); }).then(function(d){
+      captchaId=d.id||'';
+      if(img && d.image) img.src=d.image;
+    }).catch(function(){});
+  }
+  loadCaptcha();
+  var refresh=document.getElementById('zoCaptchaRefresh');
+  if(refresh) refresh.addEventListener('click', function(){ loadCaptcha(); form.captcha_answer.value=''; });
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    statusEl.hidden=true;
+    btn.disabled=true;
+    var payload={
+      source:'blog',
+      page_url:location.href,
+      name:(form.name.value||'').trim(),
+      contact_name:(form.name.value||'').trim(),
+      email:(form.email.value||'').trim(),
+      phone:(form.phone.value||'').trim(),
+      service:form.service.value||'Web Designing',
+      message:(form.message.value||'').trim(),
+      captcha_id:captchaId,
+      captcha_answer:(form.captcha_answer.value||'').trim(),
+      website_url:form.website_url.value||'',
+      started_at:started
+    };
+    fetch(api('/'), { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) })
+      .then(function(r){
+        return r.json().then(function(d){ return {ok:r.ok, d:d, status:r.status}; });
+      })
+      .then(function(res){
+        statusEl.hidden=false;
+        if(res.ok){
+          statusEl.className='rv-status success';
+          statusEl.textContent="Thanks — we'll reach out within one business day.";
+          form.reset(); started=Date.now(); loadCaptcha();
+        } else {
+          statusEl.className='rv-status error';
+          var detail=res.d && res.d.detail ? res.d.detail : ('Could not submit ('+res.status+')');
+          statusEl.textContent=typeof detail==='string'?detail:'Could not submit. Please try again.';
+          loadCaptcha();
+        }
+      })
+      .catch(function(){
+        statusEl.hidden=false;
+        statusEl.className='rv-status error';
+        statusEl.textContent='Could not submit. Please try again.';
+        loadCaptcha();
+      })
+      .finally(function(){ btn.disabled=false; });
+  });
+})();
+</script>
+"""
 
 
 def _below_footer() -> str:
@@ -391,6 +700,7 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
         getattr(block, "zip", "") or "",
     )
     body = _build_content_html(block)
+    body = re.sub(r'<div class="call-now-wrap">[\s\S]*?</div>', "", body)
     # Old generated schema used example.com — rewrite to the real public page URL.
     if public_url:
         body = re.sub(
@@ -501,6 +811,7 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
 <meta name="robots" content="index,follow" />
 <link rel="icon" type="image/webp" href="{WEBSITE}/zeorbit-logo.webp?v=8" />
 <link rel="apple-touch-icon" href="{WEBSITE}/zeorbit-logo.webp?v=8" />
+<link rel="stylesheet" href="{WEBSITE}/article-chrome.css?v=5" />
 <style>
   :root {{
     --brand:#2563EB; --brand-dark:#1D4ED8; --navy:#0B1F3A; --signal:#38BDF8;
@@ -514,7 +825,8 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
   }}
   * {{ box-sizing:border-box; }}
   html {{ scroll-behavior:smooth; }}
-  body {{ margin:0; background:var(--bg); color:var(--body); font-family:var(--apple); font-size:19px; line-height:1.85; -webkit-font-smoothing:antialiased; }}
+  body {{ margin:0; padding-top:98px; background:var(--bg); color:var(--body); font-family:var(--apple); font-size:19px; line-height:1.85; -webkit-font-smoothing:antialiased; }}
+  .nav {{ display:none !important; }}
   .sr-only {{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }}
 
   /* Black utility bar */
@@ -609,7 +921,10 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
   #overview, #contact, #faq-heading {{ scroll-margin-top:90px; }}
   h3 {{ font-family:var(--sans); font-size:19px; font-weight:700; color:var(--ink); margin:28px 0 10px; }}
   ul,ol {{ margin:0 0 22px; padding-left:24px; }} li {{ margin:8px 0; line-height:1.6; }}
-  a {{ color:var(--brand); text-underline-offset:2px; }}
+  article a {{ color:var(--brand); text-underline-offset:2px; }}
+  header a, .zo-host-footer a, .share-bar a, .ai-ask-bar a, .zo-nav a, .zo-topbar a {{
+    text-decoration:none; color:inherit;
+  }}
 
   /* Red highlight CALL NOW buttons — matches zeorbit.com blog CTAs */
   .call-now-wrap {{ text-align:center; margin:28px 0 32px; }}
@@ -689,16 +1004,25 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
   }}
   .pull-quote {{ display:none; }} /* legacy pages */
 
+  .ai-ask-wrap {{ margin:8px 0 28px; padding:16px 0 4px; border-top:1px solid var(--line); }}
+  .ai-ask-kicker {{
+    font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--faint);
+    margin:0 0 12px; font-family:var(--sans);
+  }}
   .ai-ask-bar {{
-    margin:32px 0 8px; padding:0; display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    margin:0; padding:0; display:flex; align-items:flex-start; gap:14px; flex-wrap:wrap;
   }}
   .ai-ask-bar a {{
-    width:40px; height:40px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;
-    text-decoration:none; box-shadow:0 1px 2px rgba(0,0,0,.12);
+    width:auto; min-width:64px; height:auto; border-radius:0; background:transparent !important; box-shadow:none;
+    display:inline-flex; flex-direction:column; align-items:center; gap:6px; text-decoration:none; color:var(--muted);
   }}
-  .ai-ask-bar a:hover {{ transform:translateY(-2px); }}
-  .ai-ask-bar img {{ width:22px; height:22px; border-radius:6px; object-fit:contain; }}
-  .ai-ask-bar svg {{ width:22px; height:22px; display:block; }}
+  .ai-ask-bar a span.ico {{
+    width:36px; height:36px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center;
+    border:1px solid var(--line); background:#fff;
+  }}
+  .ai-ask-bar a:hover {{ transform:none; color:var(--ink); }}
+  .ai-ask-bar img {{ width:20px; height:20px; border-radius:4px; object-fit:contain; }}
+  .ai-ask-bar .ai-name {{ font-size:11px; font-weight:600; line-height:1.2; font-family:var(--sans); }}
 
   .share-bar {{
     margin:36px 0 8px; padding:18px 0 6px; border-top:1px solid var(--line);
@@ -921,20 +1245,6 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
 {gtm_body}
   <div class="progress" id="pb"></div>
   {_social_bar()}
-  <div class="nav">
-    <a class="brand" href="{WEBSITE}" target="_blank" rel="noreferrer">
-      <img src="{WEBSITE}/zeorbit-logo.webp?v=8" alt="ZeOrbit" width="180" height="52" />
-    </a>
-    <nav class="nav-mid" aria-label="Site">
-      {nav_mid_html}
-    </nav>
-    <a class="cta" href="tel:6197249517" aria-label="Call 619-724-9517">
-      <span class="cta-phone" aria-hidden="true">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.7 2.34a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.74.34 1.53.57 2.34.7A2 2 0 0 1 22 16.92z"/></svg>
-      </span>
-      <span class="cta-num">619-724-9517</span>
-    </a>
-  </div>
 
   {hero}
 
@@ -953,49 +1263,12 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
     {body}
     {footer_figure}
     {share_bar}
-    {_ai_platform_bar()}
-    <div class="article-end">
-      <div class="contact-card" id="contact">
-        <div class="cc-main">
-          <div class="cc-kicker">Free consultation</div>
-          <div class="cc-l">Ready for a clearer next step?</div>
-          <p>Get practical advice on your {biz.lower() or 'project'} — website, SEO, and local visibility — with no obligation.</p>
-          <div class="cc-actions">
-            <a class="call-now-btn" href="tel:6197249517">CALL NOW : 619-724-9517</a>
-            <button type="button" class="cc-btn" id="ccOpenDialog">Get a Free Quote</button>
-          </div>
-        </div>
-        <div class="cc-side">
-          <p class="cc-side-label">Talk to ZeOrbit</p>
-          <a href="tel:{PHONE}">{PHONE_DISPLAY}</a>
-          <a href="mailto:{EMAIL}">{EMAIL}</a>
-          <p class="cc-meta">{ADDRESS}</p>
-        </div>
-      </div>
-
-      <dialog class="lead-dialog" id="leadDialog">
-        <button type="button" class="ld-close" id="ccCloseDialog" aria-label="Close">✕</button>
-        <div class="ld-title">Get a Free Quote</div>
-        <p class="ld-sub">Leave your email and phone number — our team will reach out shortly.</p>
-        <form class="cc-form" id="ccLeadForm">
-          <input type="email" name="email" placeholder="Your email" required />
-          <input type="tel" name="phone" placeholder="Phone number" required />
-          <div class="cc-hp" aria-hidden="true">
-            <label>Website <input type="text" name="website_url" tabindex="-1" autocomplete="off" /></label>
-          </div>
-          <div class="cc-captcha">
-            <img id="ccCaptchaImg" alt="Captcha code" width="188" height="58" />
-            <button type="button" class="cc-captcha-refresh" id="ccCaptchaRefresh" aria-label="Refresh captcha">↻</button>
-            <input type="text" name="captcha_answer" id="ccCaptchaAnswer" placeholder="Type the code" required maxlength="8" autocomplete="off" spellcheck="false" />
-          </div>
-          <button type="submit" class="cc-btn">Send</button>
-        </form>
-        <div class="cc-form-msg" id="ccLeadMsg"></div>
-      </dialog>
-    </div>
+    {_ai_platform_bar(public_url, block.title or block.h1 or "")}
   </article>
 
+  {_contact_finale()}
   {_footer()}
+  {_contact_form_script()}
 
   <script>
     var pb=document.getElementById('pb');
@@ -1003,72 +1276,11 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
       var h=document.documentElement, max=h.scrollHeight-h.clientHeight;
       pb.style.width=(max>0?(h.scrollTop/max*100):0)+'%';
     }});
-
-    var leadDialog=document.getElementById('leadDialog');
-    var ccOpenBtn=document.getElementById('ccOpenDialog');
-    var ccOpenFooter=document.getElementById('ccOpenDialogFooter');
-    var ccCloseBtn=document.getElementById('ccCloseDialog');
-    var ccForm=document.getElementById('ccLeadForm');
-    var ccCaptchaId='';
-    var ccStartedAt=Date.now();
-    function loadCaptcha(){{
-      fetch('/api/leads/captcha').then(function(r){{ return r.json(); }}).then(function(data){{
-        ccCaptchaId=data.id||'';
-        var img=document.getElementById('ccCaptchaImg');
-        if(img && data.image) img.src=data.image;
-        var ans=document.getElementById('ccCaptchaAnswer');
-        if(ans) ans.value='';
-      }}).catch(function(){{}});
-    }}
-    function openLead(){{ if(leadDialog){{ leadDialog.showModal(); loadCaptcha(); }} }}
-    if(leadDialog && ccOpenBtn){{
-      ccOpenBtn.addEventListener('click', openLead);
-      if(ccCloseBtn) ccCloseBtn.addEventListener('click', function(){{ leadDialog.close(); }});
-      leadDialog.addEventListener('click', function(e){{ if(e.target===leadDialog) leadDialog.close(); }});
-    }}
-    if(ccOpenFooter){{ ccOpenFooter.addEventListener('click', openLead); }}
-    // Mobile: collapse footer nav groups by default
-    if(window.matchMedia('(max-width:640px)').matches){{
-      document.querySelectorAll('.ft-col').forEach(function(el){{ el.removeAttribute('open'); }});
-    }}
-    if(ccForm){{
-      var refresh=document.getElementById('ccCaptchaRefresh');
-      if(refresh) refresh.addEventListener('click', loadCaptcha);
-      ccForm.addEventListener('submit', function(e){{
-        e.preventDefault();
-        var btn=ccForm.querySelector('.cc-btn');
-        btn.disabled=true; btn.textContent='Sending…';
-        fetch('/api/leads/', {{
-          method:'POST',
-          headers:{{'Content-Type':'application/json'}},
-          body:JSON.stringify({{
-            source:'public_page',
-            page_url: window.location.href,
-            email: ccForm.email.value.trim(),
-            phone: ccForm.phone.value.trim(),
-            website: {json.dumps(WEBSITE)},
-            location: {json.dumps(location)},
-            service: {json.dumps(biz)},
-            message: 'Lead captured from public SEO page: ' + window.location.href,
-            captcha_id: ccCaptchaId,
-            captcha_answer: (document.getElementById('ccCaptchaAnswer')||{{}}).value || '',
-            website_url: (ccForm.website_url && ccForm.website_url.value) || '',
-            started_at: ccStartedAt
-          }})
-        }}).then(function(r){{ if(!r.ok) throw new Error('bad status'); return r.json(); }})
-          .then(function(){{
-            ccForm.style.display='none';
-            var msg=document.getElementById('ccLeadMsg');
-            msg.textContent="Thanks! We'll be in touch shortly.";
-            msg.classList.add('show');
-          }})
-          .catch(function(){{
-            btn.disabled=false; btn.textContent='Send';
-            loadCaptcha();
-            var msg=document.getElementById('ccLeadMsg');
-            msg.textContent='Check the captcha code and try again, or call us.';
-            msg.classList.add('show');
-          }});
+    var zoHdr=document.getElementById('zoArticleHeader');
+    var zoToggle=document.getElementById('zoMobileToggle');
+    if(zoToggle && zoHdr){{
+      zoToggle.addEventListener('click', function(){{
+        zoHdr.classList.toggle('is-menu-open');
       }});
     }}
   </script>
