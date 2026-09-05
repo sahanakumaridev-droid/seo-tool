@@ -215,11 +215,22 @@ export default function SocialPage() {
   const [apiLoading, setApiLoading] = useState(false)
   const [selectedPlatforms, setSelectedPlatforms] = useState(['facebook', 'twitter', 'linkedin'])
   const [error, setError] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
 
   useEffect(() => {
     getSocialPlatforms().then(r => setApiStatus(r.data)).catch(() => {})
-    listPages(0, 50).then(r => setPages(r.data)).catch(() => {})
+    listPages(0, 250).then(r => setPages(Array.isArray(r.data) ? r.data : [])).catch(() => {})
   }, [])
+
+  const dayKey = (iso) => (iso ? String(iso).slice(0, 10) : '')
+  const filteredPages = pages.filter((p) => {
+    const day = dayKey(p.created_at || p.updated_at)
+    if (fromDate && day && day < fromDate) return false
+    if (toDate && day && day > toDate) return false
+    if ((fromDate || toDate) && !day) return false
+    return true
+  })
 
   /* Open native share dialog for that platform */
   const handleShare = (platformId) => {
@@ -308,15 +319,31 @@ export default function SocialPage() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+        <label style={{ fontSize: 11, color: 'var(--text-4)', fontWeight: 600 }}>
+          From
+          <input type="date" value={fromDate} onChange={(e) => { setFromDate(e.target.value); setSelected(null) }}
+            className="rounded-lg px-2 py-2 text-sm ml-1"
+            style={{ border: '1px solid var(--border)', background: '#fff', color: 'var(--text-1)' }} />
+        </label>
+        <label style={{ fontSize: 11, color: 'var(--text-4)', fontWeight: 600 }}>
+          To
+          <input type="date" value={toDate} onChange={(e) => { setToDate(e.target.value); setSelected(null) }}
+            className="rounded-lg px-2 py-2 text-sm ml-1"
+            style={{ border: '1px solid var(--border)', background: '#fff', color: 'var(--text-1)' }} />
+        </label>
         <select
           value={selected ? selected.slug : ''}
-          onChange={e => { setSelected(pages.find(p => p.slug === e.target.value) || null); setError('') }}
+          onChange={e => { setSelected(filteredPages.find(p => p.slug === e.target.value) || null); setError('') }}
           className="rounded-lg px-3 py-2 text-sm"
           style={{ border: '1px solid var(--border)', background: '#fff', color: 'var(--text-1)', maxWidth: 280 }}
         >
-          <option value="">Select a page to share</option>
-          {pages.map(p => (
-            <option key={p.slug} value={p.slug}>{p.seo_block?.city} — {p.business_type}</option>
+          <option value="">
+            {filteredPages.length ? `Select a page (${filteredPages.length})` : 'No pages in this date range'}
+          </option>
+          {filteredPages.map(p => (
+            <option key={p.slug} value={p.slug}>
+              {dayKey(p.created_at) || '—'} · {p.seo_block?.city || p.city || ''} — {p.seo_block?.title || p.business_type}
+            </option>
           ))}
         </select>
         <button type="button" className="btn btn-secondary" style={{ fontSize: 12.5 }}>

@@ -105,12 +105,37 @@ export default function SeoHead({
       '@type': 'WebSite',
       name: 'ZeOrbit',
       url: SITE_URL,
-      potentialAction: {
-        '@type': 'SearchAction',
-        target: `${SITE_URL}/blog?q={search_term_string}`,
-        'query-input': 'required name=search_term_string',
-      },
     })
+
+    if (type === 'article') {
+      upsertJsonLd('zo-ld-article', {
+        '@context': 'https://schema.org',
+        '@type': 'Article',
+        headline: title,
+        description,
+        image: absImg,
+        url,
+        mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+        publisher: {
+          '@type': 'Organization',
+          name: 'ZeOrbit',
+          url: SITE_URL,
+          logo: { '@type': 'ImageObject', url: `${SITE_URL}/zeorbit-logo.webp` },
+        },
+      })
+      upsertJsonLd('zo-ld-breadcrumb', {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE_URL}/` },
+          { '@type': 'ListItem', position: 2, name: 'Blog', item: `${SITE_URL}/blog` },
+          { '@type': 'ListItem', position: 3, name: title, item: url },
+        ],
+      })
+    } else {
+      document.getElementById('zo-ld-article')?.remove()
+      document.getElementById('zo-ld-breadcrumb')?.remove()
+    }
 
     if (faqs?.length) {
       upsertJsonLd('zo-ld-faq', buildFaqSchema(faqs))

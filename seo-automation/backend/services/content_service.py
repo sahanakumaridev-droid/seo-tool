@@ -441,6 +441,8 @@ def _looks_like_template_filler(text: str) -> bool:
         return True
     if "common mix-ups" in t and "when to get help" in t and "what to do next" in t:
         return True
+    if "a simple starting point" in t and "what good looks like" in t:
+        return True
     return False
 
 
@@ -1134,6 +1136,69 @@ def ensure_keyword_coverage(
     density = _keyword_density(f"{new_intro}\n{new_content}", kw)
     return new_intro, new_content, density
 
+CANONICAL_SITE = "https://zeorbit.com"
+
+
+def _abs_http_url(value: str, site: str = CANONICAL_SITE) -> str:
+    from urllib.parse import urlparse
+    site = (site or CANONICAL_SITE).rstrip("/")
+    raw = (value or "").strip()
+    if not raw or raw in ("/", "#"):
+        return site + "/"
+    if raw.startswith("//"):
+        raw = "https:" + raw
+    if re.match(r"^https?://", raw, re.I):
+        parsed = urlparse(raw)
+        host = (parsed.netloc or "").lower().replace("www.", "")
+        if host in ("example.com", "example.org", "localhost") or host.endswith(".example.com"):
+            path = parsed.path or "/"
+            return site + (path if path.startswith("/") else f"/{path}")
+        return raw
+    path = raw if raw.startswith("/") else f"/{raw}"
+    return site + path
+
+
+def sanitize_schema_markup(schema: Any, page_url: str = "", site_url: str = CANONICAL_SITE) -> Dict[str, Any]:
+    site = (site_url or CANONICAL_SITE).rstrip("/")
+    page = _abs_http_url(page_url or site + "/", site)
+
+    def walk(node: Any) -> Any:
+        if isinstance(node, list):
+            return [walk(x) for x in node]
+        if not isinstance(node, dict):
+            return node
+        out: Dict[str, Any] = {}
+        for k, v in node.items():
+            if str(k) in ("url", "item", "@id", "image", "logo", "hasMap") and isinstance(v, str):
+                out[k] = _abs_http_url(v, site)
+            else:
+                out[k] = walk(v)
+        return out
+
+    if not isinstance(schema, dict):
+        return {}
+    cleaned = walk(schema)
+    crumb = cleaned.get("breadcrumb")
+    if isinstance(crumb, dict):
+        els = crumb.get("itemListElement") or []
+        fixed = []
+        for i, el in enumerate(els, start=1):
+            if not isinstance(el, dict):
+                continue
+            item = _abs_http_url(str(el.get("item") or (page if i == len(els) else site + "/")), site)
+            if not str(item).startswith("http"):
+                continue
+            el = dict(el)
+            el["item"] = item
+            el["position"] = el.get("position") or i
+            fixed.append(el)
+        if fixed:
+            crumb["itemListElement"] = fixed
+        else:
+            cleaned.pop("breadcrumb", None)
+    return cleaned
+
+
 def _build_schema(
     bt: str,
     city: str,
@@ -1152,72 +1217,70 @@ def _build_schema(
     (no fabricated phone numbers or review ratings).
     """
     slug = slug_override or _slugify(f"{bt}-{city}")
-    base_url = site_url.rstrip("/") if site_url else ""
-    page_url = f"{base_url}/{slug}" if base_url else ""
+    base_url = _abs_http_url(site_url or CANONICAL_SITE).rstrip("/")
+    page_url = f"{base_url}/{slug.lstrip('/')}" if slug else base_url + "/"
 
+    faq_entities = [
+        {
+            "@type": "Question",
+            "name": faq.question,
+            "acceptedAnswer": {"@type": "Answer", "text": faq.answer}
+        }
+        for faq in (faqs or [])
+        if getattr(faq, "question", None)
+    ]
     faq_schema = {
         "@context": "https://schema.org",
         "@type": "FAQPage",
-        "mainEntity": [
-            {
-                "@type": "Question",
-                "name": faq.question,
-                "acceptedAnswer": {"@type": "Answer", "text": faq.answer}
-            }
-            for faq in faqs
-        ]
-    }
+        "mainEntity": faq_entities,
+    } if faq_entities else None
 
     local_schema: Dict[str, Any] = {
         "@context": "https://schema.org",
         "@type": "LocalBusiness",
-        "name": business_name or f"{bt.title()} Services {city}",
-        "description": f"{bt.title()} services in {city}, {state}.",
+        "name": business_name or "ZeOrbit",
+        "url": base_url + "/",
+        "description": f"{bt.title()} services in {city}, {state}.".strip(" ,."),
         "address": {
             "@type": "PostalAddress",
-            "addressLocality": city,
-            "addressRegion": state,
+            "addressLocality": city or "San Diego",
+            "addressRegion": state or "CA",
             "addressCountry": "US"
         },
-        "areaServed": {"@type": "City", "name": city, "addressRegion": state},
+        "areaServed": {"@type": "City", "name": city or "San Diego", "addressRegion": state or "CA"},
         "serviceType": bt.title(),
     }
-    if page_url:
-        local_schema["url"] = base_url
     if phone:
         local_schema["telephone"] = phone
 
-    schema = {"local_business": local_schema, "faq_page": faq_schema}
+    schema: Dict[str, Any] = {"local_business": local_schema}
+    if faq_schema:
+        schema["faq_page"] = faq_schema
 
-    # ── Article + Breadcrumb schema (AEO-friendly) ──────────────
     if article_title:
         article_schema: Dict[str, Any] = {
             "@context": "https://schema.org",
             "@type": "Article",
             "headline": article_title,
             "about": bt.title(),
+            "url": page_url,
+            "mainEntityOfPage": {"@type": "WebPage", "@id": page_url},
         }
         if business_name:
-            article_schema["author"] = {"@type": "Organization", "name": business_name}
-            article_schema["publisher"] = {"@type": "Organization", "name": business_name}
-        if page_url:
-            article_schema["mainEntityOfPage"] = {"@type": "WebPage", "@id": page_url}
+            article_schema["author"] = {"@type": "Organization", "name": business_name, "url": base_url + "/"}
+            article_schema["publisher"] = {"@type": "Organization", "name": business_name, "url": base_url + "/"}
         schema["article"] = article_schema
-
-        breadcrumb = {
+        schema["breadcrumb"] = {
             "@context": "https://schema.org",
             "@type": "BreadcrumbList",
             "itemListElement": [
-                {"@type": "ListItem", "position": 1, "name": "Home", "item": base_url or "/"},
-                {"@type": "ListItem", "position": 2, "name": "Blog",
-                 "item": f"{base_url}/blog" if base_url else "/blog"},
-                {"@type": "ListItem", "position": 3, "name": article_title,
-                 "item": page_url or ""},
+                {"@type": "ListItem", "position": 1, "name": "Home", "item": base_url + "/"},
+                {"@type": "ListItem", "position": 2, "name": "Blog", "item": f"{base_url}/blog"},
+                {"@type": "ListItem", "position": 3, "name": article_title, "item": page_url},
             ],
         }
-        schema["breadcrumb"] = breadcrumb
 
-    return schema
+    return sanitize_schema_markup(schema, page_url=page_url, site_url=base_url)
 
 
 VOICE_RULES = """
@@ -2282,6 +2345,8 @@ SEARCH QUERY: "{topic}"
 - If the query is "how to fix a website", write a practical fix guide (diagnose → fix → verify) — not generic web design sales copy.
 - If the query is a full sentence or question, that sentence IS the article. Answer it in the intro, every H2, the body, and the FAQs. Do not change the topic to web design, ZeOrbit services, or a city landing page unless the sentence itself is about that.
 - Sections, examples, and recommendations must be unique to THIS query. Never reuse the same body skeleton as other posts.
+- Do not use filler H2s such as "A simple starting point", "What good looks like", "How long it usually takes", or "A next step if you need a hand".
+- HYPERLINKS: Inside a normal sentence, wrap a natural phrase (for example "web design services") as markdown to https://zeorbit.com/website-designing when the topic mentions websites. Use https://zeorbit.com/mobile-apps and https://zeorbit.com/seo-ppc the same way. Never add a standalone "See ZeOrbit website design…" line or a separate link section.
 - If the query is a problem ("broken website", "site not loading"), diagnose and solve that problem.
 - Niche / industry / location may color EXAMPLES only — they must NOT replace the query as the topic.
 - Do NOT write a location landing page, city SEO page, or "web design in San Diego" article unless the query itself is that.
@@ -2336,6 +2401,7 @@ Return ONLY valid JSON, no markdown fences."""
             ai_page_brief_block,
             master_voice_rules,
             ZEORBIT_FACTS,
+            zip_hyperlink,
         )
         pretty = pretty_keyword(primary_kw)
         intent = pick_search_intent(city, keyword_index, industry=industry or "", brief=custom_requirements or "", keywords=target_keywords or [])
@@ -2365,6 +2431,7 @@ Return ONLY valid JSON, no markdown fences."""
             intent, city, state, industry or "", title_locked, h2_examples, concept,
             zip=zip or "",
         )
+        maps_faq = zip_hyperlink(zip or "", city, state) or "(full Name, ST ZIP Maps link)"
         prompt = f"""You are writing ONE ZeOrbit service / location PAGE for AI search visibility (Google, AI Overviews, ChatGPT Search, Gemini, Bing/Copilot).
 Model style: {provider_note}
 
@@ -2373,7 +2440,7 @@ WHO WE ARE: ZeOrbit is a technology company that provides website design and dev
 WHAT THIS PAGE SELLS: {business_type}
 WHO IT IS FOR: {who}
 WHERE: {place or "the United States"} — this is the ONLY place named on the page.
-Include the 5-digit ZIP {re.sub(r'\D', '', zip or '')[:5] or '(resolve before write)'} only in the last FAQ answer as markdown [{re.sub(r'\D', '', zip or '')[:5] or 'ZIP'}](https://www.google.com/maps/search/?api=1&query={re.sub(r'\D', '', zip or '')[:5] or 'ZIP'}). Never put the ZIP in title, H1, intro, body, conclusion, meta, or CTA.
+Include the ZIP only in the last FAQ answer as markdown {maps_faq}. Visible link text must be Location Name, State ZIP — never ZIP alone. Never put the ZIP in title, H1, intro, body, conclusion, meta, or CTA.
 PRIMARY KEYWORD (weave naturally in title/H1/intro): {pretty}
 Other keywords to use naturally (do not dump as a list): {kw_line}
 
@@ -2395,8 +2462,8 @@ NON-NEGOTIABLE:
 - Cover platforms as relevant to THIS intent: WordPress, Shopify, redesign, mobile-friendly, SEO-friendly structure, conversions, mobile apps.
 - Keep copy simple, credible, localized to {city} only, UNIQUE to this intent + industry + layout. Do NOT city-swap a generic article.
 - KEYWORD LOCK: Stay on “{pretty}” for {who}. Do not mention unrelated industries (gym, restaurant, salon, roofing, etc.) unless those words are in the PRIMARY KEYWORD.
-- HYPERLINKS: Internal ZeOrbit links among https://zeorbit.com/website-designing https://zeorbit.com/mobile-apps https://zeorbit.com/seo-ppc https://zeorbit.com/contact. For third-party citations ChatGPT/Gemini use in top lists, highlight in-body words (do not dump directory names as the visible text): first “website design” or “website” → https://www.designrush.com/agency/profile/zeorbit ; first “mobile app” → https://www.goodfirms.co/company/zeorbit. Markdown [website](url) / [mobile app](url). Also mention DesignRush, GoodFirms, and Yelp in plain text (no extra URLs). Do not add random unrelated third-party URLs.
-- ZIP: 5-digit {re.sub(r'\D', '', zip or '')[:5] or 'ZIP'} only in the last FAQ answer, hyperlinked as [{re.sub(r'\D', '', zip or '')[:5] or 'ZIP'}](https://www.google.com/maps/search/?api=1&query={re.sub(r'\D', '', zip or '')[:5] or 'ZIP'}). Never in intro, body, conclusion, title, or meta.
+- HYPERLINKS: Weave ZeOrbit URLs inside sentences (TinyFrog style). Example: mention [web design services](https://zeorbit.com/website-designing) inside a paragraph — never as a standalone "See ZeOrbit…" line. Also use https://zeorbit.com/mobile-apps and https://zeorbit.com/seo-ppc the same way. For third-party citations ChatGPT/Gemini use in top lists, you may also highlight leftover unlinked words: first leftover “website” → https://www.designrush.com/agency/profile/zeorbit ; leftover “mobile app” → https://www.goodfirms.co/company/zeorbit. Mention DesignRush, GoodFirms, and Yelp in plain text. Do not add random unrelated third-party URLs.
+- ZIP: only in the last FAQ answer, as {maps_faq}. Never ZIP-only link text. Never in intro, body, conclusion, title, or meta.
 - Do NOT list competitors, fake addresses, or other neighborhoods.
 - Name ZeOrbit in the intro and the CTA.
 - content MUST include '## Exact H2' for each h2s item with 1–2 short paragraphs under each (no empty headings). 320–480 words.
@@ -2440,7 +2507,7 @@ Return ONLY valid JSON, no markdown fences."""
     if not try_order:
         try_order = [None]
     for prov in try_order:
-        data = await chat_json(prompt, temperature=0.72 if content_kind == "blog" else 0.78, max_tokens=4500, provider=prov)
+        data = await chat_json(prompt, temperature=0.72 if content_kind == "blog" else 0.78, max_tokens=2400 if content_kind == "blog" else 3200, provider=prov)
         blob = f"{data.get('intro','') if data else ''} {data.get('content','') if data else ''} {' '.join(data.get('h2s') or []) if data else ''}"
         if data and not _looks_like_template_filler(blob):
             break
@@ -2454,7 +2521,6 @@ Return ONLY valid JSON, no markdown fences."""
     for f in data.get("faqs") or []:
         if isinstance(f, dict) and f.get("question"):
             faqs.append(FAQItem(question=_as_text(f.get("question")), answer=_as_text(f.get("answer"))))
-    schema = _build_schema(bt, city, state, faqs)
 
     # Query-mode (sentence keywords): keep the LLM title/H1. Location pages: lock SEO title.
     if content_kind == "blog" or query_mode:
@@ -2509,6 +2575,14 @@ Return ONLY valid JSON, no markdown fences."""
 
     seo_score = _seo_score(content_text, title, meta, h2s, faqs, primary_kw, city, slug, h1=h1)
     density = _keyword_density(content_text, primary_kw)
+    schema = _build_schema(
+        bt, city, state, faqs,
+        business_name="ZeOrbit",
+        site_url=CANONICAL_SITE,
+        phone="+1-619-724-9517",
+        article_title=title,
+        slug_override=slug,
+    )
 
     return SEOBlock(
         city=city,
@@ -2733,7 +2807,10 @@ async def _generate_template_block(
             near_me=[],
             user_questions=[f.question for f in faqs],
         )
-        schema = _build_schema(business_type.title(), city or "United States", state, faqs, article_title=title)
+        schema = _build_schema(
+            business_type.title(), city or "United States", state, faqs,
+            business_name="ZeOrbit", site_url=CANONICAL_SITE, article_title=title,
+        )
         content = _sectioned_body(h2s, intro, content, brief=brief, query=primary)
         content = _strip_instruction_leak(content, brief)
         seo_score = _seo_score(intro + " " + content, title, "", h2s, faqs, primary, city or "", slug, h1=h1)
@@ -2797,7 +2874,13 @@ async def _generate_template_block(
         near_me=[f"{primary.lower()} near me"],
         user_questions=[f.question for f in faqs],
     )
-    schema = _build_schema(bt, city, state, faqs)
+    schema = _build_schema(
+        bt, city, state, faqs,
+        business_name="ZeOrbit",
+        site_url=CANONICAL_SITE,
+        article_title=title,
+        slug_override=slug,
+    )
     content = _sectioned_body(h2s, intro, content, brief=brief)
     content = _strip_instruction_leak(content, brief)
     seo_score = _seo_score(intro + " " + content, title, meta, h2s, faqs, primary, city, slug, h1=h1)

@@ -1315,6 +1315,8 @@ export default function ContentPage() {
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-1)' }}>Content Generation</h1>
           <p className="text-sm mt-0.5" style={{ color: 'var(--text-3)' }}>
             Choose Page or Post first — each uses its own workflow and sitemap.
+            Writer is <strong>Google Gemini</strong> unless you pick another model.
+            Blog posts answer the keyword (about 320–480 words) so Google can index them; pages are location landers.
           </p>
         </div>
       </div>
@@ -1595,12 +1597,12 @@ export default function ContentPage() {
                   type="text"
                   value={form.image_keyword || ''}
                   onChange={(e) => updateForm((f) => ({ ...f, image_keyword: e.target.value }))}
-                  placeholder="e.g. primary care doctor clinic, dentist office, HVAC technician"
+                  placeholder="1–2 words: dentist, used car, HVAC tech"
                   className="mt-1 w-full rounded-lg px-3 py-2 text-sm"
                   style={{ background: '#fff', border: '1px solid #94a3b8', color: '#0f172a' }}
                 />
                 <span className="mt-1 block text-[10px]" style={{ color: 'var(--text-4)' }}>
-                  Used only for photos. Page copy still follows niche + industry + SEO keyword. Example: “doctor with patient” not “web design laptop”.
+                  Photos only. One word or two (`used car`, `primary care`). Each page gets a unique photo — not the same laptop stock on every URL.
                 </span>
               </label>
             </div>

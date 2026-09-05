@@ -27,7 +27,7 @@ const SEO_NAV = [
 ]
 
 const CONTENT_AUTOMATION_NAV = [
-  { to: '/posted-blogs', icon: Rss,            label: 'Posted Blogs' },
+  { to: '/posted-blogs', icon: Rss,            label: 'Published URLs' },
   { to: '/articles',    icon: Newspaper,       label: 'Articles' },
   { to: '/index-automation', icon: Bot,            label: 'Index Automation' },
   { to: '/daily-10',         icon: Hand,           label: 'Daily 10%' },

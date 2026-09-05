@@ -132,8 +132,11 @@ export const listBlogPosts = (skip = 0, limit = 24) =>
   api.get('/pages/blog', { params: { skip, limit } })
 
 /** Admin: blogs already published on zeorbit.com */
-export const listPostedBlogs = (skip = 0, limit = 100) =>
+export const listPostedBlogs = (skip = 0, limit = 500) =>
   api.get('/pages/posted-blogs', { params: { skip, limit } })
+
+export const bulkUpdatePublishedContent = (data) =>
+  api.post('/pages/bulk-content', data, { timeout: 120000 })
 
 export const getPage = (slug) =>
   api.get(`/pages/${encodeURIComponent(slug)}`)

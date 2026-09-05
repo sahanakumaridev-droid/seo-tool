@@ -67,6 +67,8 @@ def assign_canonical_images(images: List["ImageAsset"]) -> tuple:
 def topic_image_family(text: str) -> str:
     """Bucket niches so uniqueness is enforced per family (web vs plumbing, etc.)."""
     t = (text or "").lower()
+    if any(k in t for k in ("used car", "car dealer", "auto dealer", "automotive", "dealership")):
+        return "automotive"
     if any(k in t for k in ("plumb",)):
         return "plumbing"
     if any(k in t for k in ("hvac", "heating", "air condition")):
@@ -76,7 +78,7 @@ def topic_image_family(text: str) -> str:
     if any(k in t for k in ("dental", "dentist")):
         return "dental"
     # Verticals before "website" so "medical website" is not filed as generic web.
-    if any(k in t for k in ("health", "medical", "clinic", "hospital", "doctor", "patient")):
+    if any(k in t for k in ("health", "medical", "clinic", "hospital", "doctor", "patient", "primary care")):
         return "healthcare"
     if any(k in t for k in ("law", "legal", "attorney")):
         return "legal"
@@ -311,14 +313,75 @@ _BLOG_PLATFORM_VISUALS = (
 )
 
 
+_IMAGE_KEYWORD_PHRASES = (
+    "used car", "used cars", "real estate", "primary care", "web design",
+    "web designer", "website design", "mobile app", "google ads", "search console",
+    "air conditioning", "personal trainer", "social media", "landing page",
+    "online store", "small business", "custom software", "car dealer",
+)
+
+_IMAGE_KEYWORD_STOP = {
+    "the", "in", "of", "and", "a", "an", "for", "to", "at", "on", "by", "with",
+    "near", "me", "best", "top", "how", "to", "a", "the", "my", "your", "website",
+    "site", "page", "pages", "guide", "what", "is", "why",
+}
+
+
+def image_keyword_terms(text: str) -> dict:
+    """Parse 1–2 word image keywords the editor types (dentist, used car)."""
+    raw = re.sub(r"[-_/]+", " ", (text or "").lower())
+    raw = re.sub(r"[^\w\s]", " ", raw)
+    raw = re.sub(r"\s+", " ", raw).strip()
+    if not raw:
+        return {"phrase": "", "words": [], "is_short": False}
+    keep2 = {"ai", "rv", "ux", "ui", "hr", "it", "seo", "ppc", "crm"}
+    tokens = []
+    for w in raw.split():
+        if w in _IMAGE_KEYWORD_STOP:
+            continue
+        if len(w) <= 1:
+            continue
+        if len(w) == 2 and w not in keep2:
+            continue
+        tokens.append(w)
+    if not tokens:
+        tokens = [w for w in raw.split() if w not in _IMAGE_KEYWORD_STOP]
+    phrase = ""
+    for bg in _IMAGE_KEYWORD_PHRASES:
+        if re.search(rf"\b{re.escape(bg)}\b", raw):
+            phrase = bg
+            break
+    if not phrase:
+        phrase = " ".join(tokens[:2]) if tokens else raw
+    words = phrase.split()
+    return {"phrase": phrase.strip(), "words": words, "is_short": len(words) <= 2}
+
+
 def blog_image_plan(query: str, niche: str = "") -> dict:
     """Blog-only: pick image category from the search query (e.g. Wix from 'fix wix website').
 
     Returns topic + Unsplash modifiers so featured photos match what the reader searched.
     When multiple platforms appear (e.g. 'wordpress vs squarespace'), use the first one
     mentioned in the query — not the order of the platform list.
+    One- and two-word image keywords (dentist, used car) stay as the visual topic.
     """
     blob = f"{query or ''} {niche or ''}".strip().lower()
+    kw = image_keyword_terms(query or "")
+    if kw["phrase"] and kw["is_short"] and topic_image_family(kw["phrase"]) not in ("web", "software", "general"):
+        phrase = kw["phrase"]
+        return {
+            "category": phrase.replace(" ", "_"),
+            "topic": phrase,
+            "modifiers": [
+                phrase,
+                f"{phrase} professional",
+                f"{phrase} business",
+                f"{kw['words'][0]} workplace" if kw["words"] else phrase,
+            ],
+            "concept": f"{phrase.title()} related photography",
+            "label": phrase.title(),
+            "focus": phrase,
+        }
     if not blob:
         return {
             "category": "website",
@@ -351,9 +414,27 @@ def blog_image_plan(query: str, niche: str = "") -> dict:
         "website", "site", "page", "pages",
     }
     tokens = [t for t in re.findall(r"[a-z0-9]+", blob) if t not in stop and len(t) > 2]
-    label = " ".join(tokens[:3]).title() if tokens else "Website"
-    topic_bits = tokens[:3] or ["website", "design"]
-    topic = " ".join(topic_bits) + " website laptop"
+    if not tokens:
+        kw2 = image_keyword_terms(blob)
+        tokens = kw2["words"] or (blob.split()[:2] if blob else ["website", "design"])
+    label = " ".join(tokens[:2]).title() if tokens else "Website"
+    topic_bits = tokens[:2] or ["website", "design"]
+    short_topic = " ".join(topic_bits)
+    if len(topic_bits) <= 2 and topic_image_family(short_topic) not in ("web", "software", "general"):
+        return {
+            "category": tokens[0] if tokens else "website",
+            "topic": short_topic,
+            "modifiers": [
+                short_topic,
+                f"{short_topic} professional",
+                f"{topic_bits[0]} workplace",
+                f"{short_topic} business",
+            ],
+            "concept": f"{label} photography",
+            "label": label,
+            "focus": short_topic,
+        }
+    topic = short_topic + " website laptop"
     return {
         "category": tokens[0] if tokens else "website",
         "topic": topic,
@@ -1440,7 +1521,7 @@ def _curated_image_url(
         topic_pool = list(_HEALTHCARE_IMAGES)
     elif fam in ("dental", "legal", "fitness"):
         pass
-    elif fam in ("web", "software", "general") or any(
+    elif fam in ("web", "software", "general") and any(
         w in (topic or "").lower() for w in ("website", "web design", "wordpress", "shopify", "wix", "squarespace", "webflow", "laptop")
     ):
         topic_pool = list(_WEB_DESIGN_IMAGES)
@@ -1511,18 +1592,24 @@ def _stock_result_score(result: dict, query: str) -> int:
             "responsive", "browser", "doctor", "clinic", "hospital", "patient", "medical",
         )):
             return 0
-    # Prefer website-related hits; for website queries, require a visual match.
+    # Prefer website-related hits only when the search is actually about websites.
+    wants_web = any(k in q for k in ("website", "web design", "wordpress", "shopify", "wix", "webflow"))
     web_ok = any(k in blob for k in (
         "website", "web design", "laptop", "computer", "code", "ui", "ux",
         "mockup", "wordpress", "shopify", "browser", "developer", "designer",
     ))
-    if any(k in q for k in ("website", "web design", "wordpress", "shopify", "laptop")) and not web_ok:
+    if wants_web and not web_ok:
         return 0
-    web_bonus = 2 if web_ok else 0
-    words = [w for w in re.findall(r"[a-zA-Z]+", (query or "").lower()) if len(w) > 3]
+    web_bonus = 2 if (wants_web and web_ok) else 0
+    words = [w for w in re.findall(r"[a-zA-Z]+", (query or "").lower()) if len(w) > 2]
     if not words:
         return 1 + web_bonus
-    return sum(1 for w in words if w in blob) + web_bonus
+    hits = sum(1 for w in words if w in photo_blob or w in blob)
+    if len(words) >= 2 and hits == 0:
+        return 0
+    if len(words) == 1 and words[0] not in photo_blob and words[0] not in blob:
+        return max(0, web_bonus)
+    return hits + web_bonus + (2 if hits >= min(2, len(words)) else 0)
 
 
 def _openverse_relevance(result: dict, topic_words: List[str]) -> int:
@@ -1736,9 +1823,7 @@ async def generate_article_images(
         prefer_hosted = bool(settings.UNSPLASH_ACCESS_KEY or settings.PEXELS_API_KEY)
 
     for i in range(count):
-        pick_exclude: Set[str] = set(used)
-        if i == 0:
-            pick_exclude |= featured_taken
+        pick_exclude: Set[str] = set(used) | featured_taken
         is_featured = i == 0
         modifier = modifiers[i % len(modifiers)]
         query = f"{topic} {modifier}".strip()
@@ -1798,9 +1883,7 @@ async def generate_article_images(
             picked = False
             for u in web_only_pool:
                 uk = normalize_image_key(u)
-                if uk and uk not in used and not _is_banned_stock_key(uk):
-                    if i == 0 and uk in featured_taken:
-                        continue
+                if uk and uk not in used and uk not in featured_taken and not _is_banned_stock_key(uk):
                     url, key = _with_unsplash_params(u), uk
                     picked = True
                     break
@@ -1810,8 +1893,8 @@ async def generate_article_images(
             unused = [
                 u for u in web_only_pool
                 if normalize_image_key(u) not in used
+                and normalize_image_key(u) not in featured_taken
                 and not _is_banned_stock_key(normalize_image_key(u))
-                and (i > 0 or normalize_image_key(u) not in featured_taken)
             ]
             if unused:
                 url = _with_unsplash_params(unused[(keyword_index + i) % len(unused)])
@@ -1830,7 +1913,7 @@ async def generate_article_images(
                     # Last resort: any unused curated photo so we still ship 3 images
                     for u in web_only_pool:
                         uk = normalize_image_key(u)
-                        if uk and uk not in used and not _is_banned_stock_key(uk):
+                        if uk and uk not in used and uk not in featured_taken and not _is_banned_stock_key(uk):
                             url, key = _with_unsplash_params(u), uk
                             break
                     if not url:
@@ -1959,7 +2042,7 @@ async def reassign_unique_featured_images(rows: Iterable, used: Optional[List[st
         loc = f"{getattr(r, 'city', '') or ''}, {getattr(r, 'state', '') or ''}".strip(", ")
         industry = b.get("industry") or ""
         imgs = await generate_article_images(
-            "website design wordpress shopify" if topic_image_family(str(focus)) in ("web", "general", "software") else focus,
+            "website design wordpress shopify" if topic_image_family(str(focus)) in ("web", "general", "software") and not (b.get("image_keyword") or "").strip() else (b.get("image_keyword") or focus),
             loc,
             "ZeOrbit",
             count=3,
@@ -1969,6 +2052,9 @@ async def reassign_unique_featured_images(rows: Iterable, used: Optional[List[st
             search_intent=b.get("search_intent") or "",
             image_concept_text=b.get("image_concept") or "",
             keyword_index=updated,
+            content_type=b.get("content_type") or "",
+            match_query=(b.get("image_keyword") or "").strip() or str(focus),
+            image_keyword=(b.get("image_keyword") or "").strip(),
         )
         if not imgs:
             continue

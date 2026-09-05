@@ -14,7 +14,17 @@ const STATUS_META = {
   discovered:             { label: 'Crawled',       color: 'var(--amber)',   bg: 'var(--amber-soft)',  icon: HelpCircle },
   indexed:                { label: 'Indexed',       color: 'var(--green)',   bg: 'var(--green-soft)',  icon: CheckCircle2 },
   not_indexed:            { label: 'Not Indexed',   color: 'var(--amber)',   bg: 'var(--amber-soft)',  icon: AlertTriangle },
+  rejected:               { label: 'Rejected',      color: 'var(--red)',     bg: 'var(--red-soft)',    icon: XCircle },
   error:                  { label: 'Error / Failed', color: 'var(--red)',    bg: 'var(--red-soft)',    icon: XCircle },
+}
+
+function statusBucket(status) {
+  if (status === 'indexed') return 'indexed'
+  if (status === 'rejected') return 'rejected'
+  if (status === 'error') return 'error'
+  if (status === 'crawled' || status === 'discovered') return 'crawled'
+  if (status === 'not_indexed') return 'not_indexed'
+  return 'submitted'
 }
 
 function StatusBadge({ status }) {
@@ -50,6 +60,8 @@ export default function IndexingStatusPage() {
   const [tab, setTab] = useState('not_indexed')
   const [keyword, setKeyword] = useState('')
   const [requesting, setRequesting] = useState('')
+  const [selected, setSelected] = useState(() => new Set())
+  const [bulkBusy, setBulkBusy] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -160,13 +172,87 @@ export default function IndexingStatusPage() {
 
   const q = keyword.trim().toLowerCase()
   const indexedRows = rows.filter(r => INDEXED.has(r.status))
-  const notIndexedRows = rows.filter(r => !INDEXED.has(r.status))
+  const notIndexedRows = rows.filter(r => statusBucket(r.status) === 'not_indexed')
+  const byBucket = (id) => rows.filter(r => statusBucket(r.status) === id)
   const googleQuery = `${keyword.trim() || 'zeorbit'} site:zeorbit.com`
   const googleHref = `https://www.google.com/search?q=${encodeURIComponent(googleQuery)}`
-  const visible = (tab === 'indexed' ? indexedRows : tab === 'not_indexed' ? notIndexedRows : rows).filter((r) => {
+  const tabRows = tab === 'all' ? rows
+    : tab === 'indexed' ? indexedRows
+    : tab === 'not_indexed' ? notIndexedRows
+    : byBucket(tab)
+  const visible = tabRows.filter((r) => {
     if (!q) return true
     return `${r.title || ''} ${r.url || ''}`.toLowerCase().includes(q)
   })
+  const allVisibleSelected = visible.length > 0 && visible.every((r) => selected.has(r.id))
+
+  const toggleOne = (id) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleAllVisible = () => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (allVisibleSelected) visible.forEach((r) => next.delete(r.id))
+      else visible.forEach((r) => next.add(r.id))
+      return next
+    })
+  }
+
+  const selectedRows = rows.filter((r) => selected.has(r.id))
+
+  const bulkRefresh = async () => {
+    if (!selectedRows.length) {
+      setError('Select one or more URLs first.')
+      return
+    }
+    setBulkBusy(true)
+    setError('')
+    try {
+      for (const row of selectedRows) {
+        const res = await refreshSeoIndexing(row.id)
+        if (res.data?.urls?.length) {
+          setRows((prev) => {
+            const map = new Map(prev.map((r) => [r.id, r]))
+            res.data.urls.forEach((u) => map.set(u.id, u))
+            return [...map.values()]
+          })
+        }
+      }
+      setPushNote(`Checked Google status for ${selectedRows.length} URL${selectedRows.length === 1 ? '' : 's'}.`)
+    } catch (e) {
+      setError(e.response?.data?.detail || e.message || 'Bulk status check failed.')
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
+  const bulkReprocess = async () => {
+    if (!selectedRows.length) {
+      setError('Select one or more URLs first.')
+      return
+    }
+    setBulkBusy(true)
+    setError('')
+    try {
+      for (const row of selectedRows) {
+        const res = await requestSeoIndex({ url: row.url })
+        if (res.data?.url) {
+          setRows((prev) => prev.map((r) => (r.url === res.data.url.url ? res.data.url : r)))
+        }
+      }
+      setPushNote(`Reprocessed ${selectedRows.length} URL${selectedRows.length === 1 ? '' : 's'}.`)
+    } catch (e) {
+      setError(e.response?.data?.detail || e.message || 'Bulk reprocess failed.')
+    } finally {
+      setBulkBusy(false)
+    }
+  }
 
   return (
     <div className="space-y-6 fade-in">
@@ -174,7 +260,7 @@ export default function IndexingStatusPage() {
         <div>
           <h1 className="font-display" style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-1)' }}>Indexing</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--text-3)' }}>
-            Indexed vs not indexed on Google, keyword checks with <code>site:zeorbit.com</code>, then add any missing URL to request indexing.
+            Filter published URLs by Google status (Submitted, Crawled, Indexed, Not indexed, Rejected, Errors), then check or reprocess selected rows.
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -399,7 +485,11 @@ export default function IndexingStatusPage() {
       <div className="flex gap-2 flex-wrap">
         {[
           { id: 'not_indexed', label: `Not indexed (${notIndexedRows.length})` },
+          { id: 'submitted', label: `Submitted (${byBucket('submitted').length})` },
+          { id: 'crawled', label: `Crawled (${byBucket('crawled').length})` },
           { id: 'indexed', label: `Indexed (${indexedRows.length})` },
+          { id: 'rejected', label: `Rejected (${byBucket('rejected').length})` },
+          { id: 'error', label: `Errors (${byBucket('error').length})` },
           { id: 'all', label: `All (${rows.length})` },
         ].map((t) => (
           <button
@@ -411,6 +501,15 @@ export default function IndexingStatusPage() {
             {t.label}
           </button>
         ))}
+      </div>
+
+      <div className="flex gap-2 flex-wrap items-center">
+        <button type="button" className="btn btn-secondary text-sm" disabled={bulkBusy} onClick={bulkRefresh}>
+          {bulkBusy ? 'Working…' : `Check status (${selected.size})`}
+        </button>
+        <button type="button" className="btn btn-primary text-sm" disabled={bulkBusy} onClick={bulkReprocess}>
+          {bulkBusy ? 'Working…' : `Reprocess selected (${selected.size})`}
+        </button>
       </div>
 
       <div className="card">
@@ -425,6 +524,9 @@ export default function IndexingStatusPage() {
           <table className="data-table">
             <thead>
               <tr>
+                <th>
+                  <input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="Select all visible URLs" />
+                </th>
                 <th>URL</th>
                 <th>Status</th>
                 <th>HTTP</th>
@@ -438,6 +540,14 @@ export default function IndexingStatusPage() {
             <tbody>
               {visible.map(row => (
                 <tr key={row.id}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(row.id)}
+                      onChange={() => toggleOne(row.id)}
+                      aria-label={`Select ${row.title || row.url}`}
+                    />
+                  </td>
                   <td>
                     <div style={{ fontWeight: 600, color: 'var(--text-1)' }}>{row.title || '—'}</div>
                     <a href={row.url} target="_blank" rel="noreferrer"

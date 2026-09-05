@@ -68,9 +68,14 @@ export default function HumanTenPage() {
         <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 8px', color: 'var(--text-1)' }}>
           1. Request indexing (required today)
         </h2>
-        <p style={{ fontSize: 13, color: 'var(--text-3)', margin: '0 0 14px' }}>
+        <p style={{ fontSize: 13, color: 'var(--text-3)', margin: '0 0 10px' }}>
           Open each link, then click <strong>Request indexing</strong> in Google Search Console.
           Come back and mark it done so tomorrow’s queue skips it. Cap is about 10 per day.
+        </p>
+        <p style={{ fontSize: 13, color: 'var(--text-3)', margin: '0 0 14px', lineHeight: 1.5 }}>
+          Google must be signed in as an owner of <strong>{data?.gsc_property || 'https://zeorbit.com/'}</strong>.
+          If you see “you don’t have access to this property,” switch Google accounts, or ask the owner to add this Gmail under Search Console → Settings → Users.
+          The SEO tool API already uses a service account — your browser login is separate.
         </p>
         {queue.length === 0 ? (
           <p style={{ fontSize: 13, color: 'var(--green)' }}>No GSC clicks left in today’s quota — or hubs already marked.</p>
@@ -89,6 +94,9 @@ export default function HumanTenPage() {
                   <a className="btn btn-primary" href={row.inspect_link} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
                     Open GSC <ExternalLink size={12} />
                   </a>
+                  <button type="button" className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => copy(row.url)}>
+                    {copied === row.url ? 'Copied' : 'Copy URL'}
+                  </button>
                   <button
                     type="button"
                     className="btn btn-secondary"

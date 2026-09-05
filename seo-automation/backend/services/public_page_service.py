@@ -8,7 +8,7 @@ import html
 import json
 import re
 from models.schemas import SEOBlock
-from services.wordpress_service import _build_content_html, _ai_platform_bar
+from services.wordpress_service import _build_content_html
 from config import settings
 
 EMAIL = "info@zeorbit.com"
@@ -428,18 +428,25 @@ def _footer() -> str:
     for title, items in cols:
         lis = "".join(f'<li><a href="{u}">{_esc(n)}</a></li>' for n, u in items)
         col_html.append(f'<div class="zo-host-footer-col"><h4>{_esc(title)}</h4><ul>{lis}</ul></div>')
-    socials = "".join(
-        f'<a class="zo-host-social is-{label.lower().replace(" ", "-")}" href="{url}" '
-        f'target="_blank" rel="noreferrer" aria-label="{_esc(label)}">{inner}</a>'
-        for label, url, inner in _footer_social_items()
-    )
+    def _social_link(item) -> str:
+        label, url, inner = item
+        cls = label.lower().replace(" ", "-")
+        return (
+            f'<a class="zo-host-social is-{cls}" href="{url}" '
+            f'target="_blank" rel="noreferrer" aria-label="{_esc(label)}">{inner}</a>'
+        )
+
+    items = _footer_social_items()
+    left_socials = "".join(_social_link(s) for s in items[:5])
+    right_socials = "".join(_social_link(s) for s in items[5:10])
     return f"""
 <footer id="about" class="zo-site-footer zo-host-footer">
   <div class="zo-host-footer-accent" aria-hidden="true"></div>
   <div class="zo-host-footer-brand">
     <div class="rv-shell zo-host-footer-brand-inner">
       <a class="zo-host-footer-logo" href="{WEBSITE}/" aria-label="ZeOrbit home">
-        <img src="{WEBSITE}/zeorbit-logo-official.webp?v=9" alt="ZeOrbit" height="48" />
+        <img src="{WEBSITE}/zeorbit-logo-official.webp?v=9" alt="ZeOrbit" height="48"
+             style="height:48px;width:auto;max-width:min(180px,48vw);display:block;object-fit:contain;object-position:left center" />
       </a>
       <p class="zo-host-footer-tagline">Websites, apps, SEO, and custom software for ambitious U.S. brands.</p>
     </div>
@@ -451,7 +458,8 @@ def _footer() -> str:
   </div>
   <div class="zo-host-footer-socials-block">
     <div class="rv-shell zo-host-footer-social-row" role="group" aria-label="Social media">
-      <div class="zo-host-footer-social">{socials}</div>
+      <div class="zo-host-footer-social zo-host-footer-social-left">{left_socials}</div>
+      <div class="zo-host-footer-social zo-host-footer-social-right">{right_socials}</div>
     </div>
   </div>
   <div class="zo-host-footer-legal">
@@ -701,6 +709,11 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
     )
     body = _build_content_html(block)
     body = re.sub(r'<div class="call-now-wrap">[\s\S]*?</div>', "", body)
+    # Never keep the old stacked Share + Ask AI chrome inside article HTML.
+    body = re.sub(r'<style>\s*\.ai-ask-wrap[\s\S]*?</style>', "", body, flags=re.I)
+    body = re.sub(r'<div class="ai-ask-wrap">[\s\S]*?</nav></div>', "", body)
+    body = re.sub(r'<div class="share-bar"[^>]*>[\s\S]*?</div>', "", body)
+    body = re.sub(r'<script type="application/ld\+json">[\s\S]*?</script>', "", body, flags=re.I)
     # Old generated schema used example.com — rewrite to the real public page URL.
     if public_url:
         body = re.sub(
@@ -775,6 +788,32 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
     mins = _read_time(block)
     og_img = f'<meta property="og:image" content="{_esc(featured)}" />' if featured else ""
     canonical_tag = f'<link rel="canonical" href="{_esc(public_url)}" />' if public_url else ""
+    ld_scripts = ""
+    try:
+        from services.content_service import sanitize_schema_markup, _build_schema
+        page_abs = public_url or f"{WEBSITE}/{getattr(block, 'slug', '') or ''}"
+        schema = sanitize_schema_markup(block.schema_markup or {}, page_url=page_abs, site_url=WEBSITE)
+        if not schema.get("article"):
+            schema = _build_schema(
+                block.business_type or "ZeOrbit",
+                block.city or "",
+                block.state or "",
+                list(block.faqs or []),
+                business_name="ZeOrbit",
+                site_url=WEBSITE,
+                phone=PHONE_DISPLAY,
+                article_title=block.title or block.h1 or "",
+                slug_override=block.slug or "",
+            )
+        chunks = []
+        for val in schema.values():
+            if isinstance(val, dict) and val.get("@type"):
+                chunks.append(
+                    f'<script type="application/ld+json">{json.dumps(val, ensure_ascii=False)}</script>'
+                )
+        ld_scripts = "\n".join(chunks)
+    except Exception:
+        ld_scripts = ""
     hero = f'<div class="hero-wrap"><img src="{_esc(featured)}" alt="{hero_alt}" /></div>' if featured else ""
     footer_figure = (
         f'<figure class="article-footer-image"><a href="{WEBSITE}/contact">'
@@ -791,8 +830,6 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
         f'<meta name="google-site-verification" content="{_esc(verify_token)}" />'
         if verify_token else ""
     )
-    share_bar = _share_bar(public_url, block.title or block.h1 or "", featured)
-
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -808,10 +845,11 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
 <meta property="og:description" content="{desc}" />
 {og_img}
 {canonical_tag}
+{ld_scripts}
 <meta name="robots" content="index,follow" />
 <link rel="icon" type="image/webp" href="{WEBSITE}/zeorbit-logo.webp?v=8" />
 <link rel="apple-touch-icon" href="{WEBSITE}/zeorbit-logo.webp?v=8" />
-<link rel="stylesheet" href="{WEBSITE}/article-chrome.css?v=5" />
+<link rel="stylesheet" href="{WEBSITE}/article-chrome.css?v=6" />
 <style>
   :root {{
     --brand:#2563EB; --brand-dark:#1D4ED8; --navy:#0B1F3A; --signal:#38BDF8;
@@ -915,15 +953,24 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
   .toc a {{ font-family:var(--sans); font-size:14px; color:var(--body); text-decoration:none; }}
   .toc a:hover {{ color:var(--brand); }}
 
-  p {{ margin:0 0 22px; color:var(--body); font-size:18px; line-height:1.75; }}
+  article p {{ margin:0 0 22px; color:var(--body); font-size:18px; line-height:1.75; }}
   .seo-intro {{ font-size:20px; line-height:1.7; color:#1B2536; }}
-  h2 {{ font-family:var(--display); font-size:clamp(26px,3.5vw,34px); font-weight:700; letter-spacing:-0.015em; color:var(--ink); margin:44px 0 14px; scroll-margin-top:90px; }}
+  article h2 {{ font-family:var(--display); font-size:clamp(26px,3.5vw,34px); font-weight:700; letter-spacing:-0.015em; color:var(--ink); margin:44px 0 14px; scroll-margin-top:90px; }}
   #overview, #contact, #faq-heading {{ scroll-margin-top:90px; }}
-  h3 {{ font-family:var(--sans); font-size:19px; font-weight:700; color:var(--ink); margin:28px 0 10px; }}
-  ul,ol {{ margin:0 0 22px; padding-left:24px; }} li {{ margin:8px 0; line-height:1.6; }}
+  article h3 {{ font-family:var(--sans); font-size:19px; font-weight:700; color:var(--ink); margin:28px 0 10px; }}
+  article ul, article ol {{ margin:0 0 22px; padding-left:24px; }}
+  article li {{ margin:8px 0; line-height:1.6; }}
   article a {{ color:var(--brand); text-underline-offset:2px; }}
-  header a, .zo-host-footer a, .share-bar a, .ai-ask-bar a, .zo-nav a, .zo-topbar a {{
+  header a, .share-bar a, .ai-ask-bar a, .zo-nav a, .zo-topbar a {{
     text-decoration:none; color:inherit;
+  }}
+  .zo-host-footer-col a {{ color:#4b5563 !important; text-decoration:none; }}
+  .zo-host-footer-col a:hover {{ color:#111 !important; }}
+  .zo-host-footer-legal-links a {{ color:#4b5563 !important; text-decoration:none; }}
+  .zo-host-footer-legal-links a:hover {{ color:#111 !important; }}
+  .zo-host-footer-logo img {{
+    height:48px; width:auto; max-width:min(180px,48vw); display:block;
+    object-fit:contain; object-position:left center;
   }}
 
   /* Red highlight CALL NOW buttons — matches zeorbit.com blog CTAs */
@@ -1262,8 +1309,6 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
     {ad_unit}
     {body}
     {footer_figure}
-    {share_bar}
-    {_ai_platform_bar(public_url, block.title or block.h1 or "")}
   </article>
 
   {_contact_finale()}

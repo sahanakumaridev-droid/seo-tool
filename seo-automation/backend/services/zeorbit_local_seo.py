@@ -820,8 +820,10 @@ def ai_page_brief_block(
 ) -> str:
     place = place_label(city, state, zip) or (f"{city}, {state}".strip(", ") if state else city)
     z = re.sub(r"\D", "", zip or "")[:5]
+    maps_md = zip_hyperlink(z, city, state) if z else ""
     zip_line = (
-        f"ZIP CODE {z}: put it ONLY in the last FAQ answer, as markdown [{z}](https://www.google.com/maps/search/?api=1&query={z}). "
+        f"LOCATION PIN: only in the last FAQ answer, hyperlink the full place "
+        f"{maps_md} (Location Name, State ZIP — never ZIP alone). "
         f"Never put {z} in the title, H1, intro, body, conclusion, meta, or CTA."
         if z else
         f"LOCATION: {place} — do not invent a ZIP if you do not have one."
@@ -1001,21 +1003,66 @@ def digits_zip(zip: str = "") -> str:
     return z if len(z) == 5 else ""
 
 
-def zip_maps_url(code: str) -> str:
-    return f"https://www.google.com/maps/search/?api=1&query={code}"
+def maps_anchor_label(city: str = "", state: str = "", zip: str = "") -> str:
+    """Visible Maps text: Location Name, ST ZIP."""
+    z = digits_zip(zip)
+    city = (city or "").strip()
+    state = (state or "").strip()
+    if city and state and z:
+        return f"{city}, {state} {z}"
+    if city and z:
+        return f"{city} {z}"
+    if city and state:
+        return f"{city}, {state}"
+    return z or city
 
 
-def zip_hyperlink(z: str) -> str:
-    """FAQ ZIP links to Google Maps for that postal code."""
+def maps_lat_lng(city: str = "", state: str = "") -> tuple[float, float]:
+    try:
+        from services.location_service import _geocode_from_dataset
+        rec = _geocode_from_dataset(f"{city}, {state}".strip(", "))
+        if rec:
+            return float(rec.get("lat") or 0), float(rec.get("lon") or rec.get("lng") or 0)
+    except Exception:
+        pass
+    return 0.0, 0.0
+
+
+def zip_maps_url(code: str, city: str = "", state: str = "", lat: float = 0.0, lng: float = 0.0) -> str:
+    """Google Maps search for the full place, with viewport when we have coordinates."""
+    from urllib.parse import quote
+    label = maps_anchor_label(city, state, code) or digits_zip(code)
+    path = quote(label.replace(" ", "+"), safe="+,")
+    url = f"https://www.google.com/maps/search/{path}"
+    la, ln = lat, lng
+    if abs(la) < 0.01 and abs(ln) < 0.01:
+        la, ln = maps_lat_lng(city, state)
+    if abs(la) > 0.01 and abs(ln) > 0.01:
+        url += f"/@{la},{ln},2824m/data=!3m2!1e3!4b1"
+    return url
+
+
+def zip_hyperlink(z: str, city: str = "", state: str = "", lat: float = 0.0, lng: float = 0.0) -> str:
+    """FAQ Maps link uses the full location name, not ZIP alone."""
     code = digits_zip(z)
     if not code:
         return z or ""
-    return f"[{code}]({zip_maps_url(code)})"
+    label = maps_anchor_label(city, state, code)
+    return f"[{label}]({zip_maps_url(code, city, state, lat, lng)})"
 
 
 INTERNAL_LINK_LINE = (
     "See [ZeOrbit website design](https://zeorbit.com/website-designing), "
     "[mobile apps](https://zeorbit.com/mobile-apps), and [SEO & PPC](https://zeorbit.com/seo-ppc)."
+)
+
+# First unlinked phrase in the body → ZeOrbit service page (in-paragraph, TinyFrog-style).
+ZEO_INLINE_LINKS = (
+    (re.compile(r"\b(web design services)\b", re.I), "https://zeorbit.com/website-designing"),
+    (re.compile(r"\b(website designing)\b", re.I), "https://zeorbit.com/website-designing"),
+    (re.compile(r"\b(website design)\b", re.I), "https://zeorbit.com/website-designing"),
+    (re.compile(r"\b(mobile apps?)\b", re.I), "https://zeorbit.com/mobile-apps"),
+    (re.compile(r"\b(SEO(?:\s*[&/]| and )\s*PPC|paid search)\b", re.I), "https://zeorbit.com/seo-ppc"),
 )
 
 # Unlinked directory names (AI engines match these brands to ZeOrbit profiles).
@@ -1068,8 +1115,27 @@ def _restore_markdown_links(text: str, held: list[str]) -> str:
     return out
 
 
+def highlight_zeorbit_internal(content: str) -> str:
+    """Wrap natural service phrases with ZeOrbit URLs inside existing paragraphs."""
+    text, held = _protect_markdown_links(content or "")
+    used_urls: set[str] = set()
+    blob = content or ""
+    for pattern, url in ZEO_INLINE_LINKS:
+        if url in used_urls or re.search(rf"\]\({re.escape(url)}\)", blob, re.I):
+            continue
+
+        def repl(m: re.Match, href: str = url) -> str:
+            return f"[{m.group(1)}]({href})"
+
+        text, n = pattern.subn(repl, text, count=1)
+        if n:
+            used_urls.add(url)
+            blob = text
+    return _restore_markdown_links(text, held)
+
+
 def highlight_citation_keywords(content: str) -> str:
-    """Wrap first 'website design' / 'mobile app' / 'website' with third-party listing URLs."""
+    """Wrap first leftover 'website design' / 'mobile app' / 'website' with listing URLs."""
     text, held = _protect_markdown_links(content or "")
     for pattern, url in CITATION_HIGHLIGHTS:
         if re.search(rf"\]\({re.escape(url)}\)", content or "", re.I):
@@ -1085,28 +1151,16 @@ def highlight_citation_keywords(content: str) -> str:
 
 
 def ensure_body_hyperlinks(content: str) -> str:
-    """Internal links after the first section; third-party highlights + directory names at the end."""
+    """ZeOrbit links stay inside paragraphs. Directory mention is a last-sentence, not a link band."""
     text = (content or "").strip()
     text = _INTERNAL_LINE_RE.sub("", text)
     text = _EXTERNAL_LINE_RE.sub("", text)
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    text = highlight_zeorbit_internal(text)
     text = highlight_citation_keywords(text)
-
-    chunks = re.split(r"(?=^##\s+)", text, flags=re.M)
-    chunks = [c.strip() for c in chunks if c.strip()]
-    if len(chunks) >= 2:
-        chunks[0] = f"{chunks[0]}\n\n{INTERNAL_LINK_LINE}"
-        chunks[-1] = f"{chunks[-1]}\n\n{EXTERNAL_LINK_LINE}"
-        return "\n\n".join(chunks)
-
-    paras = [p.strip() for p in re.split(r"\n{2,}", text) if p.strip()]
-    if not paras:
-        return f"{INTERNAL_LINK_LINE}\n\n{EXTERNAL_LINK_LINE}"
-    if len(paras) == 1:
-        return f"{paras[0]}\n\n{INTERNAL_LINK_LINE}\n\n{EXTERNAL_LINK_LINE}"
-    paras.insert(1, INTERNAL_LINK_LINE)
-    paras.append(EXTERNAL_LINK_LINE)
-    return "\n\n".join(paras)
+    if not re.search(r"DesignRush|GoodFirms|Yelp", text, re.I):
+        text = f"{text.rstrip()}\n\n{EXTERNAL_LINK_LINE}" if text else EXTERNAL_LINK_LINE
+    return text
 
 
 def strip_zip_from_copy(text: str, zip: str = "") -> str:
@@ -1126,15 +1180,25 @@ def strip_zip_from_copy(text: str, zip: str = "") -> str:
     return out.strip()
 
 
-def linkify_zip(text: str, zip: str = "") -> str:
-    """Turn a ZIP into a Google Maps markdown link (rewrite any existing ZIP link)."""
+def linkify_zip(text: str, zip: str = "", city: str = "", state: str = "") -> str:
+    """Turn a ZIP or old ZIP-only Maps link into a full Name, ST ZIP Maps link."""
     z = digits_zip(zip)
     if not z or not (text or ""):
         return text or ""
-    linked = zip_hyperlink(z)
-    if f"[{z}](" in text:
-        return re.sub(rf"\[{re.escape(z)}\]\([^)]*\)", linked, text, count=1)
-    return re.sub(rf"\b{re.escape(z)}\b", linked, text, count=1)
+    linked = zip_hyperlink(z, city, state)
+    out = text
+    out = re.sub(
+        rf"\[[^\]]*{re.escape(z)}[^\]]*\]\(https?://(?:www\.)?google\.com/maps[^)]*\)",
+        linked,
+        out,
+        count=1,
+        flags=re.I,
+    )
+    if linked.split("](")[0][1:] in out and "](https://www.google.com/maps/search/" in out:
+        return out
+    if f"[{z}](" in out:
+        return re.sub(rf"\[{re.escape(z)}\]\([^)]*\)", linked, out, count=1)
+    return re.sub(rf"\b{re.escape(z)}\b", linked, out, count=1)
 
 
 def copy_has_zip(text: str, zip: str = "") -> bool:
@@ -1188,12 +1252,12 @@ def _set_faq_question(faq: Any, question: str) -> None:
 
 
 def ensure_zip_in_last_faq(faqs: Sequence[Any], city: str, state: str = "", zip: str = "") -> list:
-    """ZIP only in FAQ answers, as a hyperlink to /contact."""
+    """ZIP only in FAQ answers, as a full-place Google Maps hyperlink."""
     z = digits_zip(zip)
     out = list(faqs or [])
     if not z:
         return out
-    linked = zip_hyperlink(z)
+    linked = zip_hyperlink(z, city, state)
     place = place_label(city, state, "") or city or "this area"
     extra = f" We serve {place}, including {linked}."
     found = False
@@ -1202,7 +1266,7 @@ def ensure_zip_in_last_faq(faqs: Sequence[Any], city: str, state: str = "", zip:
         _set_faq_question(faq, strip_zip_from_copy(q or "", z))
         ans = _faq_answer(faq)
         if z in ans:
-            _set_faq_answer(faq, linkify_zip(ans, z))
+            _set_faq_answer(faq, linkify_zip(ans, z, city, state))
             found = True
     if found:
         return out

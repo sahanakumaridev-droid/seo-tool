@@ -501,8 +501,23 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
         existing_bodies.append(f"{block.intro or ''}\n{block.content or ''}")
 
         slug = (block.slug or preview_slug).strip()
-        # Avoid in-batch duplicate inserts (same resolved place listed twice)
-        if slug in batch_slugs:
+        from services.page_dedupe import row_matches_post
+        if req.content_kind == "post":
+            already = slug in batch_slugs or slug in by_slug
+            if not already:
+                for row in existing_rows:
+                    if row_matches_post(
+                        row,
+                        slug=slug,
+                        city=city_info.name or "",
+                        keyword=focus or "",
+                        title=block.title or "",
+                    ):
+                        already = True
+                        break
+            if already:
+                continue
+        elif slug in batch_slugs:
             n = 2
             while f"{slug}-{n}" in batch_slugs or f"{slug}-{n}" in by_slug:
                 n += 1
@@ -530,6 +545,11 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
         # Draft only — do not write PageRecord here. Live URLs / sitemap happen on Publish.
 
     if not pages:
+        if req.content_kind == "post":
+            raise HTTPException(
+                status_code=409,
+                detail="These posts already exist. Open Live blogs to edit them instead of creating duplicates.",
+            )
         raise HTTPException(status_code=502, detail="Generation produced no pages. Try again.")
 
     dropped = max(0, requested_n - len(pages))
@@ -580,12 +600,25 @@ async def generate_articles_endpoint(req: ArticleRequest, session: AsyncSession 
         if u0:
             used_featured.append(u0)
 
+    unique_pages = []
     for block in pages:
         # Namespace the slug so keyword-articles don't collide with city-page slugs.
         base_slug = block.slug or slugify(block.title)
         slug = base_slug
         result = await session.execute(select(PageRecord).where(PageRecord.slug == slug))
         existing = result.scalar_one_or_none()
+        if existing:
+            continue
+        from services.page_dedupe import find_duplicate_page
+        conflict = await find_duplicate_page(
+            session,
+            slug=slug,
+            city=block.city or city.strip(),
+            keyword=req.primary_keyword or "",
+            title=block.title or "",
+        )
+        if conflict:
+            continue
         # Re-pick featured if it collides with another saved page
         feat = block.featured_image_url or ""
         if feat and normalize_image_key(feat) in {normalize_image_key(u) for u in used_featured}:
@@ -607,6 +640,13 @@ async def generate_articles_endpoint(req: ArticleRequest, session: AsyncSession 
         if feat:
             used_featured.append(feat)
         block.slug = slug
+        unique_pages.append(block)
+    pages = unique_pages
+    if not pages:
+        raise HTTPException(
+            status_code=409,
+            detail="Those articles already exist. Open Live blogs to edit the published URLs instead of creating duplicates.",
+        )
     return BulkGenerateResponse(total=len(pages), pages=pages, job_id=str(uuid.uuid4()))
 
 

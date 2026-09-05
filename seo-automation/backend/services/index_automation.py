@@ -299,6 +299,7 @@ def human_ten_payload() -> dict:
     remaining = max(0, INSPECT_BATCH - done_today)
     minutes = 2 + (1 if not human["bing_webmaster_done"] else 0) + min(len(queue), remaining)
 
+    site = (settings.GSC_SITE_URL or "https://zeorbit.com/").strip()
     return {
         "split": "90% machine / 10% human",
         "minutes_today": minutes,
@@ -306,6 +307,7 @@ def human_ten_payload() -> dict:
         "requested_today": done_today,
         "quota": INSPECT_BATCH,
         "remaining_quota": remaining,
+        "gsc_property": site,
         "gsc_queue": queue[:remaining],
         "bing": {
             "done": human["bing_webmaster_done"],

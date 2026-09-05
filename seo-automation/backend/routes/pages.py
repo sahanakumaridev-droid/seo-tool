@@ -317,9 +317,35 @@ async def publish_to_web(
 
     slug = _block_slug(block)
     block.slug = slug
+    try:
+        from services.content_service import sanitize_schema_markup
+        block.schema_markup = sanitize_schema_markup(
+            block.schema_markup or {},
+            page_url=f"{LIVE_SITE}/{slug}",
+            site_url=LIVE_SITE,
+        )
+    except Exception:
+        pass
 
     result = await session.execute(select(PageRecord).where(PageRecord.slug == slug))
     existing = result.scalar_one_or_none()
+    if not existing:
+        from services.page_dedupe import find_duplicate_page
+        conflict = await find_duplicate_page(
+            session,
+            slug=slug,
+            city=block.city or "",
+            keyword=getattr(block, "focus_keyword", "") or block.business_type or "",
+            title=block.title or "",
+        )
+        if conflict:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"A post already exists at /{conflict.slug}. "
+                    "Update or re-publish that URL instead of creating a duplicate."
+                ),
+            )
     if existing:
         existing.seo_block = block.model_dump()
         existing.updated_at = datetime.now(timezone.utc)
@@ -374,6 +400,17 @@ async def publish_to_web_bulk(
         block.slug = slug
         result = await session.execute(select(PageRecord).where(PageRecord.slug == slug))
         existing = result.scalar_one_or_none()
+        if not existing:
+            from services.page_dedupe import find_duplicate_page
+            conflict = await find_duplicate_page(
+                session,
+                slug=slug,
+                city=block.city or "",
+                keyword=getattr(block, "focus_keyword", "") or block.business_type or "",
+                title=block.title or "",
+            )
+            if conflict:
+                continue
         if existing:
             existing.seo_block = block.model_dump()
             existing.updated_at = datetime.now(timezone.utc)
@@ -424,6 +461,13 @@ class SaveBlockRequest(BaseModel):
     business_type: str = ""
     sibling_slugs: List[str] = []
     sibling_blocks: List[SEOBlock] = []
+
+
+class BulkContentUpdate(BaseModel):
+    slugs: List[str]
+    find: str = ""
+    replace: str = ""
+    republish: bool = False
 
 
 def _relocalize_text(text: str, src: SEOBlock, dest_city: str, dest_state: str, dest_zip: str, keep_zip: bool = False) -> str:
@@ -713,8 +757,8 @@ async def list_posted_blogs(
     limit: int = 100,
     session: AsyncSession = Depends(get_session),
 ):
-    """Admin list: blog posts that are saved and live on zeorbit.com."""
-    limit = max(1, min(limit, 200))
+    """Admin list: published URLs on zeorbit.com."""
+    limit = max(1, min(limit, 500))
     skip = max(0, skip)
     base = (_reader_base(request) or LIVE_SITE).rstrip("/")
     tracked = (await session.execute(select(PublishedUrlRecord))).scalars().all()
@@ -731,8 +775,7 @@ async def list_posted_blogs(
     posts = []
     for r in rows:
         block = r.seo_block if isinstance(r.seo_block, dict) else {}
-        if not _is_blog_block(block):
-            continue
+        kind = "blog" if _is_blog_block(block) else "page"
         title = (block.get("title") or block.get("h1") or r.business_type or r.slug or "Untitled").strip()
         live_url = f"{base}/{r.slug}"
         st = status_by_slug.get(r.slug) or "live"
@@ -745,6 +788,7 @@ async def list_posted_blogs(
             "state": r.state,
             "industry": (block.get("industry") or r.business_type or "").strip(),
             "focus_keyword": (block.get("focus_keyword") or "").strip(),
+            "kind": kind,
             "public_url": live_url,
             "featured_image_url": block.get("featured_image_url") or None,
             "status": st,
@@ -753,6 +797,68 @@ async def list_posted_blogs(
         })
     total = len(posts)
     return {"posts": posts[skip: skip + limit], "total": total, "skip": skip, "limit": limit}
+
+
+@router.post("/bulk-content", response_model=dict)
+async def bulk_update_content(
+    req: BulkContentUpdate,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Find/replace (or republish) selected published URLs."""
+    from sqlalchemy.orm.attributes import flag_modified
+    from services.zeorbit_local_seo import apply_zip_faq_only
+    from services.publish_pipeline import track_public_publish
+
+    slugs = [s.strip() for s in (req.slugs or []) if (s or "").strip()]
+    if not slugs:
+        raise HTTPException(status_code=400, detail="Select at least one URL.")
+    find = req.find or ""
+    repl = req.replace or ""
+    if not find and not req.republish:
+        raise HTTPException(status_code=400, detail="Enter text to find, or turn on re-publish.")
+
+    rows = (await session.execute(select(PageRecord).where(PageRecord.slug.in_(slugs)))).scalars().all()
+    updated = []
+    base = _public_base(request)
+    for row in rows:
+        block = dict(row.seo_block) if isinstance(row.seo_block, dict) else {}
+        if find:
+            for key in ("title", "h1", "intro", "content", "meta_description", "cta"):
+                val = block.get(key)
+                if isinstance(val, str) and find in val:
+                    block[key] = val.replace(find, repl)
+            faqs = block.get("faqs") or []
+            next_faqs = []
+            for faq in faqs:
+                item = dict(faq) if isinstance(faq, dict) else {
+                    "question": getattr(faq, "question", ""),
+                    "answer": getattr(faq, "answer", ""),
+                }
+                for fk in ("question", "answer"):
+                    if find in str(item.get(fk) or ""):
+                        item[fk] = str(item.get(fk) or "").replace(find, repl)
+                next_faqs.append(item)
+            block["faqs"] = next_faqs
+        try:
+            parsed = SEOBlock.model_validate(block)
+            apply_zip_faq_only(parsed, parsed.city or row.city or "", parsed.state or row.state or "", parsed.zip or "")
+            block = parsed.model_dump()
+        except Exception:
+            pass
+        row.seo_block = block
+        flag_modified(row, "seo_block")
+        row.updated_at = datetime.now(timezone.utc)
+        public_url = f"{base}/{row.slug}"
+        if req.republish:
+            try:
+                parsed = SEOBlock.model_validate(block)
+                await track_public_publish(url=public_url, block=parsed, session=session)
+            except Exception:
+                pass
+        updated.append({"slug": row.slug, "public_url": public_url})
+    await session.commit()
+    return {"updated": len(updated), "urls": updated}
 
 
 @router.post("/admin/dedupe-images", response_model=dict)
@@ -817,7 +923,19 @@ async def get_page(slug: str, session: AsyncSession = Depends(get_session)):
 @router.delete("/{slug}")
 async def delete_page(slug: str, session: AsyncSession = Depends(get_session)):
     result = await session.execute(delete(PageRecord).where(PageRecord.slug == slug))
-    await session.commit()
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Page not found")
-    return {"deleted": True}
+    like = f"%/{slug}"
+    await session.execute(
+        delete(PublishedUrlRecord).where(
+            (PublishedUrlRecord.url.endswith("/" + slug))
+            | (PublishedUrlRecord.url.endswith("/" + slug + "/"))
+        )
+    )
+    await session.commit()
+    try:
+        from services.sitemap_service import persist_live_sitemaps
+        await persist_live_sitemaps(session, site_base=LIVE_SITE)
+    except Exception:
+        pass
+    return {"deleted": True, "slug": slug}

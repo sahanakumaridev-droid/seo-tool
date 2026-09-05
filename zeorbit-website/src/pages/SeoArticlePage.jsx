@@ -166,8 +166,8 @@ function extractLinkBands(raw) {
     .trim()
   return {
     text,
-    internal: internalMatch ? internalMatch[0] : INTERNAL_LINKS_MD,
-    external: externalMatch ? externalMatch[0] : EXTERNAL_LINKS_MD,
+    internal: internalMatch ? internalMatch[0] : '',
+    external: externalMatch ? externalMatch[0] : '',
   }
 }
 
@@ -286,15 +286,30 @@ function allocateSections(h2s, h3s, paras) {
   return { sections, leftover: paras.slice(idx) }
 }
 
-function linkifyFaqZip(text, zip) {
+function mapsSearchUrl(city, state, zip) {
+  const z = String(zip || '').replace(/\D/g, '').slice(0, 5)
+  const name = String(city || '').trim()
+  const st = String(state || '').trim()
+  const label = name && st && z ? `${name}, ${st} ${z}` : name && z ? `${name} ${z}` : z
+  const path = encodeURIComponent(label).replace(/%20/g, '+')
+  return `https://www.google.com/maps/search/${path}`
+}
+
+function linkifyFaqZip(text, zip, city, state) {
   const z = String(zip || '').replace(/\D/g, '').slice(0, 5)
   if (!z) return String(text || '')
-  const href = `https://www.google.com/maps/search/?api=1&query=${z}`
+  const name = String(city || '').trim()
+  const st = String(state || '').trim()
+  const label = name && st ? `${name}, ${st} ${z}` : name ? `${name} ${z}` : z
+  const href = mapsSearchUrl(city, state, zip)
+  const linked = `[${label}](${href})`
   let s = String(text || '')
+  const mapsRe = new RegExp(`\\[[^\\]]*${z}[^\\]]*\\]\\(https?:\\/\\/(?:www\\.)?google\\.com\\/maps[^)]*\\)`, 'i')
+  if (mapsRe.test(s)) return s.replace(mapsRe, linked)
   if (s.includes(`[${z}](`)) {
-    return s.replace(new RegExp(`\\[${z}\\]\\([^)]*\\)`), `[${z}](${href})`)
+    return s.replace(new RegExp(`\\[${z}\\]\\([^)]*\\)`), linked)
   }
-  return s.replace(new RegExp(`\\b${z}\\b`), `[${z}](${href})`)
+  return s.replace(new RegExp(`\\b${z}\\b`), linked)
 }
 
 function stripZipDisplay(text) {
@@ -485,8 +500,9 @@ export default function SeoArticlePage() {
         title={title}
         description={(desc || '').replace(/\s+/g, ' ').trim().slice(0, 160)}
         path={`/${slug || ''}`}
-        image={hero || '/zeorbit-logo.png'}
+        image={hero || '/zeorbit-logo.webp'}
         type="article"
+        faqs={faqs.filter((f) => f?.question).map((f) => ({ q: f.question, a: f.answer || '' }))}
       />
       )}
       <RevampHeader />
@@ -507,7 +523,7 @@ export default function SeoArticlePage() {
               {block.intro ? paragraphs(stripZipDisplay(block.intro)).map((p) => (
                 <p key={p.slice(0, 40)}><MdInline text={p} /></p>
               )) : null}
-              <LinkBand label="On ZeOrbit" variant="internal" text={linkBands.internal} />
+              {linkBands.internal ? <LinkBand label="On ZeOrbit" variant="internal" text={linkBands.internal} /> : null}
               <ArticleSections
                 layout={layout}
                 h2s={h2s}
@@ -517,7 +533,7 @@ export default function SeoArticlePage() {
                 images={block.in_content_images || []}
                 reservedKeys={[hero, footerImg]}
               />
-              <LinkBand label="Listed on" variant="external" text={linkBands.external} />
+              {linkBands.external ? <LinkBand label="Listed on" variant="external" text={linkBands.external} /> : null}
               {footerImg && footerKey && footerKey !== heroKey ? (
                 <figure className="zo-article-footer-image">
                   <a href="https://zeorbit.com/contact">
@@ -537,7 +553,7 @@ export default function SeoArticlePage() {
                   {faqs.map((faq, i) => (
                     <div key={i} className="zo-article-faq">
                       <h3>{faq.question || faq.q}</h3>
-                      <p><MdInline text={linkifyFaqZip(faq.answer || faq.a, block.zip)} /></p>
+                      <p><MdInline text={linkifyFaqZip(faq.answer || faq.a, block.zip, block.city, block.state)} /></p>
                     </div>
                   ))}
                 </div>

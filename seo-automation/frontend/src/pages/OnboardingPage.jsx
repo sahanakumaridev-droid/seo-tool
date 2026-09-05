@@ -6,7 +6,7 @@ import {
 import StepShell from '../components/onboarding/StepShell'
 import { runSiteAudit } from '../api'
 
-const COUNTRIES = ['United States', 'Canada', 'United Kingdom', 'Australia']
+const COUNTRIES = ['United States']
 
 const BUSINESS_TYPES = [
   'Local Service Business', 'E-commerce', 'SaaS / Software', 'Marketing Agency',

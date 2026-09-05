@@ -93,12 +93,12 @@ export function buildLocalBusinessSchema({ pageUrl = SITE_URL, description } = {
     '@id': `${SITE_URL}/#localbusiness`,
     name: ZEO_LOCAL.name,
     alternateName: ZEO_LOCAL.alternateName,
-    url: pageUrl,
+    url: SITE_URL,
     telephone: ZEO_LOCAL.telephone,
     email: ZEO_LOCAL.email,
     priceRange: ZEO_LOCAL.priceRange,
-    image: `${SITE_URL}/zeorbit-logo.png`,
-    logo: `${SITE_URL}/zeorbit-logo.png`,
+    image: `${SITE_URL}/zeorbit-logo.webp`,
+    logo: `${SITE_URL}/zeorbit-logo.webp`,
     description:
       description ||
       'San Diego web design company for WordPress, Shopify, website redesigns, mobile apps, SEO, and Google Ads. 5.0 Google rating. Serving San Diego County and the United States.',
@@ -153,7 +153,7 @@ export function buildOrganizationSchema() {
     name: ZEO_LOCAL.alternateName,
     legalName: ZEO_LOCAL.name,
     url: SITE_URL,
-    logo: `${SITE_URL}/zeorbit-logo.png`,
+    logo: `${SITE_URL}/zeorbit-logo.webp`,
     email: ZEO_LOCAL.email,
     telephone: ZEO_LOCAL.telephone,
     address: {

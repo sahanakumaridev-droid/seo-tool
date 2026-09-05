@@ -334,13 +334,15 @@ def _build_content_html(block: SEOBlock) -> str:
         parts.append(f'<p class="seo-intro">{_inline_md_links(block.intro)}</p>')
 
     # In-content images only — never re-show the hero/featured photo in the body.
-    featured_key = (block.featured_image_url or "").split("?")[0]
+    from services.image_service import normalize_image_key
+
+    featured_key = normalize_image_key(block.featured_image_url or "")
     in_content_imgs = []
     seen = {featured_key} if featured_key else set()
     for img in (block.in_content_images or []):
         if _img_is_featured(img):
             continue
-        key = _img_url(img)
+        key = normalize_image_key(_img_url(img))
         if not key or key in seen:
             continue
         seen.add(key)
@@ -430,7 +432,13 @@ def _build_content_html(block: SEOBlock) -> str:
     if block.cta:
         parts.append(f'<p class="end-note">{_inline_md_links(block.cta)}</p>')
 
-    schema = block.schema_markup
+    schema = block.schema_markup or {}
+    try:
+        from services.content_service import sanitize_schema_markup
+        page_url = f"https://zeorbit.com/{(block.slug or '').lstrip('/')}"
+        schema = sanitize_schema_markup(schema, page_url=page_url)
+    except Exception:
+        schema = block.schema_markup or {}
     if schema:
         for key, val in schema.items():
             parts.append(
