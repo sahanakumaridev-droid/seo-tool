@@ -1668,8 +1668,9 @@ async def _hosted_image_url(
                         scored.append((score, url, alt))
                     if scored:
                         scored.sort(key=lambda x: (-x[0], x[1]))
-                        pick = scored[_stable_index(seed, len(scored))]
-                        return pick[1], pick[2]
+                        for _score, url, alt in scored:
+                            if normalize_image_key(url) not in exclude_keys:
+                                return url, alt
         except Exception as e:
             print(f"[Image] Unsplash search error: {e}")
     if settings.PEXELS_API_KEY:
@@ -1707,8 +1708,9 @@ async def _hosted_image_url(
                         scored.append((score, cand, alt))
                     if scored:
                         scored.sort(key=lambda x: (-x[0], x[1]))
-                        pick = scored[_stable_index(seed, len(scored))]
-                        return pick[1], pick[2]
+                        for _score, url, alt in scored:
+                            if normalize_image_key(url) not in exclude_keys:
+                                return url, alt
         except Exception as e:
             print(f"[Image] Pexels search error: {e}")
 
@@ -1789,7 +1791,13 @@ async def generate_article_images(
     modifiers = list(plan["modifiers"] or [])
     fallback_topic = plan["category"]
     visual_fam = topic_image_family(f"{seed_query} {industry or ''} {niche or ''}")
-    if visual_fam == "healthcare":
+    if (image_keyword or "").strip():
+        ik = image_keyword.strip()
+        topic = ik
+        modifiers = [ik, f"{ik} workplace", f"{ik} professional", f"{ik} studio", f"{ik} close up"]
+        fallback_topic = ik
+        visual_fam = topic_image_family(ik)
+    elif visual_fam == "healthcare":
         topic = plan["topic"] if plan.get("category") == "healthcare" else "doctor clinic medical office"
         modifiers = [
             "doctor with patient",
@@ -1903,11 +1911,11 @@ async def generate_article_images(
                 hosted, hosted_alt = await _hosted_image_url(
                     f"{query} workspace {keyword_index}-{i}",
                     seed=f"{seed}|exhausted|{keyword_index}|{i}",
-                    exclude=used,
+                    exclude=pick_exclude,
                     location="",
                 )
                 hkey = normalize_image_key(hosted)
-                if hosted and hkey and hkey not in used and not _is_banned_stock_key(hkey) and not _looks_like_camera_photo(hosted, hosted_alt):
+                if hosted and hkey and hkey not in pick_exclude and not _is_banned_stock_key(hkey) and not _looks_like_camera_photo(hosted, hosted_alt):
                     url, key, photo_alt = hosted, hkey, hosted_alt
                 else:
                     # Last resort: any unused curated photo so we still ship 3 images
@@ -1918,17 +1926,25 @@ async def generate_article_images(
                             break
                     if not url:
                         continue
+        if not url:
+            continue
         if key:
             used.add(key)
+            featured_taken.add(key)
         if i == 0:
             print(f"[Image] related stock: {query} → {(url or '')[:80]}")
         if url and "picsum.photos" in url:
-            url = _curated_image_url("website design", seed=f"{seed}|nopicsum", exclude=used)
+            url = _curated_image_url("website design", seed=f"{seed}|nopicsum", exclude=pick_exclude | used)
             if not url:
-                url = _with_unsplash_params(_WEB_DESIGN_IMAGES[(keyword_index + i) % len(_WEB_DESIGN_IMAGES)])
+                for u in _WEB_DESIGN_IMAGES:
+                    uk = normalize_image_key(u)
+                    if uk and uk not in used and uk not in featured_taken:
+                        url = _with_unsplash_params(u)
+                        break
             key = normalize_image_key(url)
             if key:
                 used.add(key)
+                featured_taken.add(key)
         meta = build_image_metadata(
             clean_focus, location, business_name, len(assets), is_featured=(len(assets) == 0),
             image_concept_text=concept_for_meta if concept_for_meta and "working title" not in (concept_for_meta or "").lower() else "",

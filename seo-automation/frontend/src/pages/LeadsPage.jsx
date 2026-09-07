@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Users, Plus, Trash2, ExternalLink, Radar, MapPin, Search, LayoutGrid, List } from 'lucide-react'
-import { getLeads, createLead, updateLeadStatus, deleteLead, getLeadStats, prospectLeads } from '../api'
+import { Users, Plus, Trash2, ExternalLink, Radar, MapPin, Search, LayoutGrid, List, Send } from 'lucide-react'
+import { getLeads, createLead, updateLeadStatus, deleteLead, getLeadStats, prospectLeads, sendLeadMessage } from '../api'
 
 const STAGES = [
   { id: 'new', label: 'New' },
@@ -150,6 +150,9 @@ export default function LeadsPage() {
   const [selectedId, setSelectedId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
+  const [outreach, setOutreach] = useState({ subject: 'Quick follow-up from ZeOrbit', body: '' })
+  const [sendNote, setSendNote] = useState('')
+  const [sending, setSending] = useState(false)
 
   const loadLeads = async () => {
     setLoading(true)
@@ -202,7 +205,7 @@ export default function LeadsPage() {
       <div className="crm-head">
         <div>
           <h1>Contacts</h1>
-          <p>Pipeline, records, and prospecting — white-label CRM for this workspace</p>
+          <p>Pipeline, records, prospecting, and visitor tracking. New form leads are emailed when SMTP is configured.</p>
         </div>
         <button type="button" onClick={() => setShowAdd(true)} className="btn btn-primary">
           <Plus size={14} /> New lead
@@ -211,7 +214,8 @@ export default function LeadsPage() {
 
       <div className="crm-kpis">
         {[
-          { label: 'Total', value: stats.total || 0, hint: 'Every captured contact' },
+          { label: 'Total', value: (stats.total || 0) - (stats.pageviews || 0), hint: 'Every captured contact' },
+          { label: 'Visitors', value: stats.pageviews || 0, hint: 'Published-page views' },
           { label: 'New', value: stats.by_status?.new || 0, hint: 'Waiting on first touch' },
           { label: 'Qualified', value: stats.by_status?.qualified || 0, hint: 'Ready to close' },
           { label: 'Won', value: stats.by_status?.closed || 0, hint: 'Closed this workspace' },
@@ -308,6 +312,42 @@ export default function LeadsPage() {
                   ) : <div>—</div>}
                 </div>
                 <div className="crm-field"><label>Notes</label><div style={{ whiteSpace: 'pre-wrap' }}>{selected.message || '—'}</div></div>
+                {selected.email ? (
+                  <div className="crm-field">
+                    <label>Send email</label>
+                    <input value={outreach.subject} onChange={(e) => setOutreach((o) => ({ ...o, subject: e.target.value }))}
+                      placeholder="Subject" style={{ width: '100%', padding: '8px 10px', marginBottom: 8 }} />
+                    <textarea rows={5} value={outreach.body} onChange={(e) => setOutreach((o) => ({ ...o, body: e.target.value }))}
+                      placeholder={`Hi ${selected.contact_name || selected.name || 'there'}, thanks for visiting ZeOrbit…`}
+                      style={{ width: '100%', padding: '8px 10px', resize: 'vertical' }} />
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      style={{ width: '100%', marginTop: 8 }}
+                      disabled={sending || !outreach.body.trim()}
+                      onClick={async () => {
+                        setSending(true); setSendNote('')
+                        try {
+                          await sendLeadMessage(selected.id, outreach)
+                          setSendNote('Sent. Stage set to contacted.')
+                          await handleStatusChange(selected.id, 'contacted')
+                        } catch (err) {
+                          setSendNote(err.response?.data?.detail || 'Send failed — check SMTP.')
+                        } finally { setSending(false) }
+                      }}
+                    >
+                      <Send size={13} /> {sending ? 'Sending…' : 'Send message'}
+                    </button>
+                    {sendNote ? <div style={{ fontSize: 12, marginTop: 6, color: 'var(--text-3)' }}>{sendNote}</div> : null}
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 13, color: '#6e6e73' }}>No email — use chat capture or the contact form so you can message them.</p>
+                )}
+                {selected.phone ? (
+                  <a className="btn btn-secondary" href={`tel:${selected.phone}`} style={{ marginTop: 8, justifyContent: 'center' }}>
+                    Call {selected.phone}
+                  </a>
+                ) : null}
                 <button type="button" className="btn btn-ghost" style={{ marginTop: 16, color: 'var(--red)' }} onClick={() => handleDelete(selected.id)}>
                   <Trash2 size={13} /> Delete
                 </button>

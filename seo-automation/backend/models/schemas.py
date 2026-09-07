@@ -152,6 +152,8 @@ class SEOBlock(BaseModel):
     quality_score: Optional[float] = None
     quality_breakdown: Dict[str, Any] = Field(default_factory=dict)
     publishable: bool = True
+    scheduled_at: Optional[str] = Field(default=None, description="ISO datetime; future = hold until due")
+    publish_status: str = Field(default="", description="live | scheduled")
 
 
 class BriefSuggestRequest(BaseModel):
@@ -211,6 +213,7 @@ class WebsiteProfile(BaseModel):
     phone: str = ""
     page_inventory: List[SitePage] = Field(default=[])
     analyzed: bool = False             # False when analysis failed / degraded gracefully
+    rag_chunk_count: int = 0           # MiniLM-indexed chunks from crawled pages
 
 class ArticleRequest(BaseModel):
     primary_keyword: str = Field(..., example="commercial roofing")

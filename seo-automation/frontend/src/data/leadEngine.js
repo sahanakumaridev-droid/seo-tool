@@ -304,14 +304,6 @@ export const LINKEDIN_TARGETS = [
 export const LINKEDIN_MESSAGE =
   'I noticed your website could use a modern refresh. We help businesses redesign outdated websites while improving mobile experience and conversions.'
 
-export const BUDGET_PLAN = [
-  { channel: 'Google Search Ads', pct: 50, amount: 1500, note: 'High-intent searches → dedicated LPs' },
-  { channel: 'Upwork / DesignRush', pct: 25, amount: 750, note: 'Marketplace project opportunities' },
-  { channel: 'LinkedIn prospecting', pct: 10, amount: 300, note: 'Tools + outreach time' },
-  { channel: 'Landing pages / SEO content', pct: 8, amount: 250, note: 'Build owned assets in this tool' },
-  { channel: 'Retargeting / testing', pct: 7, amount: 200, note: 'Iterate after 60 days' },
-]
-
 export const ENGINE_STACK = [
   { name: 'Google Ads', role: 'High-intent leads' },
   { name: 'Local SEO', role: 'Free recurring leads' },

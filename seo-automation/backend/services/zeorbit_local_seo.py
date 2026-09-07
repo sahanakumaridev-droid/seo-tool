@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 # ── Verified ZeOrbit facts only (never invent beyond these) ──────────────────
 ZEORBIT_FACTS = {
-    "pricing_range": "$500-$3,000",
+    "pricing_range": "",
     "experience": "20+ years",
     "reviews": "1,000+ client reviews",
     "services": [
@@ -185,20 +185,20 @@ SEARCH_INTENTS: Tuple[SearchIntent, ...] = (
         service_emphasis="affordable",
         platform_hint="WordPress",
         title_templates=(
-            "Affordable Website Design for Small Businesses in {city}",
-            "How Much Does a Small-Business Website Cost in {city}?",
-            "Reasonably Priced Website Design in {city}",
-            "Small-Business Friendly Website Pricing in {city}",
+            "Practical Website Design for Small Businesses in {city}",
+            "Small-Business Website Design in {city}",
+            "Straightforward Website Design in {city}",
+            "Website Design Built for Small Teams in {city}",
         ),
         faq_seeds=(
-            "How much does a small-business website cost in {city}?",
-            "What is included in a website in the ${pricing} range?",
-            "Is a cheaper website still professional enough?",
-            "What should I budget for besides the website build?",
+            "What should a small-business website include in {city}?",
+            "What is included in a typical small-business website?",
+            "Can a simpler website still look professional?",
+            "What else should I plan besides the website build?",
         ),
         image_scenes=(
-            "small-business owner reviewing website pricing options on a laptop",
-            "entrepreneur comparing website packages with a designer at a desk",
+            "small-business owner reviewing a website on a laptop",
+            "entrepreneur mapping website pages with a designer at a desk",
         ),
     ),
     SearchIntent(
@@ -542,22 +542,21 @@ def intent_h2_set(
 ) -> List[str]:
     ind = industry or "local"
     city_l = city or "your area"
-    pricing = ZEORBIT_FACTS["pricing_range"]
     by_intent = {
         "discovery": [
             f"What {city_l} small businesses need from a website",
             "What ZeOrbit can build for you",
             "WordPress, Shopify, and redesign options",
-            f"Practical pricing for {city_l} projects ({pricing})",
+            f"How {city_l} visitors decide to contact you",
             "How to choose a website designer",
             f"Next step for your {city_l} business",
         ],
         "affordable": [
-            f"What “affordable” should mean for a {city_l} website",
-            f"Typical ZeOrbit website project range ({pricing})",
+            f"What a practical website should mean in {city_l}",
+            "Scope that fits a small-business site",
             "What is included in a small-business website",
-            "WordPress vs Shopify for your budget",
-            "How to avoid hidden website costs",
+            "WordPress vs Shopify for your needs",
+            "How to avoid hidden website extras",
             "Talk with ZeOrbit about a practical plan",
         ],
         "wordpress": [
@@ -565,7 +564,7 @@ def intent_h2_set(
             "What a custom WordPress build includes",
             "Mobile-friendly and SEO-friendly structure",
             "Can you update the site yourself?",
-            f"Timeline and pricing ({pricing})",
+            "What the timeline looks like",
             "Start a WordPress project with ZeOrbit",
         ],
         "shopify": [
@@ -573,7 +572,7 @@ def intent_h2_set(
             "What ZeOrbit sets up on Shopify",
             "Products, payments, and mobile shopping",
             "Shopify vs WordPress for your store",
-            f"Budgeting a store ({pricing} for many website projects)",
+            "Planning a store that is easy to run",
             "Launch your store with ZeOrbit",
         ],
         "redesign": [
@@ -581,7 +580,7 @@ def intent_h2_set(
             "What a redesign or rebuild can fix",
             "Keeping useful content while improving the experience",
             "Mobile-friendly rebuilds that convert",
-            f"What redesign projects typically cost ({pricing})",
+            "What a redesign project usually covers",
             "Plan a redesign with ZeOrbit",
         ],
         "leads": [
@@ -597,7 +596,7 @@ def intent_h2_set(
             "Pages every new business needs",
             "WordPress for a flexible first site",
             "When to add Shopify or a mobile app later",
-            f"Starting within a practical budget ({pricing})",
+            "Starting with a practical first site",
             "Launch your first site with ZeOrbit",
         ],
         "mobile_app": [
@@ -613,7 +612,7 @@ def intent_h2_set(
             f"Service pages that speak to {ind} customers",
             "WordPress or Shopify for your business type",
             "Mobile-friendly design and clear contact paths",
-            f"Pricing context ({pricing}) and experience",
+            "Experience, process, and what to expect",
             f"Website help for {ind} with ZeOrbit",
         ],
     }
@@ -646,16 +645,16 @@ def intent_faqs(
     seeds = seeds[rot:] + seeds[:rot]
     answers = {
         "discovery": [
-            f"ZeOrbit builds custom WordPress and Shopify websites for small businesses, including businesses in {city}. Website projects typically range from {pricing}.",
-            "Look for clear communication, mobile-friendly design, SEO-friendly structure, realistic pricing, and experience with businesses like yours, not vague “best in town” claims.",
+            f"ZeOrbit builds custom WordPress and Shopify websites for small businesses, including businesses in {city}.",
+            "Look for clear communication, mobile-friendly design, SEO-friendly structure, and experience with businesses like yours, not vague “best in town” claims.",
             "Most small-business sites need clear services, contact options, mobile layouts, proof, and pages that match how people search locally.",
             "Straightforward builds often take a few weeks after content and goals are clear. ZeOrbit shares a timeline before work starts.",
         ],
         "affordable": [
-            f"ZeOrbit website projects typically range from {pricing}. The right fit depends on pages, features, and whether you need WordPress, Shopify, or a redesign.",
-            f"In the {pricing} range you can usually cover a professional multi-page site with mobile-friendly layouts and a clear path for customers to contact you.",
-            "A lower price still needs to cover useful pages, mobile usability, and a clear offer. Extremely cheap sites often skip the parts that get leads.",
-            "Budget for domain, hosting, photos, and ongoing updates, not only the initial design.",
+            "The right fit depends on pages, features, and whether you need WordPress, Shopify, or a redesign.",
+            "A professional multi-page site should include mobile-friendly layouts and a clear path for customers to contact you.",
+            "A simpler site still needs useful pages, mobile usability, and a clear offer. Extremely thin sites often skip the parts that get leads.",
+            "Plan for domain, hosting, photos, and ongoing updates, not only the initial design.",
         ],
         "wordpress": [
             "WordPress is a strong fit when you need flexible pages, blogs, and room to grow without rebuilding from scratch.",
@@ -759,31 +758,49 @@ def stock_query_from_concept(intent: SearchIntent, industry: str, index: int) ->
 
 
 def facts_blurb(variant: int = 0) -> str:
-    pricing = ZEORBIT_FACTS["pricing_range"]
     exp = ZEORBIT_FACTS["experience"]
     reviews = ZEORBIT_FACTS["reviews"]
     variants = (
-        f"ZeOrbit website projects typically range from {pricing}. "
         f"With more than two decades of experience and {reviews}, "
         f"ZeOrbit builds custom WordPress and Shopify sites, redesigns, and mobile apps when a business needs more than a basic website.",
         f"ZeOrbit brings {exp} to website projects and has {reviews}. "
-        f"Typical website projects range from {pricing}, covering WordPress, Shopify, redesign, and conversion-focused builds.",
+        f"Work covers WordPress, Shopify, redesign, and conversion-focused builds.",
         f"Businesses looking for WordPress, Shopify, a redesign, or a mobile-friendly site can work with ZeOrbit. "
-        f"Website projects typically range from {pricing}, backed by {exp} and {reviews}.",
+        f"Projects are backed by {exp} and {reviews}.",
     )
     return variants[variant % len(variants)]
 
 
-def scrub_ceo_dashes(text: str) -> str:
-    """Reduce em/en dashes in published copy (CEO preference). Keep simple $500-$3,000 hyphens."""
+_DOLLAR_AMT = re.compile(r"\$\s*\d[\d,]*(?:\s*[-–—]\s*\$?\s*\d[\d,]*)?")
+_PRICE_SENT = re.compile(
+    r"(?is)[^.?\n]{0,120}(?:\$\s*\d|typically range from|projects typically|pricing context|"
+    r"practical pricing|typical(?:ly)? website project)[^.?\n]*[.?]?"
+)
+
+
+def strip_pricing_from_text(text: str) -> str:
+    """Remove dollar amounts and canned pricing sentences from generated copy."""
     if not text:
         return text
     t = str(text)
-    t = t.replace("$500-$3,000", "$500-$3,000").replace("$500—$3,000", "$500-$3,000")
+    t = _PRICE_SENT.sub("", t)
+    t = _DOLLAR_AMT.sub("", t)
+    t = re.sub(r"(?i)\b(typical(ly)?|practical|transparent)\s+pricing\b", "project scope", t)
+    t = re.sub(r"(?i)\bpricing range\b", "project scope", t)
+    t = re.sub(r"[ \t]{2,}", " ", t)
+    t = re.sub(r"\n{3,}", "\n\n", t)
+    return t.strip()
+
+
+def scrub_ceo_dashes(text: str) -> str:
+    """Reduce em/en dashes in published copy (CEO preference)."""
+    if not text:
+        return text
+    t = str(text)
     t = re.sub(r"\s*[—–]\s*", ", ", t)
     t = re.sub(r",\s*,+", ",", t)
     t = re.sub(r"[ \t]{2,}", " ", t)
-    return t
+    return strip_pricing_from_text(t)
 
 
 def master_voice_rules() -> str:
@@ -795,10 +812,9 @@ VOICE (helpful small-business English, ZeOrbit local SEO):
 - Prefer concrete lines like: "If your website is difficult to use on a phone, customers may leave before contacting you."
 - FORBIDDEN fluff: {", ".join(AI_FLUFF)}.
 - NEVER claim #1, cheapest, best in [city], fake reviews, fake clients, fake offices, fake awards, or fake case studies.
-- FACTS YOU MAY USE (only these): pricing {ZEORBIT_FACTS['pricing_range']}; experience {ZEORBIT_FACTS['experience']}; {ZEORBIT_FACTS['reviews']}; services: {", ".join(ZEORBIT_FACTS['services'])}.
-- Pricing language: affordable / reasonably priced / small-business friendly. Never say "cheapest".
+- FACTS YOU MAY USE (only these): experience {ZEORBIT_FACTS['experience']}; {ZEORBIT_FACTS['reviews']}; services: {", ".join(ZEORBIT_FACTS['services'])}.
+- NEVER mention prices, dollar amounts, retainers, packages, or project cost ranges.
 - Punctuation: avoid em dashes (—) and en dashes (–). Prefer commas, periods, or short sentences. Do not stack dashes in body copy.
-- Pricing ranges may use a simple hyphen only when needed (e.g. $500-$3,000), not an em dash.
 - Make entity relationships explicit: ZeOrbit → website design → WordPress/Shopify/mobile apps → small businesses → this location → industry → customer problem.
 - Every location page must feel unique: different intro, problem, industry examples, FAQs, and CTA. Do not only swap the city name.
 - NEVER paste writing briefs or Custom Content Requirements into published fields.
@@ -846,7 +862,7 @@ IMAGE CONCEPT (do not describe tourism): {image_concept_text}
 MUST COVER IN NATURAL LANGUAGE:
 - Who ZeOrbit helps and what problem this page solves
 - Relevant ZeOrbit services (WordPress / Shopify / redesign / mobile-friendly / SEO structure / conversions / mobile apps as relevant)
-- Pricing context: typically {ZEORBIT_FACTS['pricing_range']}
+- Do not mention prices or dollar amounts
 - Experience/trust: {ZEORBIT_FACTS['experience']}, {ZEORBIT_FACTS['reviews']} (no fake individual reviews)
 - Practical advice for choosing a provider
 - FAQs aligned to this intent (suggested questions):\n{faq_lines}
@@ -1337,10 +1353,9 @@ def ensure_location_body(
             f"Businesses in {place} compete for attention from people who search on phones between errands. "
             f"A website for a {ind} owner here should name real services, make contact easy, and answer "
             f"questions {city} customers ask before they call.\n\n"
-            f"ZeOrbit builds WordPress and Shopify sites, redesigns, and mobile-friendly layouts with "
-            f"projects typically ranging from {ZEORBIT_FACTS['pricing_range']}. "
+            f"ZeOrbit builds WordPress and Shopify sites, redesigns, and mobile-friendly layouts. "
             f"With {ZEORBIT_FACTS['experience']} and {ZEORBIT_FACTS['reviews']}, the focus stays on a clear site "
-            f"for {city} — not a thin page that only swaps the city name."
+            f"for {city}, not a thin page that only swaps the city name."
         )
         # Vary inject slightly by index so 33 locations are not identical add-ons.
         if index % 2:
@@ -1349,17 +1364,17 @@ def ensure_location_body(
                 f"If you run a {ind} in {place}, customers decide quickly whether your site looks trustworthy. "
                 f"Pages should explain what you do in {city}, show how to reach you, and work on mobile.\n\n"
                 f"ZeOrbit provides custom WordPress website development, Shopify builds when you sell online, "
-                f"and redesigns when the current site is losing people. Typical website projects range from "
-                f"{ZEORBIT_FACTS['pricing_range']} — practical scope, not empty “cheap” promises."
+                f"and redesigns when the current site is losing people."
+            )
+        elif index % 3 == 0:
+            inject = (
+                f"\n\n## A different starting point in {city}\n\n"
+                f"{ind.title()} owners in {place} often need service pages, a simple contact path, and layouts that work on a phone. "
+                f"ZeOrbit maps those pages before design so the site matches how people actually search in {city}."
             )
         content_out = (content_out or "").rstrip() + inject
-    # Ensure pricing + experience appear for scoring / factual gate.
-    blob = f"{intro_out}\n{content_out}"
-    if "500" not in blob and "$500" not in blob:
-        content_out += (
-            f"\n\nWebsite projects with ZeOrbit typically range from {ZEORBIT_FACTS['pricing_range']}, "
-            f"backed by {ZEORBIT_FACTS['experience']} and {ZEORBIT_FACTS['reviews']}."
-        )
+    intro_out = strip_pricing_from_text(intro_out)
+    content_out = strip_pricing_from_text(content_out)
     return intro_out, content_out
 
 
@@ -1427,18 +1442,6 @@ def score_page_quality(
         ):
             factual -= 20
             reasons.append("Suspicious unverifiable claim")
-    pricing_ok = "500" in body or "$500" in body or "3,000" in body or "3000" in body
-    # Location pages: soft price context. Blogs: only when the query is about cost/pricing.
-    topic_l = (focus_keyword or title or "").lower()
-    needs_pricing = (not is_blog) and intent_id in (
-        "affordable", "discovery", "wordpress", "shopify", "redesign",
-        "industry_local", "leads", "new_business", "general", "",
-    )
-    if is_blog:
-        needs_pricing = bool(re.search(r"\b(cost|price|pricing|affordable|cheap)\b", topic_l))
-    if needs_pricing and not pricing_ok:
-        factual -= 5
-        reasons.append("Missing pricing context")
     if (
         not is_blog
         and ZEORBIT_FACTS["experience"].split("+")[0] not in body
@@ -1600,7 +1603,6 @@ def build_template_page_copy(
     """Deep, intent-specific template copy when LLM is unavailable."""
     place = place_label(city, state, zip) or (f"{city}, {state}".strip(", ") if state else (city or "your area"))
     ind = industry or "this business"
-    pricing = ZEORBIT_FACTS["pricing_range"]
     facts = facts_blurb(index)
     problem = intent.customer_problem
     title = title_from_primary_keyword(pretty_keyword, city, ind, intent, index)
@@ -1700,7 +1702,7 @@ def build_template_page_copy(
             f"ZeOrbit builds conversion-focused layouts so visitors are not left guessing what to do next.\n\n"
         ),
         "affordable": (
-            f"Reasonably priced does not mean empty. In the {pricing} range, a {city} business can usually get a professional multi-page site with mobile-friendly layouts and a clear contact path.\n\n"
+            f"A practical website for a {city} business should cover useful pages, mobile usability, and a clear contact path.\n\n"
             f"ZeOrbit keeps scope honest so you are not paying for features you will not use in year one.\n\n"
         ),
     }
@@ -1723,19 +1725,18 @@ def build_template_page_copy(
         f"{platform_para}"
         f"## {h2s[2]}\n\n"
         f"Technology should follow the job: WordPress for flexible marketing sites, Shopify for stores, redesign when the current site is losing people. "
-        f"ZeOrbit maps that choice for {ind} in {city} before building. "
-        f"Projects typically range from {pricing}.\n\n"
+        f"ZeOrbit maps that choice for {ind} in {city} before building.\n\n"
     )
 
     meta = (
         f"ZeOrbit builds WordPress and Shopify websites for {ind} in {place}. "
-        f"Projects typically {pricing}. Practical, mobile-friendly sites — talk with us."
+        f"Practical, mobile-friendly sites — talk with us."
     )
     meta = ensure_zip_in_meta(meta, city, state, zip)
 
     cta_options = (
         f"If your {ind} in {city} needs a website that matches a real business problem, ZeOrbit can help with WordPress, Shopify, redesign, or mobile apps. Not sure where to start? We're here to help.",
-        f"Ready to talk through a reasonably priced website for your {city} business? ZeOrbit website projects typically range from {pricing}. Reach out and we'll map a practical plan.",
+        f"Ready to talk through a practical website for your {city} business? Reach out and we'll map a plan.",
         f"Need a clearer website for customers in {place}? ZeOrbit builds conversion-focused, mobile-friendly sites with SEO-friendly structure. Contact ZeOrbit to get started.",
         f"Building or rebuilding a site for {ind} in {city}? ZeOrbit can recommend WordPress, Shopify, or a redesign based on what customers need to do next.",
     )
@@ -1751,7 +1752,7 @@ def build_template_page_copy(
         "h3s": [
             "WordPress and Shopify options",
             "Mobile-friendly and SEO-friendly structure",
-            f"Practical pricing ({pricing})",
+            "Process and what to expect",
             "A clear next step with ZeOrbit",
         ],
         "faqs": faqs,

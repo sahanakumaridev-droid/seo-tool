@@ -1,9 +1,11 @@
 import os
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Request, Depends, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse, PlainTextResponse, Response, RedirectResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.staticfiles import StaticFiles
 from db import get_session
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -53,10 +55,26 @@ async def lifespan(app: FastAPI):
             except asyncio.TimeoutError:
                 pass
 
+    async def _schedule_loop():
+        await asyncio.sleep(25)
+        while not stop.is_set():
+            try:
+                from services.schedule_service import publish_due_pages
+                async with AsyncSessionLocal() as session:
+                    await publish_due_pages(session)
+            except Exception:
+                logger.exception("Scheduled publish cycle failed")
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=60)
+            except asyncio.TimeoutError:
+                pass
+
     task = asyncio.create_task(_index_loop())
+    sched_task = asyncio.create_task(_schedule_loop())
     yield
     stop.set()
     task.cancel()
+    sched_task.cancel()
     logger.info("Shutting down SEO Automation API")
 
 
@@ -124,16 +142,15 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # ── Exception Handlers ──────────────────────────────────────────
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Global exception handler with structured logging."""
-    request_id = getattr(request.scope, "request_id", "unknown")
-    logger.error(
-        f"Unhandled exception",
-        extra={
-            "request_id": request_id,
-            "path": request.url.path,
-            "method": request.method,
-            "error": str(exc)
-        }
+    """Log unexpected errors. Do not swallow HTTP 4xx or validation errors."""
+    if isinstance(exc, (HTTPException, StarletteHTTPException, RequestValidationError)):
+        raise exc
+    request_id = request.scope.get("request_id", "unknown") if isinstance(request.scope, dict) else "unknown"
+    logger.exception(
+        "Unhandled exception path=%s method=%s request_id=%s",
+        request.url.path,
+        request.method,
+        request_id,
     )
     return JSONResponse(
         status_code=500,

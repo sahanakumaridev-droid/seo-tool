@@ -362,9 +362,10 @@ async def setup_checklist(session: AsyncSession = Depends(get_session)):
     from routes.pages import _reader_base
     import os
 
-    key = settings.GOOGLE_INDEXING_KEY_FILE or ""
+    key = search_console_service.resolve_key_file() or (settings.GOOGLE_INDEXING_KEY_FILE or "")
     base = _reader_base().rstrip("/")
     gsc = search_console_service.is_configured()
+    key_ok = bool(key) and os.path.exists(key)
     steps = [
         {
             "id": "public_base",
@@ -399,8 +400,8 @@ async def setup_checklist(session: AsyncSession = Depends(get_session)):
         {
             "id": "service_account",
             "label": "Service account JSON key",
-            "done": bool(key) and os.path.exists(key),
-            "detail": key if key else "Run: python3 scripts/setup_gsc.py",
+            "done": key_ok or gsc,
+            "detail": "Key file found" if (key_ok or gsc) else "Run: python3 scripts/setup_gsc.py",
         },
         {
             "id": "api_live",

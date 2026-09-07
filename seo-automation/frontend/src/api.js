@@ -177,8 +177,8 @@ export function zeorbitArticleUrl(slugOrUrl) {
   return zeorbitBlogUrl()
 }
 
-export const publishToWeb = (seoBlock) =>
-  api.post('/pages/publish-web', seoBlock)
+export const publishToWeb = (seoBlock, extra = {}) =>
+  api.post('/pages/publish-web', { ...seoBlock, ...extra })
 
 export const publishAllToWeb = (pages) =>
   api.post('/pages/publish-web/bulk', pages)
@@ -289,6 +289,12 @@ export const deleteLead = (leadId) =>
 
 export const getLeadStats = () =>
   api.get('/leads/stats')
+
+export const getLeadVisitors = (params = {}) =>
+  api.get('/leads/visitors', { params })
+
+export const sendLeadMessage = (leadId, data) =>
+  api.post(`/leads/${leadId}/message`, data)
 
 export const prospectLeads = (data) =>
   api.post('/leads/prospect', data)

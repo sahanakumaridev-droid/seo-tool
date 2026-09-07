@@ -1,12 +1,13 @@
 import asyncio
 from fastapi import APIRouter, HTTPException, Depends, Request
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete as sa_delete
 from db import get_session, LeadRecord
 from models.schemas import LeadCreate, ProspectRequest
 from services.leads_service import parse_webhook_lead
 from services.prospecting_service import discover_businesses
-from services.email_service import notify_lead
+from services.email_service import notify_lead, send_lead_message
 from services import captcha_service
 from services import form_guard
 from typing import List, Optional
@@ -62,31 +63,71 @@ async def issue_captcha():
     return captcha_service.issue()
 
 
+@router.post("/visit")
+async def track_visit(payload: dict, request: Request, session: AsyncSession = Depends(get_session)):
+    """Anonymous pageview. Cannot be messaged until the visitor shares email or phone."""
+    path = str(payload.get("path") or payload.get("page_url") or "")[:300]
+    referrer = str(payload.get("referrer") or "")[:400]
+    ua = (request.headers.get("user-agent") or "")[:180]
+    rec = LeadRecord(
+        source="pageview",
+        name="Anonymous visitor",
+        website=path,
+        location=_client_ip(request)[:80],
+        message=f"referrer={referrer}\nua={ua}",
+        status="new",
+    )
+    session.add(rec)
+    await session.commit()
+    return {"ok": True, "note": "Pageview stored. Identify the visitor via chat or contact form to message them."}
+
+
+@router.get("/visitors")
+async def list_visitors(skip: int = 0, limit: int = 50, session: AsyncSession = Depends(get_session)):
+    stmt = (
+        select(LeadRecord)
+        .where(LeadRecord.source == "pageview")
+        .order_by(LeadRecord.id.desc())
+        .offset(skip)
+        .limit(min(limit, 100))
+    )
+    rows = (await session.execute(stmt)).scalars().all()
+    return [_to_dict(r) for r in rows]
+
+
+@router.get("/email-status")
+async def email_status():
+    from services.email_service import smtp_configured
+    return {"smtp_configured": smtp_configured()}
+
+
 @router.post("/", response_model=dict)
 async def create_lead(lead: LeadCreate, request: Request, session: AsyncSession = Depends(get_session)):
     """Manually create a lead and email it to the ZeOrbit inbox."""
     public = captcha_service.is_public_source(lead.source)
+    chat = (lead.source or "").strip().lower() == "chat"
 
-    if public:
+    if public or chat:
         if captcha_service.honeypot_tripped(lead.website_url):
             return {"id": 0, "status": "new", "source": lead.source}
         if captcha_service.rate_limited(_client_ip(request)):
             raise HTTPException(status_code=429, detail="Too many submissions. Please try again later.")
-        if captcha_service.too_fast(lead.started_at):
-            raise HTTPException(status_code=400, detail="Please complete the form and captcha, then send.")
         email_err = form_guard.email_reject_reason(lead.email or "")
         if email_err:
             raise HTTPException(status_code=400, detail=email_err)
         if not form_guard.is_valid_us_phone(lead.phone or ""):
             raise HTTPException(status_code=400, detail="Enter a valid U.S. phone number.")
-        if not captcha_service.verify(lead.captcha_id, lead.captcha_answer):
-            raise HTTPException(status_code=400, detail="Captcha is incorrect. Refresh the code and try again.")
+        if public:
+            if captcha_service.too_fast(lead.started_at):
+                raise HTTPException(status_code=400, detail="Please complete the form and captcha, then send.")
+            if not captcha_service.verify(lead.captcha_id, lead.captcha_answer):
+                raise HTTPException(status_code=400, detail="Captcha is incorrect. Refresh the code and try again.")
 
     data = lead.model_dump()
     page_url = (data.pop("page_url", None) or "").strip()
     if page_url.startswith("https://") or page_url.startswith("http://"):
         data["website"] = page_url[:300]
-    if public and data.get("phone"):
+    if (public or chat) and data.get("phone"):
         data["phone"] = form_guard.format_us_phone(data["phone"])
     rec = _record_from({**data, "status": "new"})
     session.add(rec)
@@ -95,6 +136,30 @@ async def create_lead(lead: LeadCreate, request: Request, session: AsyncSession 
     payload = _to_dict(rec)
     await asyncio.to_thread(notify_lead, payload)
     return payload
+
+
+class OutreachRequest(BaseModel):
+    subject: str = ""
+    body: str = ""
+
+
+@router.post("/{lead_id}/message")
+async def message_lead(lead_id: int, req: OutreachRequest, session: AsyncSession = Depends(get_session)):
+    rec = (await session.execute(select(LeadRecord).where(LeadRecord.id == lead_id))).scalar_one_or_none()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if rec.source == "pageview":
+        raise HTTPException(
+            status_code=400,
+            detail="This is only a page visit. Get their name, email, and phone via chat or the contact form before messaging.",
+        )
+    payload = _to_dict(rec)
+    result = await asyncio.to_thread(send_lead_message, payload, req.subject, req.body)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("detail") or "Could not send message")
+    rec.status = "contacted"
+    await session.commit()
+    return {**_to_dict(rec), "sent": True}
 
 
 @router.get("/", response_model=List[dict])
@@ -108,6 +173,8 @@ async def list_leads(
         stmt = stmt.where(LeadRecord.status == status)
     if source:
         stmt = stmt.where(LeadRecord.source == source)
+    else:
+        stmt = stmt.where(LeadRecord.source != "pageview")
     stmt = stmt.offset(skip).limit(limit)
     rows = (await session.execute(stmt)).scalars().all()
     return [_to_dict(r) for r in rows]
@@ -122,7 +189,10 @@ async def lead_stats(session: AsyncSession = Depends(get_session)):
         rows = await session.execute(select(col, func.count(LeadRecord.id)).group_by(col))
         for key, cnt in rows.all():
             bucket[key or "unknown"] = cnt
-    return {"total": total, "by_status": by_status, "by_source": by_source}
+    views = (await session.execute(
+        select(func.count(LeadRecord.id)).where(LeadRecord.source == "pageview")
+    )).scalar() or 0
+    return {"total": total, "by_status": by_status, "by_source": by_source, "pageviews": views}
 
 
 @router.patch("/{lead_id}/status")

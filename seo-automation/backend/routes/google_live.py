@@ -21,7 +21,7 @@ async def google_live_status():
     ads_ok, ads_detail = probe_connection() if ads_creds else (False, "Missing GOOGLE_ADS_* credentials")
     gsc_live = search_console_service.is_configured()
     gbp_live = gbp_configured()
-    key = settings.GOOGLE_INDEXING_KEY_FILE or ""
+    key = search_console_service.resolve_key_file() or (settings.GOOGLE_INDEXING_KEY_FILE or "")
 
     ads_blocking = []
     if not ads_ok:

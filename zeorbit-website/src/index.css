@@ -5466,6 +5466,39 @@ img {
   border-top: 1px solid rgba(15, 23, 42, 0.06);
 }
 
+.zo-site-chat-capture {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #fff;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.zo-site-chat-capture input {
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  padding: 0 12px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+.zo-site-chat-capture button {
+  height: 40px;
+  border: 0;
+  border-radius: 10px;
+  background: #111;
+  color: #fff;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.zo-site-chat-capture-status {
+  margin: 0;
+  font-size: 12px;
+  color: #b45309;
+}
+
 .zo-site-chat-composer input {
   flex: 1;
   min-width: 0;

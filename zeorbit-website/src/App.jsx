@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import ScrollToTop from './components/ScrollToTop'
 import PageJump from './components/PageJump'
 import RouteMeta from './components/RouteMeta'
+import VisitBeacon from './components/VisitBeacon'
 import LandingPage from './pages/LandingPage'
 
 const SiteDock = lazy(() => import('./components/SiteDock'))
@@ -37,6 +38,7 @@ export default function App() {
       <ScrollToTop />
       <PageJump />
       <RouteMeta />
+      <VisitBeacon />
       <DelayedChrome />
       <Suspense fallback={null}>
         <Routes>

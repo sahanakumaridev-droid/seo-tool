@@ -84,6 +84,7 @@ function ProfileCard({ profile }) {
       <div className="flex items-center gap-2 mt-3 text-xs text-slate-500">
         <Link2 size={12} className="text-slate-500" />
         {profile.page_inventory?.length || 0} pages found for internal linking
+        {profile.rag_chunk_count ? ` · ${profile.rag_chunk_count} RAG chunks indexed` : ''}
       </div>
     </div>
   )

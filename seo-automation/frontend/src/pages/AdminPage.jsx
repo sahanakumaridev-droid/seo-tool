@@ -30,6 +30,9 @@ export default function AdminPage() {
   const [users, setUsers]   = useState([])
   const [loading, setLoading] = useState(true)
   const [verifying, setVerifying] = useState(null)
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'client' })
+  const [creating, setCreating] = useState(false)
+  const [createMsg, setCreateMsg] = useState('')
 
   const load = async () => {
     setLoading(true)
@@ -62,6 +65,28 @@ export default function AdminPage() {
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_verified: true } : u))
     } catch (e) { alert(e.response?.data?.detail || 'Failed to verify') }
     finally { setVerifying(null) }
+  }
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault()
+    setCreating(true)
+    setCreateMsg('')
+    try {
+      await api.post('/users/register', {
+        name: newUser.name.trim(),
+        email: newUser.email.trim(),
+        password: newUser.password,
+        role: newUser.role,
+      })
+      setCreateMsg('User created. They can sign in on the SEO tool login page.')
+      setNewUser({ name: '', email: '', password: '', role: 'client' })
+      await load()
+    } catch (err) {
+      const detail = err.response?.data?.detail
+      setCreateMsg(typeof detail === 'string' ? detail : 'Could not create user.')
+    } finally {
+      setCreating(false)
+    }
   }
 
   if (loading) {
@@ -97,6 +122,43 @@ export default function AdminPage() {
           <StatBox label="Credits Sold"   value={stats.total_credits_sold}  icon={<Zap size={16} />}         color="text-amber-400" />
         </div>
       )}
+
+      {/* User management */}
+      <div className="card">
+        <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>Create SEO login</h2>
+        </div>
+        <form onSubmit={handleCreateUser} className="px-5 py-4 flex flex-wrap gap-3 items-end">
+          <label className="text-xs" style={{ color: 'var(--text-2)' }}>
+            Name
+            <input required minLength={2} value={newUser.name} onChange={(e) => setNewUser((u) => ({ ...u, name: e.target.value }))}
+              className="block mt-1 rounded-lg px-3 py-2 text-sm" style={{ border: '1px solid var(--border)', minWidth: 160 }} />
+          </label>
+          <label className="text-xs" style={{ color: 'var(--text-2)' }}>
+            Email
+            <input required type="email" value={newUser.email} onChange={(e) => setNewUser((u) => ({ ...u, email: e.target.value }))}
+              className="block mt-1 rounded-lg px-3 py-2 text-sm" style={{ border: '1px solid var(--border)', minWidth: 200 }} />
+          </label>
+          <label className="text-xs" style={{ color: 'var(--text-2)' }}>
+            Password (8+ chars)
+            <input required minLength={8} type="password" value={newUser.password} onChange={(e) => setNewUser((u) => ({ ...u, password: e.target.value }))}
+              className="block mt-1 rounded-lg px-3 py-2 text-sm" style={{ border: '1px solid var(--border)', minWidth: 160 }} />
+          </label>
+          <label className="text-xs" style={{ color: 'var(--text-2)' }}>
+            Role
+            <select value={newUser.role} onChange={(e) => setNewUser((u) => ({ ...u, role: e.target.value }))}
+              className="block mt-1 rounded-lg px-3 py-2 text-sm" style={{ border: '1px solid var(--border)' }}>
+              <option value="client">Client</option>
+              <option value="admin">Admin</option>
+              <option value="professional">Professional</option>
+            </select>
+          </label>
+          <button type="submit" disabled={creating} className="px-4 py-2 rounded-lg text-sm text-white" style={{ background: 'var(--brand)' }}>
+            {creating ? 'Creating…' : 'Create user'}
+          </button>
+          {createMsg && <p className="text-xs w-full m-0" style={{ color: 'var(--text-3)' }}>{createMsg}</p>}
+        </form>
+      </div>
 
       {/* User management */}
       <div className="card">

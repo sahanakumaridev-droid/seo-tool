@@ -94,7 +94,12 @@ export default function SeoHead({
     upsertJsonLd('zo-ld-org', buildOrganizationSchema())
 
     if (localBusiness) {
-      upsertJsonLd('zo-ld-local', buildLocalBusinessSchema({ pageUrl: url, description }))
+      const isHome = path === '/' || path === ''
+      upsertJsonLd('zo-ld-local', buildLocalBusinessSchema({
+        pageUrl: url,
+        description,
+        includeRating: isHome,
+      }))
     } else {
       const stale = document.getElementById('zo-ld-local')
       if (stale) stale.remove()

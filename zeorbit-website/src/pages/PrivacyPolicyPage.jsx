@@ -80,6 +80,7 @@ export default function PrivacyPolicyPage() {
         title="Privacy Policy — ZeOrbit"
         description="How ZeOrbit collects, uses, and protects personal information on zeorbit.com."
         path="/privacy-policy"
+        localBusiness={false}
       />
       <RevampHeader />
       <main className="zo-legal-main" id="main">

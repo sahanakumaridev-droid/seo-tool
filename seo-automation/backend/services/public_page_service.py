@@ -578,6 +578,14 @@ def _contact_form_script() -> str:
     return """
 <script>
 (function(){
+  try {
+    fetch('/api/leads/visit', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({path: location.pathname, referrer: document.referrer || ''}),
+      keepalive: true
+    });
+  } catch (e) {}
   var form=document.getElementById('zoArticleLeadForm');
   if(!form) return;
   var started=Date.now();

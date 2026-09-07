@@ -137,3 +137,64 @@ def notify_lead(lead: dict) -> None:
         logger.info("Lead email sent to %s", settings.LEAD_NOTIFY_TO)
     except Exception:
         logger.exception("Failed to email lead to %s", settings.LEAD_NOTIFY_TO)
+
+
+def send_lead_message(lead: dict, subject: str, body: str) -> dict:
+    """Email a captured lead. Used from Lead Engine outreach."""
+    to_email = _clean(lead.get("email"))
+    if "@" not in to_email:
+        return {"ok": False, "detail": "This visitor has no email yet. Capture their details first."}
+    if not smtp_configured():
+        return {"ok": False, "detail": "SMTP is not configured. Set SMTP_HOST and LEAD_NOTIFY_TO in .env."}
+
+    name = _clean(lead.get("name")) or _clean(lead.get("contact_name")) or "there"
+    subj = _clean(subject) or f"Following up from ZeOrbit"
+    text = _clean(body)
+    if not text:
+        return {"ok": False, "detail": "Message cannot be empty."}
+
+    html_body = f"""<!DOCTYPE html>
+<html><body style="margin:0;padding:24px;background:#f6f7f9;font-family:Manrope,Arial,sans-serif">
+  <div style="max-width:640px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #e6e8ee;padding:24px">
+    <p style="color:#0b1220;font-size:15px;line-height:1.55;white-space:pre-wrap">{escape(text)}</p>
+    <p style="color:#64748b;font-size:13px;margin-top:24px">ZeOrbit · websites, apps, SEO, and custom software</p>
+  </div>
+</body></html>"""
+
+    from_email = _clean(settings.SMTP_FROM) or _clean(settings.SMTP_USER) or settings.LEAD_NOTIFY_TO
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subj
+    msg["From"] = formataddr(("ZeOrbit", from_email))
+    msg["To"] = to_email
+    if settings.LEAD_NOTIFY_TO:
+        msg["Bcc"] = settings.LEAD_NOTIFY_TO
+    msg.attach(MIMEText(f"Hi {name},\n\n{text}\n\n— ZeOrbit", "plain", "utf-8"))
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+    host = settings.SMTP_HOST
+    port = int(settings.SMTP_PORT or 587)
+    user = _clean(settings.SMTP_USER)
+    password = settings.SMTP_PASSWORD or ""
+
+    try:
+        if port == 465:
+            context = ssl.create_default_context()
+            with smtplib.SMTP_SSL(host, port, timeout=20, context=context) as smtp:
+                if user:
+                    smtp.login(user, password)
+                smtp.send_message(msg)
+        else:
+            with smtplib.SMTP(host, port, timeout=20) as smtp:
+                smtp.ehlo()
+                if settings.SMTP_STARTTLS:
+                    context = ssl.create_default_context()
+                    smtp.starttls(context=context)
+                    smtp.ehlo()
+                if user:
+                    smtp.login(user, password)
+                smtp.send_message(msg)
+        logger.info("Outreach email sent to %s", to_email)
+        return {"ok": True}
+    except Exception as exc:
+        logger.exception("Failed to send outreach to %s", to_email)
+        return {"ok": False, "detail": str(exc)[:240]}

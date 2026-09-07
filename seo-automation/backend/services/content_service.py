@@ -10,6 +10,24 @@ from services.keyword_service import generate_keywords
 from services.internal_linking_service import insert_internal_links
 from config import settings
 
+
+async def _ensure_rag_context(query: str, site_url: str) -> str:
+    """Retrieve live-site chunks for this query. Empty string if nothing indexed."""
+    site_url = (site_url or "").strip()
+    q = (query or "").strip()
+    if not site_url or not q:
+        return ""
+    try:
+        from services.rag_service import already_tried, has_index, mark_tried, rag_prompt_block
+        from services.website_analysis_service import analyze_website
+        if not has_index(site_url) and not already_tried(site_url):
+            await analyze_website(site_url)
+            mark_tried(site_url)
+        return await rag_prompt_block(q, site_url)
+    except Exception as e:
+        print(f"[RAG] retrieve skipped: {e}")
+        return ""
+
 TITLE_VARIANTS = [
     "Best {BT} in {city}, {state} | Affordable, Proven Results",
     "Top {BT} Services in {city}, {state} — Free Estimates",
@@ -20,23 +38,23 @@ TITLE_VARIANTS = [
 ]
 
 META_VARIANTS = [
-    "Looking for the best {bt} in {city}? Our proven team delivers affordable, results-driven {bt} services for {city} businesses. Free estimate — call today.",
-    "Top-rated {bt} in {city}, {state}. Affordable pricing, fast turnaround, and guaranteed results. Trusted by 500+ local businesses. Get your free quote now.",
-    "Affordable {bt} services in {city}. We help local businesses grow with proven {bt} strategies. Licensed experts, transparent pricing. Call for a free consultation.",
-    "Need a trusted {bt} in {city}, {state}? We specialize in helping {city} businesses get found online. Best rates, proven results. Contact us today.",
+    "Looking for {bt} in {city}? Our team delivers practical, results-driven {bt} services for {city} businesses. Call today.",
+    "Trusted {bt} in {city}, {state}. Clear process, fast turnaround, and local support. Get in touch.",
+    "{BT} services in {city}. We help local businesses grow with proven {bt} work. Licensed experts. Call for a consultation.",
+    "Need a trusted {bt} in {city}, {state}? We help {city} businesses get found online. Contact us today.",
 ]
 
 H1_VARIANTS = [
-    "Best {BT} in {city}, {state} — Affordable, Proven & Local",
-    "Top-Rated {BT} Services in {city} | Trusted by Local Businesses",
-    "Affordable {BT} in {city}, {state} — Results That Speak for Themselves",
-    "Your Local {BT} Experts in {city} | Best Rates, Proven Results",
-    "#1 {BT} Company Serving {city}, {state} — Free Estimates",
+    "{BT} in {city}, {state} — Practical, Proven & Local",
+    "Trusted {BT} Services in {city} | Built for Local Businesses",
+    "{BT} in {city}, {state} — Results That Speak for Themselves",
+    "Your Local {BT} Experts in {city} | Clear Process, Real Work",
+    "{BT} Serving {city}, {state} — Talk With the Team",
 ]
 
 H2_POOL = [
     "What Does a {BT} Do in {city}?",
-    "How Much Does {BT} Cost in {city}?",
+    "How to Choose {BT} in {city}?",
     "Why Do {city} Businesses Need {BT}?",
     "What Makes the Best {BT} in {city}?",
     "How to Choose the Right {BT} in {city}, {state}",
@@ -61,17 +79,17 @@ H3_POOL = [
 ]
 
 INTRO_VARIANTS = [
-    "If you're looking for the best {bt} in {city}, {state}, you've found the right team. "
-    "We help {city} businesses get more customers online with affordable, proven {bt} services. "
-    "Our local experts know {city}'s market and deliver results that matter.",
+    "If you're looking for {bt} in {city}, {state}, you've found the right team. "
+    "We help {city} businesses get more customers online with practical, proven {bt} services. "
+    "Our local experts know {city}'s market and deliver work that matters.",
 
     "{city} businesses trust us for professional {bt} services that actually work. "
-    "We're a locally based {bt} team serving {city}, {state} with transparent pricing and real results. "
+    "We're a locally based {bt} team serving {city}, {state} with a clear process and real results. "
     "Whether you're a small contractor or a growing company, we have the right {bt} solution for you.",
 
-    "The best {bt} in {city} isn't the most expensive — it's the one that delivers results. "
+    "The right {bt} in {city} is the one that delivers results. "
     "Our {city}-based {bt} team has helped hundreds of local businesses grow their online presence. "
-    "Affordable rates, proven strategies, and a team that knows {city} inside and out.",
+    "Clear process, proven strategies, and a team that knows {city}.",
 ]
 
 BODY_SECTION_VARIANTS = [
@@ -79,7 +97,7 @@ BODY_SECTION_VARIANTS = [
     "Our {bt} services are built specifically for {city} businesses that want to attract local customers. "
     "Here's what sets us apart:\n\n"
     "• Local expertise — we know {city}'s neighborhoods, competitors, and customer behavior\n"
-    "• Affordable pricing — no agency markups, just honest rates for {city} businesses\n"
+    "• Clear process — no agency markups, just honest work for {city} businesses\n"
     "• Proven results — our {city} clients see measurable growth within 90 days\n"
     "• Fast delivery — most {city} projects are completed in 2-4 weeks\n\n"
     "Unlike national agencies that treat {city} as just another zip code, we're invested in your success.",
@@ -106,10 +124,10 @@ BODY_SECTION_VARIANTS = [
 
 FAQ_POOLS = [
     (
-        "How much does {bt} cost in {city}?",
-        "{BT} costs in {city} vary by scope, but most small business packages range from $500 to $3,000. "
-        "Our {city} team offers transparent, flat-rate pricing with no hidden fees. "
-        "Contact us for a free estimate tailored to your {city} business."
+        "How do I choose {bt} in {city}?",
+        "Choose {bt} in {city} based on communication, mobile-friendly work, and whether they can explain the process in plain language. "
+        "Ask for a clear timeline and what you will be able to update yourself. "
+        "ZeOrbit can walk through that with your {city} business."
     ),
     (
         "Who is the best {bt} in {city}?",
@@ -144,7 +162,7 @@ FAQ_POOLS = [
     (
         "What should I look for when hiring a {bt} in {city}?",
         "When hiring a {bt} in {city}, look for: local market knowledge, a portfolio of {city} clients, "
-        "transparent pricing, clear communication, and measurable deliverables. "
+        "clear process, clear communication, and measurable deliverables. "
         "Avoid anyone who guarantees overnight results or won't explain their process."
     ),
     (
@@ -1089,6 +1107,29 @@ def _keyword_density(text: str, keyword: str) -> float:
     return round(min(score, 100.0), 1)
 
 
+_QUERY_STOP = {
+    "a", "an", "the", "for", "and", "or", "of", "to", "in", "on", "with", "how", "what",
+    "why", "when", "where", "does", "do", "is", "are", "your", "my", "our", "that", "this",
+    "from", "into", "about", "best", "near", "me",
+}
+
+
+def query_relevance_score(text: str, query: str) -> float:
+    """0–10: how much the body actually answers the search query (not generic web-design filler)."""
+    qtoks = [t for t in re.findall(r"[a-zA-Z0-9']+", (query or "").lower()) if t not in _QUERY_STOP and len(t) > 2]
+    if not qtoks:
+        return 10.0
+    blob = (text or "").lower()
+    hits = sum(1 for t in qtoks if t in blob)
+    phrase = " ".join(qtoks[:8])
+    bonus = 1.5 if phrase and phrase in blob else 0.0
+    # Penalize generic agency filler that ignores the query.
+    filler = 0.0
+    if any(p in blob for p in ("zeorbit builds", "wordpress and shopify", "web design in ")) and hits < max(2, len(qtoks) // 2):
+        filler = 2.0
+    return round(min(10.0, max(0.0, (hits / len(qtoks)) * 10.0 + bonus - filler)), 1)
+
+
 def ensure_keyword_coverage(
     intro: str,
     content: str,
@@ -1110,7 +1151,7 @@ def ensure_keyword_coverage(
 
     boosters = [
         f"Businesses comparing {display_kw}{city_bit} want clear scope, mobile-friendly pages, and a site that turns visits into calls.",
-        f"ZeOrbit builds WordPress and Shopify websites for {display_kw}{city_bit} — projects typically run $500–$3,000 depending on pages and features.",
+        f"ZeOrbit builds WordPress and Shopify websites for {display_kw}{city_bit} with mobile-friendly layouts and a clear contact path.",
         f"If {display_kw}{city_bit} is your next step, start with goals, budget, and a homepage that answers what you do and how to contact you.",
         f"Local searchers looking for {display_kw}{city_bit} notice fast load times, readable copy, and contact paths above the fold.",
     ]
@@ -1122,7 +1163,7 @@ def ensure_keyword_coverage(
     new_intro = intro or ""
     if display_kw.lower() not in new_intro.lower():
         new_intro = (
-            f"{new_intro} Teams evaluating {display_kw}{city_bit} usually start with pricing, timeline, and what launches first."
+            f"{new_intro} Teams evaluating {display_kw}{city_bit} usually start with timeline, pages, and what launches first."
         ).strip()
 
     parts = [content or ""]
@@ -1299,18 +1340,22 @@ VOICE — American English, user-first, conversational (ZeOrbit):
 - Vary structure: do not reuse the same five generic H2s on every page. Match the BODY LAYOUT note and SEARCH INTENT.
 - Quality bar: content should read like a strong ChatGPT / Claude / Gemini draft — specific, natural, topic-aware.
 - Never invent fake reviews, clients, offices, awards, rankings, or "best/cheapest in [city]" claims.
-- Use only verified ZeOrbit facts: website projects typically $500–$3,000; 20+ years experience; 1,000+ client reviews; WordPress, Shopify, redesign, mobile-friendly, SEO-friendly structure, conversion-focused sites, mobile apps.
+- Use only verified ZeOrbit facts: 20+ years experience; 1,000+ client reviews; WordPress, Shopify, redesign, mobile-friendly, SEO-friendly structure, conversion-focused sites, mobile apps.
+- Never mention prices, dollar amounts, or project cost ranges.
 """
 
-LAYOUT_VARIANTS = ("qa", "steps", "story", "cards", "split", "timeline")
+LAYOUT_VARIANTS = ("qa", "steps", "story", "cards", "split", "timeline", "checklist", "compare", "myths")
 
 LAYOUT_INSTRUCTIONS = {
     "qa": "Use question-style H2s a real customer would ask. Body answers in short paragraphs, then a 3-item list under at least one H2.",
     "steps": "Structure as a how-to: H2s are numbered steps (Step 1…, Step 2…). Body is actionable with concrete deliverables, not a pitch dump.",
     "story": "Open with a local situation, then proof, then what working together looks like. One H2 should be a short anecdote tied to this industry/location.",
-    "cards": "Each H2 is a distinct benefit/offer card (speed, local SEO, care plan, cost clarity, launch support). Keep each section 2-4 sentences plus one concrete example.",
+    "cards": "Each H2 is a distinct benefit/offer card (speed, local SEO, care plan, launch support). Keep each section 2-4 sentences plus one concrete example.",
     "split": "Alternate problem vs solution: first H2 is the pain in this city, next is how you fix it, then who it's for, then timeline, then next step.",
     "timeline": "Walk the reader through a project timeline (week 1 discovery → design → build → launch → support). Name real milestones.",
+    "checklist": "H2s are checklist groups. Each section is a punch-list with 4-6 concrete checks the reader can apply today.",
+    "compare": "Compare two or three real options (e.g. WordPress vs Shopify vs redesign). Use even-handed criteria, then a recommendation for THIS reader.",
+    "myths": "Lead with misconceptions. Each H2 names a myth, then the practical truth, then what to do instead.",
 }
 
 
@@ -1369,6 +1414,27 @@ def _page_h2_set(
             "Launch: Local SEO and AI-friendly structure",
             "After launch: Care and improvements",
         ],
+        "checklist": [
+            f"Pages a {ind} site in {city_l} should not skip",
+            "Mobile and contact checks before you launch",
+            "Content that matches how people search",
+            "Proof, speed, and follow-up after go-live",
+            f"Your {city_l} launch checklist with ZeOrbit",
+        ],
+        "compare": [
+            f"WordPress vs Shopify for {ind} in {city_l}",
+            "When a redesign beats a patch",
+            "Website first vs adding an app later",
+            "How to choose without guessing",
+            "A clear recommendation from ZeOrbit",
+        ],
+        "myths": [
+            f"Myth: a {ind} site in {city_l} only needs a homepage",
+            "Myth: templates already do local SEO",
+            "Myth: you can skip mobile if desktop looks fine",
+            "What actually moves inquiries",
+            f"What {aud} in {city_l} should do next",
+        ],
     }
     return sets.get(layout) or sets["cards"]
 
@@ -1384,18 +1450,28 @@ PROVIDER_STYLE_NOTES = {
 }
 
 
-def blog_layout_for_query(query: str, brief: str = "") -> str:
-    """How-to/fix → steps even if the keyword ends with '?'; other questions → Q&A."""
+def blog_layout_for_query(query: str, brief: str = "", salt: str = "") -> str:
+    """Prefer a layout that fits the query, then rotate so two posts never clone the same flow."""
     t = f"{query or ''} {brief or ''}".lower()
+    preferred = "story"
     if re.search(r"\b(how to|how do i|how do you|step-by-step|guide)\b", t):
-        return "steps"
-    if re.search(r"\b(fix|repair|broken|not working|error)\b", t):
-        return "steps"
-    if "?" in t or re.search(r"^\s*(what|why|when|which|who|where|should|is|are|can|do|does)\b", t):
-        return "qa"
-    if re.search(r"\bquestion\b", t):
-        return "qa"
-    return "story"
+        preferred = "steps"
+    elif re.search(r"\b(fix|repair|broken|not working|error)\b", t):
+        preferred = "steps"
+    elif "?" in t or re.search(r"^\s*(what|why|when|which|who|where|should|is|are|can|do|does)\b", t):
+        preferred = "qa"
+    elif re.search(r"\b(vs|versus|compare|difference)\b", t):
+        preferred = "compare"
+    elif re.search(r"\b(myth|mistake|wrong)\b", t):
+        preferred = "myths"
+    elif re.search(r"\bquestion\b", t):
+        preferred = "qa"
+    pool = [preferred] + [x for x in LAYOUT_VARIANTS if x != preferred]
+    h = int(hashlib.md5(f"{t}|{salt}".encode()).hexdigest(), 16)
+    # 60% keep the preferred family, 40% rotate to a unique sibling layout.
+    if h % 5 < 3:
+        return preferred
+    return pool[h % len(pool)]
 
 
 def _query_task_phrase(query: str) -> str:
@@ -1667,8 +1743,8 @@ def _blog_query_copy(primary: str) -> dict:
     return {"intro": intro, "content": content, "h2s": h2s, "faqs": faqs, "h3s": []}
 
 
-def pick_layout_variant(city: str, business_type: str, kind: str = "service") -> str:
-    seed = f"{kind}|{(business_type or '').lower()}|{(city or '').lower()}"
+def pick_layout_variant(city: str, business_type: str, kind: str = "service", salt: int = 0) -> str:
+    seed = f"{kind}|{(business_type or '').lower()}|{(city or '').lower()}|{int(salt)}"
     h = int(hashlib.md5(seed.encode()).hexdigest(), 16)
     return LAYOUT_VARIANTS[h % len(LAYOUT_VARIANTS)]
 
@@ -1756,8 +1832,12 @@ async def generate_seo_block(
         zip = digits_zip(zip) or await lookup_place_zip(city, state, zip)
         zip = digits_zip(zip)
         if not zip:
-            raise RuntimeError(
-                f"ZIP is mandatory for location pages. Could not resolve a postal code for {city}, {state}."
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"ZIP is mandatory for location pages. Could not resolve a postal code for {city}, {state}."
+                ),
             )
     # Real vertical only — never stamp "Professional Services" onto keyword/slug.
     # With target keywords, keep industry explicit/inferred; do not rotate the pool.
@@ -1805,9 +1885,9 @@ async def generate_seo_block(
         primary_kw = strip_generic_industry_prefix(primary_kw)
     query_mode = kind == "blog" or _looks_like_search_query(primary_kw)
     if query_mode:
-        layout = blog_layout_for_query(primary_kw, custom_requirements or "")
+        layout = blog_layout_for_query(primary_kw, custom_requirements or "", salt=str(keyword_index))
     else:
-        layout = pick_layout_variant(city, f"{primary_kw or business_type}|{(intent.id if intent else '')}", kind)
+        layout = pick_layout_variant(city, f"{primary_kw or business_type}|{(intent.id if intent else '')}", kind, salt=keyword_index)
     concept = image_concept(intent, city, industry, keyword_index) if intent else ""
     gen_kwargs = dict(
         business_type=business_type, city=city, state=state, target_keywords=target_keywords,
@@ -1834,8 +1914,15 @@ async def generate_seo_block(
 
     if query_mode and (
         len((block.content or "").split()) < 80 or _looks_like_template_filler(f"{block.intro} {block.content}")
+        or query_relevance_score(f"{block.title} {block.h1} {block.intro} {block.content}", primary_kw) < 7.0
     ):
-        print("[SEO] Query body thin or template-like — retry Gemini then topic-shaped template")
+        rel = query_relevance_score(f"{block.title} {block.h1} {block.intro} {block.content}", primary_kw)
+        print(f"[SEO] Query body thin, filler, or low relevance ({rel}/10) — retry on-query rewrite")
+        gen_kwargs["custom_requirements"] = (
+            (custom_requirements or "")
+            + f"\n\nREWRITE RULE: The previous draft scored {rel}/10 for relevance to “{primary_kw}”. "
+            "Write a new article that stays on that query in every section. Concrete steps. No generic web-design pitch."
+        )
         try:
             gen_kwargs["llm_provider"] = "gemini"
             block = await _generate_ai_block(llm_provider="gemini", **{k: v for k, v in gen_kwargs.items() if k != "llm_provider"})
@@ -1860,7 +1947,7 @@ async def generate_seo_block(
         gen_kwargs["search_intent"] = alt_intent.id
         gen_kwargs["customer_problem"] = alt_intent.customer_problem
         gen_kwargs["image_concept_text"] = image_concept(alt_intent, city, industry, alt_index)
-        gen_kwargs["layout_variant"] = pick_layout_variant(city, f"{primary_kw}|{alt_intent.id}|alt", kind)
+        gen_kwargs["layout_variant"] = pick_layout_variant(city, f"{primary_kw}|{alt_intent.id}|alt", kind, salt=keyword_index + 11)
         try:
             if use_ai:
                 block = await _generate_ai_block(llm_provider=llm_provider, **gen_kwargs)
@@ -2080,8 +2167,16 @@ async def generate_seo_block(
     # Blogs: never inject location-page sales lines; density weave stays on the query.
     focus_for_density = (block.focus_keyword or primary_kw or "").strip()
     if kind == "blog":
-        kw_use = _keyword_density(f"{block.intro or ''}\n{block.content or ''}", focus_for_density)
+        block.intro, block.content, kw_use = ensure_keyword_coverage(
+            block.intro or "",
+            block.content or "",
+            focus_for_density,
+            city="",
+            min_score=75.0,
+        )
         block.keyword_density = kw_use
+        rel = query_relevance_score(f"{block.title} {block.intro} {block.content}", focus_for_density)
+        print(f"[SEO] blog relevance={rel}/10 keyword_use={kw_use} query={focus_for_density[:60]!r}")
     else:
         block.intro, block.content, kw_use = ensure_keyword_coverage(
             block.intro or "",
@@ -2289,12 +2384,20 @@ async def _generate_ai_block(
     )).strip()
     query_mode = content_kind == "blog" or _looks_like_search_query(primary_kw)
     layout = layout_variant if layout_variant in LAYOUT_INSTRUCTIONS else (
-        blog_layout_for_query(primary_kw, brief) if query_mode
-        else pick_layout_variant(city, business_type, content_kind)
+        blog_layout_for_query(primary_kw, brief, salt=str(keyword_index)) if query_mode
+        else pick_layout_variant(city, business_type, content_kind, salt=keyword_index)
     )
     layout_note = LAYOUT_INSTRUCTIONS[layout]
     provider_key = (llm_provider or "").lower().strip()
     provider_note = PROVIDER_STYLE_NOTES.get(provider_key, "Write at the quality level of ChatGPT, Claude, or Gemini — specific and human.")
+    # RAG on ZeOrbit.com for location/service pages only. Query blogs must stay on the keyword —
+    # retrieved agency copy made bodies ~4/10 relevant.
+    rag_section = ""
+    if not query_mode:
+        rag_query = " ".join(x for x in (primary_kw, business_type, city, industry, audience) if x)
+        rag_site = (getattr(settings, "MARKETING_SITE_URL", None) or settings.PUBLIC_BASE_URL or "").strip()
+        rag_block = await _ensure_rag_context(rag_query, rag_site)
+        rag_section = f"\n{rag_block}\n" if rag_block else ""
 
     if query_mode:
         from services.zeorbit_local_seo import master_voice_rules
@@ -2360,12 +2463,15 @@ Industry field (examples only — ZeOrbit is NOT a {industry or "clinic"}): {ind
 Secondary keywords to weave lightly (do not hijack the topic): {", ".join(secondary) if secondary else "none"}
 BODY LAYOUT ({layout}): {layout_note}
 {loc_note}
+{rag_section}
 
 {VOICE_RULES}
 {master_voice_rules()}
 
 NON-NEGOTIABLE:
 - The article must feel written for someone who typed "{topic}" into Google.
+- Relevance must be at least 8/10 to that query: title, H1, intro, every H2, and the body must stay on it.
+- Do not drift into generic ZeOrbit / web-design sales copy unless the query is specifically about hiring a web designer.
 - Title and H1 must name the query (how-to / question / problem wording is fine).
 - H2s must be steps or sub-questions of "{topic}", not generic agency sections.
 - content MUST use markdown H2 lines that exactly match each string in h2s, with 1–2 short paragraphs under EVERY H2 (40–70 words each).
@@ -2453,11 +2559,12 @@ CUSTOM CONTENT REQUIREMENTS — WRITING BRIEF ONLY (follow; NEVER paste into int
 BODY LAYOUT ({layout}): {layout_note}
 {VOICE_RULES}
 {master_voice_rules()}
+{rag_section}
 
 NON-NEGOTIABLE:
 - ZeOrbit is the vendor. {industry or "The industry"} is the CLIENT type, not ZeOrbit's own business.
-- Write useful depth: who ZeOrbit helps + what ZeOrbit does + where relevant + problems solved + pricing context + technologies + business types + why it may fit.
-- Mention pricing naturally: website projects typically range from {ZEORBIT_FACTS['pricing_range']}.
+- Write useful depth: who ZeOrbit helps + what ZeOrbit does + where relevant + problems solved + technologies + business types + why it may fit.
+- Do not mention prices, dollar amounts, retainers, or project cost ranges.
 - Mention experience/reviews only as verified: {ZEORBIT_FACTS['experience']}, {ZEORBIT_FACTS['reviews']} — never invent individual reviews or star ratings.
 - Cover platforms as relevant to THIS intent: WordPress, Shopify, redesign, mobile-friendly, SEO-friendly structure, conversions, mobile apps.
 - Keep copy simple, credible, localized to {city} only, UNIQUE to this intent + industry + layout. Do NOT city-swap a generic article.
@@ -2475,9 +2582,9 @@ Generate a JSON response with EXACTLY this structure:
   "meta_description": "150-160 chars: helpful promise for {who} in {city} + ZeOrbit website help (no keyword stuffing)",
   "h1": "{title_locked}",
   "h2s": {h2_json},
-  "h3s": ["WordPress and Shopify options", "Mobile-friendly and SEO-friendly structure", "Practical pricing and experience", "A clear next step"],
+  "h3s": ["WordPress and Shopify options", "Mobile-friendly and SEO-friendly structure", "Process and experience", "A clear next step"],
   "intro": "2-4 sentences. Customer problem in {city}. What depends on the business need. ZeOrbit as the provider. No fluff.",
-  "content": "Markdown sections matching h2s. Each section 1-2 short paragraphs. Include pricing {ZEORBIT_FACTS['pricing_range']} where natural. Stay on website design for {who} in {city} for intent {intent.id}. 320-480 words.",
+  "content": "Markdown sections matching h2s. Each section 1-2 short paragraphs. No prices. Stay on website design for {who} in {city} for intent {intent.id}. 320-480 words.",
   "faqs": [
     {{"question": "Intent-specific FAQ 1 for {city}", "answer": "2-3 factual sentences"}},
     {{"question": "FAQ 2", "answer": "2-3 sentences"}},
@@ -2705,7 +2812,7 @@ async def _generate_template_block(
                 "in the first screen are the usual misses. If someone asked a question, lead with the answer.\n\n"
                 "## When ZeOrbit can help\n\n"
                 "If the answer points to a broken site, a redesign, or a store that does not convert, ZeOrbit can "
-                "map the fix. Website projects typically range from $500–$3,000 depending on scope."
+                "map the fix and what to change first."
             )
             h2s = [
                 f"Direct answer: {pretty}",
@@ -2747,8 +2854,7 @@ async def _generate_template_block(
                 "leave temporary 302s in place for permanent moves.\n\n"
                 "## When to get help\n\n"
                 "If the site is revenue-critical, the root cause is unclear, or you are uncomfortable in hosting/DNS panels, "
-                "ZeOrbit can diagnose and apply a safe fix with you. Website projects for small businesses typically start "
-                "around $500–$3,000 depending on scope — a repair consult is often smaller than a full redesign."
+                "ZeOrbit can diagnose and apply a safe fix with you."
             )
             h2s = [
                 f"What “{pretty}” usually involves",
@@ -2946,6 +3052,7 @@ Return ONLY valid JSON: {{"articles": [{{"title": "...", "intent": "informationa
 def _article_block_from_fields(
     data: dict, primary_keyword: str, city: str, state: str,
     profile: WebsiteProfile, industry: str, angle_title: str,
+    preferred_link_urls: Optional[list] = None,
 ) -> SEOBlock:
     """Assemble a SEOBlock from generated fields (shared by LLM + template paths)."""
     faqs = [FAQItem(question=f["question"], answer=f["answer"]) for f in data.get("faqs", [])]
@@ -2956,7 +3063,10 @@ def _article_block_from_fields(
     body = data.get("content", "")
 
     if profile and profile.page_inventory:
-        body = insert_internal_links(body, profile.page_inventory, max_links=5)
+        body = insert_internal_links(
+            body, profile.page_inventory, max_links=5,
+            preferred_urls=preferred_link_urls or [],
+        )
 
     bt = primary_keyword.title()
     schema = _build_schema(
@@ -3027,6 +3137,21 @@ async def _generate_article(
     location = f"{city}, {state}" if state else city
 
     data = None
+    rag_block = ""
+    preferred_link_urls = []
+    if profile and profile.url:
+        from services.rag_service import preferred_urls, retrieve
+        try:
+            chunks = await retrieve(
+                f"{primary_keyword} {angle_title} {location} {industry}",
+                profile.url,
+            )
+            from services.rag_service import format_context
+            rag_block = format_context(chunks)
+            preferred_link_urls = preferred_urls(chunks)
+        except Exception as e:
+            print(f"[RAG] article retrieve failed: {e}")
+
     if llm_available():
         biz_ctx = ""
         if profile and profile.analyzed:
@@ -3038,6 +3163,8 @@ GROUND THIS ARTICLE IN THE REAL BUSINESS (do not invent unrelated services):
 - Target audience: {profile.target_audience}
 - Brand tone: {profile.brand_tone}
 Write in the brand tone above and reference the business's actual services where relevant."""
+        if rag_block:
+            biz_ctx = (biz_ctx or "") + "\n\n" + rag_block
 
         prompt = f"""You are an expert SEO + AEO (AI answer engine) content writer. Write ONE complete, unique blog article.
 
@@ -3073,7 +3200,10 @@ Provide at least 5 FAQs. Return ONLY valid JSON, no markdown."""
         data = _template_article_fields(primary_keyword, city, state, angle)
 
     data["_keywords"] = keywords
-    return _article_block_from_fields(data, primary_keyword, city, state, profile, industry, angle_title)
+    return _article_block_from_fields(
+        data, primary_keyword, city, state, profile, industry, angle_title,
+        preferred_link_urls=preferred_link_urls,
+    )
 
 
 async def generate_articles(req: ArticleRequest, profile: WebsiteProfile) -> List[SEOBlock]:

@@ -86,8 +86,8 @@ export const NEAR_ME_FAQS = [
   },
 ]
 
-export function buildLocalBusinessSchema({ pageUrl = SITE_URL, description } = {}) {
-  return {
+export function buildLocalBusinessSchema({ pageUrl = SITE_URL, description, includeRating = false } = {}) {
+  const schema = {
     '@context': 'https://schema.org',
     '@type': 'ProfessionalService',
     '@id': `${SITE_URL}/#localbusiness`,
@@ -118,19 +118,22 @@ export function buildLocalBusinessSchema({ pageUrl = SITE_URL, description } = {
       address: { '@type': 'PostalAddress', addressRegion: a.region, addressCountry: 'US' },
     })),
     sameAs: ZEO_LOCAL.sameAs,
-    aggregateRating: {
-      '@type': 'AggregateRating',
-      ratingValue: ZEO_LOCAL.rating,
-      reviewCount: ZEO_LOCAL.reviewCount,
-      bestRating: 5,
-      worstRating: 1,
-    },
     knowsAbout: ZEO_LOCAL.services,
     makesOffer: ZEO_LOCAL.services.map((name) => ({
       '@type': 'Offer',
       itemOffered: { '@type': 'Service', name, provider: { '@id': `${SITE_URL}/#localbusiness` } },
     })),
   }
+  if (includeRating) {
+    schema.aggregateRating = {
+      '@type': 'AggregateRating',
+      ratingValue: ZEO_LOCAL.rating,
+      reviewCount: ZEO_LOCAL.reviewCount,
+      bestRating: 5,
+      worstRating: 1,
+    }
+  }
+  return schema
 }
 
 export function buildFaqSchema(faqs) {

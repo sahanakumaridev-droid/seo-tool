@@ -38,8 +38,6 @@ def _compose_brief_text(data: dict) -> str:
         parts.append(f"Search intent: {data['search_intent'].strip()}")
     if data.get("customer_problem"):
         parts.append(f"Customer problem: {data['customer_problem'].strip()}")
-    if data.get("pricing"):
-        parts.append(f"Pricing: {data['pricing'].strip()}")
     if data.get("key_points"):
         parts.append(f"Key points to cover:\n{data['key_points'].strip()}")
     if data.get("faq_ideas"):
@@ -57,10 +55,9 @@ def _brief_needs_autofill(brief: str) -> bool:
     text = (brief or "").strip()
     if len(text) < 40:
         return True
-    has_pricing = bool(re.search(r"(?im)^\s*pricing\s*:", text) or re.search(r"\$\s*\d", text))
     has_intent = bool(re.search(r"(?im)^\s*search intent\s*:", text))
     has_problem = bool(re.search(r"(?im)^\s*customer problem\s*:", text))
-    return not (has_pricing and has_intent and has_problem)
+    return not (has_intent and has_problem)
 
 
 async def ensure_brief_for_generate(req: GenerateRequest) -> GenerateRequest:
@@ -123,7 +120,6 @@ Return ONLY JSON:
   "topic_title": "working title that names the keyword/query",
   "search_intent": "short intent label matched to the keyword",
   "customer_problem": "1-2 sentences about the searcher's problem for this query",
-  "pricing": "{ZEORBIT_FACTS['pricing_range']}",
   "key_points": "5-7 bullet lines starting with - that teach the query",
   "faq_ideas": "4-6 bullet questions starting with - about the query",
   "cta_direction": "1 soft CTA sentence",
@@ -133,7 +129,7 @@ Return ONLY JSON:
 }}"""
             data = await chat_json(prompt, temperature=0.55, max_tokens=1400, provider=req.llm_provider)
             if data:
-                for key in ("topic_title", "search_intent", "customer_problem", "pricing", "key_points", "faq_ideas", "cta_direction", "tone_notes"):
+                for key in ("topic_title", "search_intent", "customer_problem", "key_points", "faq_ideas", "cta_direction", "tone_notes"):
                     val = data.get(key)
                     if isinstance(val, str) and val.strip():
                         base[key] = val.strip()
@@ -153,8 +149,6 @@ Return ONLY JSON:
     except Exception as e:
         print(f"[Generate] brief autofill AI failed, using template: {e}")
 
-    if not (base.get("pricing") or "").strip():
-        base["pricing"] = ZEORBIT_FACTS["pricing_range"]
     if brief and "Extra editor notes" not in brief:
         base["extra_notes"] = brief
     req.custom_requirements = _compose_brief_text(base)
@@ -186,7 +180,7 @@ def _template_brief_fields(req: BriefSuggestRequest) -> dict:
     key_points = req.key_points or "\n".join([
         f"- Who ZeOrbit helps in {city} and what problem this page solves",
         f"- Relevant services: WordPress, Shopify, redesign, mobile-friendly sites, SEO-friendly structure",
-        f"- Pricing context: website projects typically {ZEORBIT_FACTS['pricing_range']}",
+        f"- Practical advice for choosing a website provider",
         f"- Experience: {ZEORBIT_FACTS['experience']}, {ZEORBIT_FACTS['reviews']}",
         f"- Practical advice for choosing a website provider",
         f"- Clear next step / CTA",
@@ -194,18 +188,17 @@ def _template_brief_fields(req: BriefSuggestRequest) -> dict:
     faqs = intent_faqs(intent, city, industry, 0)
     faq_ideas = req.faq_ideas or "\n".join(f"- {f['question']}" for f in faqs[:5])
     cta = req.cta_direction or (
-        f"Invite a conversation about a reasonably priced website for a {industry or 'small business'} in {city}. Soft CTA — not a hard sell."
+        f"Invite a conversation about a website for a {industry or 'small business'} in {city}. Soft CTA — not a hard sell."
     )
     tone = req.tone_notes or (
         "Plain American English for a small-business owner. No fluff (cutting-edge, seamless, unlock your potential). "
         "Do not invent fake reviews, offices, or 'best in city' claims."
     )
-    pricing = (req.pricing or "").strip() or ZEORBIT_FACTS["pricing_range"]
     return {
         "topic_title": title,
         "search_intent": intent_label,
         "customer_problem": problem,
-        "pricing": pricing,
+        "pricing": "",
         "key_points": key_points,
         "faq_ideas": faq_ideas,
         "cta_direction": cta,
@@ -243,19 +236,18 @@ Return ONLY JSON with these keys (short, editable draft text — not the full ar
   "topic_title": "working title",
   "search_intent": "short intent matched to the keyword (e.g. WordPress | Website redesign | Mobile app | SEO | eCommerce)",
   "customer_problem": "1-2 sentences: what the customer is trying to solve",
-  "pricing": "typical project range, e.g. $500–$3,000 — only when website-related",
   "key_points": "5-7 bullet lines starting with -",
   "faq_ideas": "4-6 bullet questions starting with -",
   "cta_direction": "1 sentence soft CTA guidance",
   "tone_notes": "1-2 sentences on voice"
 }}
 
-Rules: match services to the keyword (do not force every ZeOrbit service). Default website pricing $500–$3,000 when applicable. No fake reviews/offices/#1 claims. Field focus: {field}."""
+Rules: match services to the keyword (do not force every ZeOrbit service). Do not include prices or dollar amounts. No fake reviews/offices/#1 claims. Field focus: {field}."""
         try:
             data = await chat_json(prompt, temperature=0.7, max_tokens=1200, provider=req.llm_provider)
             if data:
                 source = "ai"
-                for key in ("topic_title", "search_intent", "customer_problem", "pricing", "key_points", "faq_ideas", "cta_direction", "tone_notes"):
+                for key in ("topic_title", "search_intent", "customer_problem", "key_points", "faq_ideas", "cta_direction", "tone_notes"):
                     if field != "all" and field != key:
                         continue
                     val = data.get(key)
@@ -268,7 +260,7 @@ Rules: match services to the keyword (do not force every ZeOrbit service). Defau
 
     if field != "all" and field in base:
         # Only return the requested field change; keep others from request if provided
-        for key in ("topic_title", "search_intent", "customer_problem", "pricing", "key_points", "faq_ideas", "cta_direction", "tone_notes"):
+        for key in ("topic_title", "search_intent", "customer_problem", "key_points", "faq_ideas", "cta_direction", "tone_notes"):
             if key == field:
                 continue
             incoming = getattr(req, key, "") or ""
@@ -437,6 +429,8 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             zip=getattr(city_info, "zip", "") or "",
             image_keyword=getattr(req, "image_keyword", "") or "",
             )
+        except HTTPException:
+            raise
         except Exception as e:
             print(f"[Generate] {city_info.name} failed ({e}); writing a fallback page so none are skipped")
             block = await generate_seo_block(

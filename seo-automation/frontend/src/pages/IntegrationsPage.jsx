@@ -6,14 +6,15 @@ import {
 import { getGoogleLiveStatus, getSocialPlatforms } from '../api'
 
 function StatusPill({ ok, label }) {
+  const checking = ok == null
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,
       fontSize: 11.5, fontWeight: 700, padding: '3px 9px', borderRadius: 6,
-      color: ok ? 'var(--green)' : 'var(--amber)',
-      background: ok ? 'var(--green-soft)' : 'var(--amber-soft)',
+      color: checking ? 'var(--text-3)' : ok ? 'var(--green)' : 'var(--amber)',
+      background: checking ? 'var(--bg-raised)' : ok ? 'var(--green-soft)' : 'var(--amber-soft)',
     }}>
-      {ok ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
+      {checking ? null : ok ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
       {label}
     </span>
   )
@@ -24,7 +25,7 @@ function ModuleCard({ title, to, live, detail, blocking = [], docs, formCmd }) {
     <div className="card p-5" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div className="flex items-center justify-between gap-3">
         <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>{title}</h3>
-        <StatusPill ok={!!live} label={live ? 'LIVE' : 'NOT LIVE'} />
+        <StatusPill ok={live == null ? null : !!live} label={live == null ? 'CHECKING' : live ? 'LIVE' : 'NOT LIVE'} />
       </div>
       {detail && (
         <p style={{ fontSize: 12.5, color: 'var(--text-3)', margin: 0, lineHeight: 1.5 }}>{detail}</p>
@@ -133,7 +134,7 @@ export default function IntegrationsPage() {
           <ModuleCard
             title="Google Indexing (Search Console)"
             to="/indexing"
-            live={idx.live}
+            live={loading && !data ? null : idx.live}
             detail={idx.crawl_fallback ? 'Crawl checks work free; live “Indexed by Google” needs Search Console.' : undefined}
             blocking={idx.blocking}
             docs={idx.docs}

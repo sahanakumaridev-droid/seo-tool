@@ -95,7 +95,7 @@ const EMPTY_BRIEF = {
   topic_title: '',
   search_intent: '',
   customer_problem: '',
-  pricing: '$500–$3,000',
+  pricing: '',
   key_points: '',
   faq_ideas: '',
   cta_direction: '',
@@ -107,7 +107,6 @@ function composeBriefFromParts(briefFields, extraNotes) {
   if (briefFields.topic_title?.trim()) parts.push(`Working title / topic: ${briefFields.topic_title.trim()}`)
   if (briefFields.search_intent?.trim()) parts.push(`Search intent: ${briefFields.search_intent.trim()}`)
   if (briefFields.customer_problem?.trim()) parts.push(`Customer problem: ${briefFields.customer_problem.trim()}`)
-  if (briefFields.pricing?.trim()) parts.push(`Pricing: ${briefFields.pricing.trim()}`)
   if (briefFields.key_points?.trim()) parts.push(`Key points to cover:\n${briefFields.key_points.trim()}`)
   if (briefFields.faq_ideas?.trim()) parts.push(`FAQs to answer:\n${briefFields.faq_ideas.trim()}`)
   if (briefFields.cta_direction?.trim()) parts.push(`CTA direction: ${briefFields.cta_direction.trim()}`)
@@ -435,7 +434,7 @@ function PreviewModal({ block, businessType, targetKeywords = [], onClose, onReg
     setPublishing(true)
     setPublishResult(null)
     try {
-      const res = await publishToWeb(block)
+      const res = await publishToWeb(publishPayload(block))
       const url = zeorbitArticleUrl(res.data.public_url || res.data.slug)
       setPublishResult({ success: true, post_url: url })
     } catch (e) {
@@ -707,6 +706,7 @@ export default function ContentPage() {
   })
   const [customRequirements, setCustomRequirements] = useState('')
   const [briefFields, setBriefFields] = useState(() => ({ ...EMPTY_BRIEF }))
+  const [scheduleAt, setScheduleAt] = useState('')
   const [briefAiBusy, setBriefAiBusy] = useState('') // '' | 'all' | field key
   const [showAdvancedBrief, setShowAdvancedBrief] = useState(true)
   const [sdCounty, setSdCounty] = useState(null)
@@ -1060,12 +1060,11 @@ export default function ContentPage() {
       const data = res.data || {}
       setBriefFields((prev) => {
         const next = { ...prev }
-        const keys = ['topic_title', 'search_intent', 'customer_problem', 'pricing', 'key_points', 'faq_ideas', 'cta_direction', 'tone_notes']
+        const keys = ['topic_title', 'search_intent', 'customer_problem', 'key_points', 'faq_ideas', 'cta_direction', 'tone_notes']
         keys.forEach((k) => {
           if (field !== 'all' && field !== 'ready90' && field !== k) return
           if (data[k]) next[k] = data[k]
         })
-        if (!(next.pricing || '').trim()) next.pricing = '$500–$3,000'
         return next
       })
       showToast(data.source === 'ai' ? 'AI filled the brief fields — edit anything manually' : 'Template brief filled — edit anything manually')
@@ -1269,11 +1268,24 @@ export default function ContentPage() {
     } finally { setExporting('') }
   }
 
+  const publishPayload = (block) => ({
+    ...block,
+    scheduled_at: scheduleAt ? new Date(scheduleAt).toISOString() : null,
+  })
+
   const handlePublishSingle = async (block, index) => {
     setPublishResults(r => ({ ...r, [index]: 'loading' }))
     try {
-      const res = await publishToWeb(block)
-      setPublishResults(r => ({ ...r, [index]: { success: true, post_url: zeorbitArticleUrl(res.data.public_url || res.data.slug) } }))
+      const res = await publishToWeb(publishPayload(block))
+      const scheduled = res.data?.scheduled
+      setPublishResults(r => ({
+        ...r,
+        [index]: {
+          success: true,
+          scheduled,
+          post_url: zeorbitArticleUrl(res.data.public_url || res.data.slug),
+        },
+      }))
     } catch (e) {
       setPublishResults(r => ({ ...r, [index]: { success: false, error: e.response?.data?.detail || e.message } }))
     }
@@ -1284,10 +1296,10 @@ export default function ContentPage() {
     if (!pages.length) return
     setWebAll({ loading: true })
     try {
-      const res = await publishAllToWeb(pages)
+      const res = await publishAllToWeb(pages.map(publishPayload))
       setWebAll({ links: res.data.published })
-      showToast(`${res.data.count} pages published to ZeOrbit!`)
-      window.open(zeorbitBlogUrl(), '_blank', 'noopener')
+      showToast(scheduleAt ? `Scheduled ${res.data.count || pages.length} pages` : `${res.data.count} pages published to ZeOrbit!`)
+      if (!scheduleAt) window.open(zeorbitBlogUrl(), '_blank', 'noopener')
     } catch (e) {
       setWebAll({ error: e.response?.data?.detail || 'Publish failed. Please try again.' })
     }
@@ -1702,7 +1714,7 @@ export default function ContentPage() {
                 }</>}
             </button>
             <p className="text-[10px] text-center" style={{ color: 'var(--text-3)' }}>
-              Backend fills intent, problem, pricing, FAQs, and tone. Locations below 90% are generated again right away until they pass — then all results are shown.
+              Backend fills intent, problem, FAQs, and tone. Locations below 90% are generated again right away until they pass — then all results are shown.
             </p>
           </form>
         </div>
@@ -1918,6 +1930,16 @@ export default function ContentPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <label className="text-[11px] flex items-center gap-1.5" style={{ color: 'var(--text-2)' }}>
+              Schedule
+              <input
+                type="datetime-local"
+                value={scheduleAt}
+                onChange={(e) => setScheduleAt(e.target.value)}
+                className="rounded-lg px-2 py-1.5 text-xs"
+                style={{ border: '1px solid var(--border)', background: '#fff' }}
+              />
+            </label>
             <button onClick={handleExport} disabled={exporting === 'json'}
               className="content-btn flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm disabled:opacity-50">
               <FileJson size={14} /> {exporting === 'json' ? 'Exporting...' : 'Download JSON'}
@@ -2072,7 +2094,7 @@ export default function ContentPage() {
                             color: pr?.success ? '#047857' : pr?.error ? '#b91c1c' : '#0f172a',
                           }}>
                           <Globe size={11} />
-                          {pr === 'loading' ? '...' : pr?.success ? 'Live' : pr?.error ? 'Err' : 'Publish'}
+                          {pr === 'loading' ? '...' : pr?.success ? (pr?.scheduled ? 'Queued' : 'Live') : pr?.error ? 'Err' : (scheduleAt ? 'Schedule' : 'Publish')}
                         </button>
                       </div>
                     </td>

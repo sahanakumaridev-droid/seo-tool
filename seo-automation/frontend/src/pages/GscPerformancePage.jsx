@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { LineChart as ReLine, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react'
-import { getGscPerformance } from '../api'
+import { getGscConnection, getGscPerformance } from '../api'
 
 export default function GscPerformancePage() {
   const [days, setDays] = useState(28)
@@ -13,9 +13,14 @@ export default function GscPerformancePage() {
     setLoading(true)
     setError('')
     try {
-      const res = await getGscPerformance(d)
-      setData(res.data)
-      if (!res.data?.ok && res.data?.detail) setError(res.data.detail)
+      const [connRes, perfRes] = await Promise.all([
+        getGscConnection().catch(() => null),
+        getGscPerformance(d),
+      ])
+      const perf = perfRes?.data || {}
+      const conn = { ...(perf.connection || {}), ...(connRes?.data || {}) }
+      setData({ ...perf, connection: conn })
+      if (perf.ok === false && perf.detail && conn.configured !== true) setError(perf.detail)
     } catch (e) {
       setError(e.response?.data?.detail || e.message || 'Could not load Search Console.')
     } finally {
@@ -27,7 +32,8 @@ export default function GscPerformancePage() {
 
   const conn = data?.connection || {}
   const totals = data?.totals || { clicks: 0, impressions: 0, ctr: 0, position: 0 }
-  const live = !!conn.configured
+  const live = conn.configured !== false
+  const statusLabel = loading && data == null ? 'Checking…' : (conn.configured === false ? 'Not connected' : 'Connected')
 
   return (
     <div className="space-y-6 fade-in">
@@ -61,9 +67,9 @@ export default function GscPerformancePage() {
       <div className="card p-4" style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         {live ? <CheckCircle2 size={18} style={{ color: 'var(--green)', marginTop: 2 }} /> : <AlertTriangle size={18} style={{ color: 'var(--amber)', marginTop: 2 }} />}
         <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5 }}>
-          <strong style={{ color: 'var(--text-1)' }}>{live ? 'Connected' : 'Not connected'}</strong>
+          <strong style={{ color: 'var(--text-1)' }}>{statusLabel}</strong>
           {' · '}Property: {conn.gsc_site_url || '—'}
-          {conn.key_exists ? ' · key file found' : ' · key file missing'}
+          {conn.key_exists === false ? ' · key file missing' : conn.key_exists ? ' · key file found' : ''}
           {conn.auth_error ? ` · ${conn.auth_error}` : ''}
           {conn.probe ? ` · ${conn.probe}` : ''}
           <div style={{ fontSize: 12, color: 'var(--text-4)', marginTop: 4 }}>
@@ -92,7 +98,7 @@ export default function GscPerformancePage() {
         <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px', color: 'var(--text-1)' }}>Clicks and impressions</h2>
         {(data?.by_date || []).length === 0 ? (
           <p style={{ fontSize: 13, color: 'var(--text-3)' }}>
-            {live ? 'No Search Analytics rows in this window yet. New sites often show zeros until Google has impressions.' : 'Connect Search Console to load the chart.'}
+            {live ? 'No Search Analytics rows in this window yet. New sites often show zeros until Google has impressions.' : 'Search Console credentials are missing on the server.'}
           </p>
         ) : (
           <ResponsiveContainer width="100%" height={220}>

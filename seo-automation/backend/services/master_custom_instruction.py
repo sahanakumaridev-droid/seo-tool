@@ -16,7 +16,7 @@ Determine what the target customer is actually trying to solve based on the keyw
 
 ### Pricing
 
-Use ZeOrbit's typical website project range of **$500 to $3,000+** when the topic is specifically related to website design or website development, explain that actual pricing depends on scope, pages, design, functionality, integrations, platform, content, eCommerce, and customization, and do not introduce website pricing into content about unrelated services unless pricing is specifically relevant; for services without an established price range, do not invent pricing.
+Do not mention prices, dollar amounts, retainers, packages, or typical project cost ranges in generated pages or posts. Describe process, scope, and next steps instead. Never invent pricing.
 
 ### Key points to cover
 
@@ -58,7 +58,7 @@ If the keyword indicates a **service**, explain the service, who needs it, what 
 
 If the keyword indicates a **comparison**, objectively explain the differences, advantages, limitations, and appropriate use cases before connecting the reader to the relevant service.
 
-If the keyword indicates a **cost/pricing question**, explain the factors that influence cost and use verified ZeOrbit pricing only where applicable.
+If the keyword indicates a **cost/pricing question**, explain the factors that influence scope and timeline. Do not quote dollar amounts or project ranges.
 
 If the keyword indicates a **new business**, focus on what the business needs to establish its digital presence and attract customers.
 
@@ -100,7 +100,7 @@ The AI should dynamically determine:
 
 The resulting article should feel like it was specifically written for that search query and customer, not like a template with different keywords inserted.
 
-PUNCTUATION: Do not use em dashes (—) or en dashes (–) in body copy. Prefer commas or short sentences. Simple hyphens only in prices like $500-$3,000.
+PUNCTUATION: Do not use em dashes (—) or en dashes (–) in body copy. Prefer commas or short sentences.
 
 ### Accuracy and trust rule
 

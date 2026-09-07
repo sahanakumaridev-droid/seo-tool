@@ -19,6 +19,7 @@ export default function RouteMeta() {
       image={rec.image}
       robots={rec.robots}
       faqs={faqs}
+      localBusiness={rec.path !== '/privacy-policy'}
     />
   )
 }

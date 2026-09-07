@@ -95,8 +95,8 @@ export default function IndexAutomationPage() {
         </div>
         <div className="card p-4">
           <div style={{ fontSize: 11, color: 'var(--text-4)', fontWeight: 600 }}>Search Console</div>
-          <div style={{ fontSize: 18, fontWeight: 700, marginTop: 6, color: data?.gsc_configured ? 'var(--green)' : 'var(--amber)' }}>
-            {data?.gsc_configured ? 'Connected' : 'Off'}
+          <div style={{ fontSize: 18, fontWeight: 700, marginTop: 6, color: data?.gsc_configured ? 'var(--green)' : (loading ? 'var(--text-3)' : 'var(--amber)') }}>
+            {loading && data == null ? 'Checking…' : data?.gsc_configured ? 'Connected' : 'Off'}
           </div>
         </div>
         <div className="card p-4">

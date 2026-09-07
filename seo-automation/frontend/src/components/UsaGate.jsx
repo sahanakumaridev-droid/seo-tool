@@ -46,8 +46,10 @@ async function lookupCountry() {
  * Local Vite has no GeoIP, so the browser checks the public IP.
  */
 export default function UsaGate({ children }) {
+  const host = window.location.hostname
   const skip = import.meta.env.VITE_SKIP_US_GATE === 'true'
-    || ['localhost', '127.0.0.1'].includes(window.location.hostname)
+    || ['localhost', '127.0.0.1'].includes(host)
+    || host.startsWith('seo.')
   const [allowed, setAllowed] = useState(skip)
 
   useEffect(() => {

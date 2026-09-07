@@ -10,7 +10,7 @@ Strategy:
 - Cap total links so the content stays natural.
 """
 import re
-from typing import List, Set
+from typing import List, Optional, Set
 from models.schemas import SitePage
 
 # Order in which we try to guarantee one link per important type.
@@ -44,6 +44,7 @@ def insert_internal_links(
     body: str,
     page_inventory: List[SitePage],
     max_links: int = 5,
+    preferred_urls: Optional[List[str]] = None,
 ) -> str:
     """Return body with up to max_links contextual internal links inserted."""
     if not body or not page_inventory:
@@ -51,6 +52,7 @@ def insert_internal_links(
 
     used_urls: Set[str] = set()
     links_added = 0
+    by_url = {p.url: p for p in page_inventory}
 
     def try_link_page(page: SitePage) -> bool:
         nonlocal body, links_added
@@ -75,6 +77,12 @@ def insert_internal_links(
         used_urls.add(page.url)
         links_added += 1
         return True
+
+    # 0) RAG-preferred URLs (semantically closest pages to this article).
+    for u in preferred_urls or []:
+        page = by_url.get(u)
+        if page and try_link_page(page):
+            pass
 
     # 1) Guarantee one link per priority type when available.
     for ptype in _PRIORITY_TYPES:

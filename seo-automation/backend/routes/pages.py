@@ -317,6 +317,21 @@ async def publish_to_web(
 
     slug = _block_slug(block)
     block.slug = slug
+
+    scheduled_raw = (getattr(block, "scheduled_at", None) or "").strip()
+    scheduled_dt = None
+    if scheduled_raw:
+        from services.schedule_service import _parse_when
+        scheduled_dt = _parse_when(scheduled_raw)
+        if scheduled_raw and not scheduled_dt:
+            raise HTTPException(status_code=400, detail="scheduled_at must be a valid datetime.")
+    hold_for_schedule = bool(scheduled_dt and scheduled_dt > datetime.now(timezone.utc))
+    if hold_for_schedule:
+        block.publish_status = "scheduled"
+        block.scheduled_at = scheduled_dt.isoformat()
+    else:
+        block.publish_status = "live"
+        block.scheduled_at = None
     try:
         from services.content_service import sanitize_schema_markup
         block.schema_markup = sanitize_schema_markup(
@@ -361,6 +376,17 @@ async def publish_to_web(
     await session.commit()
 
     public_url = f"{_public_base(request)}/{slug}"
+    if hold_for_schedule:
+        return {
+            "slug": slug,
+            "public_url": public_url,
+            "published": False,
+            "scheduled": True,
+            "scheduled_at": block.scheduled_at,
+            "quality_score": block.quality_score,
+            "publishable": block.publishable,
+        }
+
     indexing = await track_public_publish(url=public_url, block=block, session=session)
     ads = await maybe_auto_create_ads(public_url=public_url, block=block)
     try:
@@ -395,9 +421,19 @@ async def publish_to_web_bulk(
 
     base = _public_base(request)
     published = []
+    from services.schedule_service import _parse_when
+    now = datetime.now(timezone.utc)
     for block in blocks:
         slug = _block_slug(block)
         block.slug = slug
+        scheduled_dt = _parse_when(getattr(block, "scheduled_at", None) or "")
+        hold = bool(scheduled_dt and scheduled_dt > now)
+        if hold:
+            block.publish_status = "scheduled"
+            block.scheduled_at = scheduled_dt.isoformat()
+        else:
+            block.publish_status = "live"
+            block.scheduled_at = None
         result = await session.execute(select(PageRecord).where(PageRecord.slug == slug))
         existing = result.scalar_one_or_none()
         if not existing:
@@ -422,6 +458,13 @@ async def publish_to_web_bulk(
                 seo_block=block.model_dump(),
             ))
         public_url = f"{base}/{slug}"
+        if hold:
+            published.append({
+                "slug": slug, "city": block.city, "state": block.state,
+                "title": block.title, "public_url": public_url,
+                "scheduled": True, "scheduled_at": block.scheduled_at,
+            })
+            continue
         indexing = await track_public_publish(url=public_url, block=block, session=session)
         ads = await maybe_auto_create_ads(public_url=public_url, block=block)
         published.append({

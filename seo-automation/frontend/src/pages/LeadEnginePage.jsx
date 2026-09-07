@@ -1,22 +1,220 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   ExternalLink, Zap, Target, MapPin, Megaphone, Link2,
-  Rocket, CheckCircle2, Copy, ArrowRight, Star, Clock,
+  Rocket, Copy, ArrowRight, Star, Clock, Phone, Send,
 } from 'lucide-react'
 import {
   LEAD_PLATFORMS, START_WITH, TRACK_METRICS, SERVICE_FUNNELS,
   GOOGLE_ADS_KEYWORDS, LOCAL_SEO_CITIES, LOCAL_SEO_PAGES,
-  LINKEDIN_TARGETS, LINKEDIN_MESSAGE, BUDGET_PLAN, ENGINE_STACK,
+  LINKEDIN_TARGETS, LINKEDIN_MESSAGE, ENGINE_STACK,
   SALES_FUNNEL, SPEED_RULE,
 } from '../data/leadEngine'
+import { getLeads, getLeadVisitors, getLeadStats, sendLeadMessage, updateLeadStatus } from '../api'
 
 const TABS = [
+  { id: 'inbox', label: 'Inbox' },
   { id: 'platforms', label: 'Lead Platforms' },
   { id: 'engine', label: 'Own Lead Engine' },
   { id: 'funnels', label: 'Service Funnels' },
-  { id: 'budget', label: 'Budget & Playbook' },
 ]
+
+function leadName(lead) {
+  return lead.contact_name || lead.name || lead.business_name || 'Untitled'
+}
+
+function defaultOutreach(lead) {
+  const name = (lead.contact_name || lead.name || 'there').split(' ')[0]
+  return {
+    subject: 'Quick follow-up from ZeOrbit',
+    body: `Hi ${name},\n\nThanks for visiting ZeOrbit. We build websites, apps, and SEO systems that turn traffic into customers.\n\nIf you share what you need (new site, redesign, app, or SEO), we can outline a clear next step and a timeline.\n\nReply to this email or call 619-724-9517.\n\n— ZeOrbit`,
+  }
+}
+
+function InboxTab() {
+  const [leads, setLeads] = useState([])
+  const [visitors, setVisitors] = useState([])
+  const [stats, setStats] = useState({})
+  const [selected, setSelected] = useState(null)
+  const [draft, setDraft] = useState({ subject: '', body: '' })
+  const [sending, setSending] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const [l, v, s] = await Promise.all([
+        getLeads({ limit: 80 }),
+        getLeadVisitors({ limit: 40 }),
+        getLeadStats(),
+      ])
+      setLeads(Array.isArray(l.data) ? l.data : [])
+      setVisitors(Array.isArray(v.data) ? v.data : [])
+      setStats(s.data || {})
+    } catch (e) {
+      setMsg(e.response?.data?.detail || 'Could not load inbox')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  const pick = (lead) => {
+    setSelected(lead)
+    setMsg('')
+    setDraft(defaultOutreach(lead))
+  }
+
+  const send = async () => {
+    if (!selected?.id) return
+    setSending(true)
+    setMsg('')
+    try {
+      await sendLeadMessage(selected.id, draft)
+      setMsg('Message sent. Lead marked as contacted.')
+      await updateLeadStatus(selected.id, 'contacted')
+      setLeads((prev) => prev.map((l) => (l.id === selected.id ? { ...l, status: 'contacted' } : l)))
+      setSelected((cur) => (cur ? { ...cur, status: 'contacted' } : cur))
+    } catch (e) {
+      setMsg(typeof e.response?.data?.detail === 'string' ? e.response.data.detail : 'Could not send')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const identified = leads.filter((l) => l.email || l.phone)
+
+  return (
+    <div className="space-y-4">
+      <div className="crm-kpis">
+        {[
+          { label: 'Contacts', value: identified.length, hint: 'Have email or phone' },
+          { label: 'Visitors', value: stats.pageviews || visitors.length, hint: 'Page views — not yet identifiable' },
+          { label: 'New', value: stats.by_status?.new || 0, hint: 'Waiting first message' },
+          { label: 'Contacted', value: stats.by_status?.contacted || 0, hint: 'Outreach sent' },
+        ].map((s) => (
+          <div key={s.label} className="crm-kpi">
+            <div className="lbl">{s.label}</div>
+            <div className="val">{s.value}</div>
+            <div className="hint">{s.hint}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card p-4" style={{ background: '#fff' }}>
+        <p className="text-sm" style={{ color: 'var(--text-2)', margin: 0 }}>
+          You cannot legally message a visitor from a pageview alone. Chat and the contact form capture name, email, and U.S. phone so you can email them from this inbox and move them New → Contacted → Qualified → Won.
+        </p>
+      </div>
+
+      <div className="crm-split">
+        <div>
+          <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--text-1)' }}>Captured contacts</h3>
+          {loading ? (
+            <p className="text-sm" style={{ color: 'var(--text-3)' }}>Loading…</p>
+          ) : identified.length === 0 ? (
+            <div className="card p-5">
+              <p className="text-sm" style={{ color: 'var(--text-3)', margin: 0 }}>
+                No contacts yet. On zeorbit.com, visitors use the chat bubble to leave name, email, and phone — then they appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {identified.map((lead) => (
+                <button
+                  key={lead.id}
+                  type="button"
+                  className={`crm-card${selected?.id === lead.id ? ' selected' : ''}`}
+                  style={{ width: '100%', textAlign: 'left' }}
+                  onClick={() => pick(lead)}
+                >
+                  <div className="crm-card-title">{leadName(lead)}</div>
+                  <div className="crm-card-meta">
+                    {[lead.email, lead.phone, lead.service].filter(Boolean).join(' · ')}
+                  </div>
+                  <div className="crm-card-foot">
+                    <span className={`crm-chip crm-chip-${lead.status || 'new'}`}>{lead.status || 'new'}</span>
+                    <span className="crm-chip crm-chip-source">{lead.source}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <h3 className="text-sm font-semibold mt-6 mb-2" style={{ color: 'var(--text-1)' }}>Recent visitors (anonymous)</h3>
+          {visitors.length === 0 ? (
+            <p className="text-xs" style={{ color: 'var(--text-3)' }}>No pageviews recorded yet.</p>
+          ) : (
+            <div className="card overflow-hidden">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Page</th>
+                    <th>When</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visitors.slice(0, 15).map((v) => (
+                    <tr key={v.id}>
+                      <td className="text-xs">{v.website || '/'}</td>
+                      <td className="muted-cell">{v.created_at ? new Date(v.created_at).toLocaleString() : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <aside className="crm-drawer">
+          {selected ? (
+            <>
+              <h2>{leadName(selected)}</h2>
+              <div className="crm-field"><label>Email</label><div>{selected.email || '—'}</div></div>
+              <div className="crm-field"><label>Phone</label><div>{selected.phone || '—'}</div></div>
+              <div className="crm-field"><label>Notes</label><div style={{ whiteSpace: 'pre-wrap' }}>{selected.message || '—'}</div></div>
+              {selected.email ? (
+                <>
+                  <div className="crm-field">
+                    <label>Subject</label>
+                    <input value={draft.subject} onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))}
+                      style={{ width: '100%', padding: '8px 10px' }} />
+                  </div>
+                  <div className="crm-field">
+                    <label>Message</label>
+                    <textarea rows={8} value={draft.body} onChange={(e) => setDraft((d) => ({ ...d, body: e.target.value }))}
+                      style={{ width: '100%', padding: '8px 10px', resize: 'vertical' }} />
+                  </div>
+                  <button type="button" className="btn btn-primary" onClick={send} disabled={sending} style={{ width: '100%' }}>
+                    <Send size={14} /> {sending ? 'Sending…' : 'Send message'}
+                  </button>
+                </>
+              ) : (
+                <p className="text-sm" style={{ color: 'var(--text-3)' }}>No email on this record — add one in Contacts or ask them to complete chat capture.</p>
+              )}
+              {selected.phone ? (
+                <a className="btn btn-secondary" style={{ width: '100%', marginTop: 8, justifyContent: 'center' }} href={`tel:${selected.phone}`}>
+                  <Phone size={14} /> Call
+                </a>
+              ) : null}
+              {msg ? <p className="text-xs" style={{ marginTop: 10, color: 'var(--text-2)' }}>{msg}</p> : null}
+            </>
+          ) : (
+            <>
+              <h2>Message a lead</h2>
+              <p style={{ marginTop: 8, fontSize: 13, color: '#6e6e73' }}>
+                Select a captured contact. SMTP must be set on the backend for email to send.
+              </p>
+              <Link to="/leads" className="text-xs" style={{ color: 'var(--brand)' }}>Open full Contacts CRM</Link>
+            </>
+          )}
+        </aside>
+      </div>
+    </div>
+  )
+}
 
 function Stars({ n }) {
   return (
@@ -307,116 +505,45 @@ function FunnelsTab() {
   )
 }
 
-function BudgetTab() {
-  const total = BUDGET_PLAN.reduce((s, b) => s + b.amount, 0)
-  return (
-    <div className="space-y-5">
-      <div className="card p-5">
-        <h2 className="text-sm font-semibold text-white mb-1">~$3,000 / month test budget</h2>
-        <p className="text-sm text-slate-400">
-          After 60 days, kill the most expensive channel (by cost per acquired customer) and move budget to the winner.
-          Measure CPA, not lead volume — 8 leads that close 3 × $5k projects beat 50 cheap tire-kickers.
-        </p>
-      </div>
-
-      <div className="card overflow-hidden">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Channel</th>
-              <th>Share</th>
-              <th>Amount</th>
-              <th>Note</th>
-            </tr>
-          </thead>
-          <tbody>
-            {BUDGET_PLAN.map(b => (
-              <tr key={b.channel}>
-                <td className="font-semibold text-slate-200">{b.channel}</td>
-                <td className="text-slate-400 text-xs">{b.pct}%</td>
-                <td className="text-emerald-400 text-sm font-medium">${b.amount.toLocaleString()}</td>
-                <td className="text-slate-500 text-xs">{b.note}</td>
-              </tr>
-            ))}
-            <tr>
-              <td className="font-semibold text-white">Total</td>
-              <td />
-              <td className="text-white font-semibold">${total.toLocaleString()}</td>
-              <td className="text-slate-500 text-xs">Adjust after 60-day review</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div className="card p-5 space-y-2">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-          <CheckCircle2 size={14} className="text-emerald-400" /> North star
-        </h3>
-        <p className="text-sm text-slate-400">
-          Build toward <strong className="text-slate-200">Google + local SEO + direct outreach</strong> as the core engine,
-          with marketplaces as supplemental — not the business model.
-        </p>
-      </div>
-    </div>
-  )
-}
-
 export default function LeadEnginePage() {
-  const [tab, setTab] = useState('platforms')
+  const [tab, setTab] = useState('inbox')
   const navigate = useNavigate()
 
   return (
     <div className="space-y-5 fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white">Lead Engine</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Channel playbook + owned funnels — not an automatic lead marketplace.
+          <h1 className="text-xl font-bold" style={{ color: 'var(--text-1)' }}>Lead Engine</h1>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--text-3)' }}>
+            Capture visitors, message them, and turn conversations into projects.
           </p>
         </div>
         <div className="flex gap-2">
-          <Link to="/leads"
-            className="px-3 py-2 rounded-lg text-xs border border-white/10 text-slate-300 hover:bg-white/4">
-            Open Leads CRM
-          </Link>
-          <button type="button" onClick={() => navigate('/instant-quote')}
-            className="btn-primary px-4 py-2 rounded-lg text-sm font-semibold text-white">
+          <Link to="/leads" className="btn btn-secondary">Contacts CRM</Link>
+          <button type="button" onClick={() => navigate('/instant-quote')} className="btn btn-primary">
             Instant Quote
           </button>
         </div>
       </div>
 
-      <div className="card p-4 border border-sky-500/20 bg-sky-500/5">
-        <h2 className="text-sm font-semibold text-sky-200 mb-1">How this works</h2>
-        <ul className="text-xs text-slate-400 space-y-1.5 list-disc pl-4">
-          <li><strong className="text-slate-200">Lead Engine</strong> is a strategy guide: channels, funnel pages, and budgets to test.</li>
-          <li><strong className="text-slate-200">Leads CRM</strong> stores inquiries from your SEO pages, forms, ads, and Places prospecting — you own the contacts.</li>
-          <li><strong className="text-slate-200">API Integrations</strong> wires Google Ads, Search Console, social tokens, and AI providers into this app.</li>
-          <li>This does <em>not</em> automatically purchase or resell consumer leads nationwide. Use the platforms list to generate demand yourself, then manage contacts in Leads.</li>
-        </ul>
-      </div>
-
-      <div className="flex flex-wrap gap-1 p-1 rounded-xl bg-white/3 border border-white/8 w-fit">
+      <div className="flex flex-wrap gap-1 p-1 rounded-xl w-fit" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
         {TABS.map(t => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              tab === t.id
-                ? 'bg-indigo-600/30 text-indigo-200 border border-indigo-500/30'
-                : 'text-slate-400 hover:text-slate-200 border border-transparent'
-            }`}
+            className={tab === t.id ? 'tab-active' : 'tab-inactive'}
+            style={{ padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, border: 0, cursor: 'pointer' }}
           >
             {t.label}
           </button>
         ))}
       </div>
 
+      {tab === 'inbox' && <InboxTab />}
       {tab === 'platforms' && <PlatformsTab />}
       {tab === 'engine' && <EngineTab onOpenQuote={() => navigate('/instant-quote')} />}
       {tab === 'funnels' && <FunnelsTab />}
-      {tab === 'budget' && <BudgetTab />}
     </div>
   )
 }

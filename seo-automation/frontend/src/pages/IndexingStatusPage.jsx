@@ -42,7 +42,7 @@ function StatusBadge({ status }) {
 
 export default function IndexingStatusPage() {
   const [rows, setRows] = useState([])
-  const [gscConfigured, setGscConfigured] = useState(false)
+  const [gscConfigured, setGscConfigured] = useState(null)
   const [mode, setMode] = useState('crawl')
   const [demo, setDemo] = useState(false)
   const [setup, setSetup] = useState(null)
@@ -306,7 +306,7 @@ export default function IndexingStatusPage() {
         </div>
       )}
 
-      {!gscConfigured && (
+      {!loading && gscConfigured === false && (
         <div className="card p-4 border border-amber-500/25 bg-amber-500/5">
           <div className="flex items-start gap-2 text-sm text-amber-100">
             <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-400" />
@@ -366,7 +366,7 @@ export default function IndexingStatusPage() {
           </div>
         </div>
       )}
-      {setup && (
+      {setup && gscConfigured === false && (
         <div className="card p-5">
           <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 6px', color: 'var(--text-1)' }}>
             Setup checklist {setup.ready ? '— live' : '— finish to appear in Google Search'}
@@ -418,7 +418,7 @@ export default function IndexingStatusPage() {
           <div><strong>Live Search Console.</strong> Sitemap + URL Inspection are connected. Ranking still takes time.</div>
         </div>
       )}
-      {mode === 'crawl' && !demo && (
+      {mode === 'crawl' && !demo && gscConfigured === false && (
         <div className="alert alert-warning">
           <AlertTriangle size={15} />
           <div>

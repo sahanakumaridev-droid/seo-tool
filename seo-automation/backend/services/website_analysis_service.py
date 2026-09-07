@@ -6,7 +6,9 @@ plus a page inventory used for internal linking.
 
 Degrades gracefully: if the site can't be fetched or the AI call fails, it returns
 a WebsiteProfile with analyzed=False so content generation still works (just less grounded).
+Also indexes crawled page text for RAG retrieval at generate time.
 """
+import asyncio
 import json
 import re
 from urllib.parse import urljoin, urlparse
@@ -100,6 +102,84 @@ async def _build_page_inventory(client: httpx.AsyncClient, base_url: str, homepa
     return list(pages.values())
 
 
+_SKIP_PATH = re.compile(
+    r"\.(pdf|jpg|jpeg|png|gif|webp|svg|zip|mp4|xml|css|js)(\?|$)|/wp-admin|/cart|/checkout",
+    re.I,
+)
+_MAX_RAG_PAGES = 12
+
+
+def _pick_rag_pages(inventory: List[SitePage], homepage: str) -> List[SitePage]:
+    """Homepage first, then service/blog/location pages, then others."""
+    home = homepage.rstrip("/")
+    picked: List[SitePage] = []
+    seen = set()
+
+    def add(page: SitePage):
+        u = (page.url or "").split("#")[0]
+        if not u or u in seen or _SKIP_PATH.search(u):
+            return
+        seen.add(u)
+        picked.append(page)
+
+    for p in inventory:
+        if p.page_type == "home" or p.url.rstrip("/") == home:
+            add(p)
+    for want in ("service", "blog", "location", "product", "other"):
+        for p in inventory:
+            if p.page_type == want:
+                add(p)
+            if len(picked) >= _MAX_RAG_PAGES:
+                return picked
+    for p in inventory:
+        add(p)
+        if len(picked) >= _MAX_RAG_PAGES:
+            break
+    return picked
+
+
+async def _collect_rag_documents(
+    client: httpx.AsyncClient,
+    base_url: str,
+    homepage_html: str,
+    inventory: List[SitePage],
+) -> List[dict]:
+    docs = []
+    home_signals = _extract_text_signals(homepage_html)
+    docs.append({
+        "url": base_url,
+        "title": home_signals.get("title") or "Home",
+        "text": " ".join([
+            home_signals.get("title") or "",
+            home_signals.get("meta_description") or "",
+            " ".join(home_signals.get("headings") or []),
+            home_signals.get("body_sample") or "",
+        ]),
+    })
+    targets = [p for p in _pick_rag_pages(inventory, base_url) if p.url.rstrip("/") != base_url.rstrip("/")]
+
+    async def one(page: SitePage) -> Optional[dict]:
+        html = await _fetch(client, page.url)
+        if not html:
+            return None
+        sig = _extract_text_signals(html)
+        text = " ".join([
+            sig.get("title") or page.title or "",
+            sig.get("meta_description") or "",
+            " ".join(sig.get("headings") or []),
+            sig.get("body_sample") or "",
+        ]).strip()
+        if len(text) < 80:
+            return None
+        return {"url": page.url, "title": sig.get("title") or page.title, "text": text[:6000]}
+
+    batches = await asyncio.gather(*[one(p) for p in targets[:_MAX_RAG_PAGES]], return_exceptions=True)
+    for item in batches:
+        if isinstance(item, dict) and item.get("text"):
+            docs.append(item)
+    return docs
+
+
 def _extract_text_signals(html: str) -> dict:
     """Pull the raw text signals we feed to the LLM."""
     soup = BeautifulSoup(html, "html.parser")
@@ -177,6 +257,12 @@ async def analyze_website(url: str, use_cache: bool = True) -> WebsiteProfile:
 
         signals = _extract_text_signals(homepage)
         profile.page_inventory = await _build_page_inventory(client, url, homepage)
+        try:
+            from services.rag_service import index_documents
+            docs = await _collect_rag_documents(client, url, homepage, profile.page_inventory)
+            profile.rag_chunk_count = await index_documents(url, docs)
+        except Exception as e:
+            print(f"[RAG] index during analyze failed: {e}")
 
     ai = await _ai_profile(url, signals)
     if ai:

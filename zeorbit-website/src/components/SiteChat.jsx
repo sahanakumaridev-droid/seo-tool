@@ -87,11 +87,19 @@ export default function SiteChat() {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [messages, setMessages] = useState([WELCOME])
-  const [chips, setChips] = useState(() => TOPICS.map((t) => ({ id: t.id, label: t.label, kind: 'topic' })))
+  const [chips, setChips] = useState(() => [
+    ...TOPICS.map((t) => ({ id: t.id, label: t.label, kind: 'topic' })),
+    { id: 'capture', label: 'Leave my contact details', kind: 'quote' },
+  ])
+  const [capture, setCapture] = useState({ name: '', email: '', phone: '' })
+  const [showCapture, setShowCapture] = useState(false)
+  const [captureStatus, setCaptureStatus] = useState('')
+  const [savingLead, setSavingLead] = useState(false)
   const titleId = useId()
   const listRef = useRef(null)
   const inputRef = useRef(null)
   const sendingRef = useRef(false)
+  const transcriptRef = useRef([])
 
   useEffect(() => {
     const onOpen = (event) => {
@@ -147,6 +155,7 @@ export default function SiteChat() {
     setChips([])
     setInput('')
     setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: 'user', text: trimmed }])
+    transcriptRef.current = [...transcriptRef.current, `Visitor: ${trimmed}`]
 
     await new Promise((r) => window.setTimeout(r, 320))
 
@@ -159,7 +168,10 @@ export default function SiteChat() {
     } else if (topic) {
       setChips(chipsForTopic(topic))
     } else {
-      setChips(TOPICS.map((t) => ({ id: t.id, label: t.label, kind: 'topic' })))
+      setChips([
+        ...TOPICS.map((t) => ({ id: t.id, label: t.label, kind: 'topic' })),
+        { id: 'capture', label: 'Leave my contact details', kind: 'quote' },
+      ])
     }
 
     sendingRef.current = false
@@ -178,13 +190,14 @@ export default function SiteChat() {
 
     if (chip.kind === 'quote') {
       setChips([])
+      setShowCapture(true)
       setMessages((prev) => [
         ...prev,
         { id: `u-${Date.now()}`, role: 'user', text: chip.label },
         {
           id: `a-${Date.now() + 1}`,
           role: 'assistant',
-          text: 'Opening the free quote form — share a short brief and we’ll reply with next steps.',
+          text: 'Leave your name, email, and U.S. phone below so we can message you with next steps. You can also open the full quote form.',
           cta: { to: '/contact#contact', label: 'Go to free quote' },
         },
       ])
@@ -238,6 +251,55 @@ export default function SiteChat() {
 
     if (chip.kind === 'reply' && chip.reply) {
       void handleSend(chip.label, { replyText: chip.reply, nextChips: [] })
+    }
+  }
+
+  async function saveChatLead(e) {
+    e.preventDefault()
+    const name = capture.name.trim()
+    const email = capture.email.trim()
+    const phone = capture.phone.trim()
+    if (!name || !email || !phone) {
+      setCaptureStatus('Name, email, and U.S. phone are required.')
+      return
+    }
+    setSavingLead(true)
+    setCaptureStatus('')
+    const apiBase = (import.meta.env.VITE_API_URL || '/api').trim().replace(/\/$/, '')
+    try {
+      const res = await fetch(`${apiBase}/leads/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source: 'chat',
+          name,
+          contact_name: name,
+          email,
+          phone,
+          service: 'Chat inquiry',
+          message: transcriptRef.current.slice(-12).join('\n') || 'Chat capture',
+          page_url: typeof window !== 'undefined' ? window.location.href : '',
+          website_url: '',
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setCaptureStatus(typeof data.detail === 'string' ? data.detail : 'Could not save. Check the phone number.')
+        return
+      }
+      setShowCapture(false)
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `a-saved-${Date.now()}`,
+          role: 'assistant',
+          text: `Thanks ${name.split(' ')[0]} — we have your details and will follow up at ${email}.`,
+        },
+      ])
+    } catch {
+      setCaptureStatus('Network error. Try the contact form.')
+    } finally {
+      setSavingLead(false)
     }
   }
 
@@ -319,6 +381,16 @@ export default function SiteChat() {
                   </button>
                 ))}
               </div>
+            ) : null}
+
+            {showCapture ? (
+              <form className="zo-site-chat-capture" onSubmit={saveChatLead}>
+                <input value={capture.name} onChange={(e) => setCapture((c) => ({ ...c, name: e.target.value }))} placeholder="Your name" autoComplete="name" required />
+                <input type="email" value={capture.email} onChange={(e) => setCapture((c) => ({ ...c, email: e.target.value }))} placeholder="Work email" autoComplete="email" required />
+                <input type="tel" value={capture.phone} onChange={(e) => setCapture((c) => ({ ...c, phone: e.target.value }))} placeholder="U.S. phone" autoComplete="tel" required />
+                {captureStatus ? <p className="zo-site-chat-capture-status">{captureStatus}</p> : null}
+                <button type="submit" disabled={savingLead}>{savingLead ? 'Saving…' : 'Save my details'}</button>
+              </form>
             ) : null}
 
             <form
