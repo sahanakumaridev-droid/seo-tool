@@ -225,15 +225,18 @@ function BriefField({ label, hint, value, onChange, onAi, aiBusy, rows = 3, plac
   )
 }
 
-function SearchSelect({ label, required, value, onChange, options, placeholder, maxResults = 40, remoteSearch = null }) {
+function SearchSelect({
+  label, required, value, onChange, options, placeholder, maxResults = 40, remoteSearch = null,
+  multi = false, selected = [], onToggle,
+}) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const [remoteOpts, setRemoteOpts] = useState([])
   const query = (q || '').trim().toLowerCase()
+  const picked = multi ? (selected || []) : []
   const localFiltered = (options || [])
     .filter((o) => !query || o.toLowerCase().includes(query))
     .slice(0, maxResults)
-  // Merge remote US-city hits with local options (local first, then remote unique)
   const filtered = (() => {
     if (!remoteSearch) return localFiltered
     const seen = new Set(localFiltered.map((o) => locKey(o)))
@@ -246,23 +249,37 @@ function SearchSelect({ label, required, value, onChange, options, placeholder, 
     }
     return [...localFiltered, ...extra].slice(0, maxResults)
   })()
-  const exact = (options || []).some((o) => locKey(o) === locKey(value))
-    || remoteOpts.some((o) => locKey(o) === locKey(value))
-  const showCustom = Boolean((value || '').trim()) && !exact
+  const typed = (multi ? q : value) || ''
+  const exact = (options || []).some((o) => locKey(o) === locKey(typed))
+    || remoteOpts.some((o) => locKey(o) === locKey(typed))
+    || picked.some((o) => locKey(o) === locKey(typed))
+  const showCustom = Boolean(typed.trim()) && !exact
 
   useEffect(() => {
     if (!remoteSearch || !open) return
     let cancelled = false
     const timer = setTimeout(async () => {
       try {
-        const rows = await remoteSearch(q || value || '')
+        const rows = await remoteSearch(q || (!multi ? value : '') || '')
         if (!cancelled) setRemoteOpts(Array.isArray(rows) ? rows : [])
       } catch {
         if (!cancelled) setRemoteOpts([])
       }
     }, 220)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [q, value, open, remoteSearch])
+  }, [q, value, open, remoteSearch, multi])
+
+  const pick = (opt) => {
+    if (multi && onToggle) {
+      onToggle(opt)
+      setQ('')
+      setOpen(true)
+      return
+    }
+    onChange(opt)
+    setQ('')
+    setOpen(false)
+  }
 
   return (
     <div style={{ position: 'relative' }}>
@@ -270,15 +287,33 @@ function SearchSelect({ label, required, value, onChange, options, placeholder, 
         {label}
         {required ? <span className="ml-2 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ background: 'var(--amber-soft)', color: 'var(--amber)' }}>Required</span> : null}
       </label>
+      {multi && picked.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {picked.map((loc) => (
+            <span key={`sel-${loc}`} className="text-[11px] px-2 py-0.5 rounded font-semibold inline-flex items-center gap-1"
+              style={{ background: '#ecfdf5', border: '1px solid #059669', color: '#065f46' }}>
+              {loc}
+              <button type="button" onClick={() => onToggle?.(loc)} aria-label={`Remove ${loc}`} className="leading-none">×</button>
+            </span>
+          ))}
+        </div>
+      )}
       <input
-        value={value}
-        onChange={(e) => { onChange(e.target.value); setQ(e.target.value); setOpen(true) }}
-        onFocus={() => { setQ(value || ''); setOpen(true) }}
+        value={multi ? q : value}
+        onChange={(e) => {
+          const next = e.target.value
+          setQ(next)
+          setOpen(true)
+          if (!multi) onChange(next)
+        }}
+        onFocus={() => { if (!multi) setQ(value || ''); setOpen(true) }}
         onBlur={() => setTimeout(() => setOpen(false), 160)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.preventDefault()
-            setOpen(false)
+            const t = (multi ? q : value).trim()
+            if (t) pick(t)
+            else setOpen(false)
           }
         }}
         placeholder={placeholder}
@@ -291,31 +326,36 @@ function SearchSelect({ label, required, value, onChange, options, placeholder, 
             <button
               type="button"
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { setOpen(false) }}
+              onClick={() => pick(typed.trim())}
               className="w-full text-left px-3 py-2 text-sm"
               style={{ color: 'var(--brand)', background: 'var(--brand-soft)' }}
             >
-              Use “{(value || '').trim()}”
+              {multi ? `Add “${typed.trim()}”` : `Use “${typed.trim()}”`}
             </button>
           )}
-          {filtered.map((opt) => (
-            <button
-              type="button"
-              key={opt}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { onChange(opt); setQ(''); setOpen(false) }}
-              className="w-full text-left px-3 py-2 text-sm"
-              style={{ background: locKey(opt) === locKey(value) ? 'var(--brand-soft)' : 'transparent', color: 'var(--text-1)' }}
-            >
-              {opt}
-            </button>
-          ))}
+          {filtered.map((opt) => {
+            const on = multi && picked.some((x) => locKey(x) === locKey(opt))
+            return (
+              <button
+                type="button"
+                key={opt}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pick(opt)}
+                className="w-full text-left px-3 py-2 text-sm"
+                style={{ background: on || locKey(opt) === locKey(value) ? 'var(--brand-soft)' : 'transparent', color: 'var(--text-1)' }}
+              >
+                {multi ? (on ? `✓ ${opt}` : `+ ${opt}`) : opt}
+              </button>
+            )
+          })}
         </div>
       )}
       <p className="mt-1 text-[10px]" style={{ color: 'var(--text-4)' }}>
-        {remoteSearch
-          ? 'Type to search 30,000+ US cities, or enter a custom place — both are saved.'
-          : 'Search the list or type a custom value — both are saved.'}
+        {multi
+          ? 'Select as many cities as you want. Each selected place becomes its own page or blog.'
+          : remoteSearch
+            ? 'Type to search 30,000+ US cities, or enter a custom place — both are saved.'
+            : 'Search the list or type a custom value — both are saved.'}
       </p>
     </div>
   )
@@ -1016,6 +1056,9 @@ export default function ContentPage() {
   const addSdItems = (names) => {
     addExtraLocation(names.join('\n'))
   }
+  const syncBaseFromPins = (pins) => {
+    updateForm((f) => ({ ...f, base_location: pins[0] || f.base_location }))
+  }
   const addExtraLocation = (raw) => {
     const parts = splitLocations(raw || extraLocDraft)
     if (!parts.length) return
@@ -1024,11 +1067,32 @@ export default function ContentPage() {
       parts.forEach((loc) => {
         if (!next.some((x) => locKey(x) === locKey(loc))) next.push(loc)
       })
+      syncBaseFromPins(next)
       return next
     })
     setExtraLocDraft('')
   }
-  const removeExtraLocation = (loc) => setExtraLocations(prev => prev.filter(x => locKey(x) !== locKey(loc)))
+  const toggleExtraLocation = (raw) => {
+    const parts = splitLocations(raw)
+    if (!parts.length) return
+    setExtraLocations((prev) => {
+      let next = [...prev]
+      parts.forEach((loc) => {
+        if (next.some((x) => locKey(x) === locKey(loc))) {
+          next = next.filter((x) => locKey(x) !== locKey(loc))
+        } else {
+          next.push(loc)
+        }
+      })
+      syncBaseFromPins(next)
+      return next
+    })
+  }
+  const removeExtraLocation = (loc) => setExtraLocations((prev) => {
+    const next = prev.filter((x) => locKey(x) !== locKey(loc))
+    syncBaseFromPins(next)
+    return next
+  })
 
   const updateBriefField = (key, value) => {
     setBriefFields((prev) => ({ ...prev, [key]: value }))
@@ -1169,11 +1233,13 @@ export default function ContentPage() {
     const hasBlogLocations = contentKind === 'post' && (
       !!(form.base_location || '').trim() || extraLocations.length > 0
     )
-    // Page always uses locations. Blog uses them only when base/chips are set.
     const useLocations = contentKind === 'page' || hasBlogLocations
-    const pageCount = useLocations
-      ? Math.max(Number(form.num_cities) || 1, extraLocations.length || 0, 1)
-      : 1
+    const selectedOnly = extraLocations.length > 0
+    const pageCount = !useLocations
+      ? 1
+      : selectedOnly
+        ? extraLocations.length
+        : Math.max(Number(form.num_cities) || 1, 1)
     setGenerateRequested(pageCount)
     // Auto async for large batches
     const runAsync = useAsync || pageCount >= 20
@@ -1192,12 +1258,11 @@ export default function ContentPage() {
         })(),
         audience: (form.audience || '').trim(),
         num_cities: pageCount,
-        base_location: useLocations ? (form.base_location || '') : '',
+        base_location: useLocations ? (extraLocations[0] || form.base_location || '') : '',
         target_keywords: targetKeywords.length
           ? [...targetKeywords]
           : ['website design'],
-        // Manual chips first; backend fills remaining from base location
-        extra_locations: useLocations ? [...extraLocations] : [],
+        extra_locations: useLocations && selectedOnly ? [...extraLocations] : [],
         content_kind: contentKind,
         custom_requirements: (() => {
           const composed = composeBriefFromParts(briefFields, customRequirements)
@@ -1567,8 +1632,8 @@ export default function ContentPage() {
           </h3>
           <p className="text-[11px] mb-4" style={{ color: 'var(--text-4)' }}>
             {contentKind === 'post'
-              ? 'Keyword + niche + industry required. Base location, cities, streets, and counties are optional.'
-              : 'Type keyword + niche + industry + base location. Pick cities, streets, and counties — then generate.'}
+              ? 'Keyword + niche required. Select multiple cities if you want one post per place; leave locations empty for a national topic.'
+              : 'Type keyword + niche + industry, then select every city you want. Generate creates one page per selected location.'}
           </p>
           <form onSubmit={handleGenerate} className="space-y-4">
             <div id="business-niche-section" className="space-y-3">
@@ -1620,21 +1685,26 @@ export default function ContentPage() {
             </div>
             <div>
               <SearchSelect
-                label="Base location"
+                label="Select locations"
                 required={contentKind === 'page'}
+                multi
+                selected={extraLocations}
+                onToggle={toggleExtraLocation}
                 value={form.base_location}
                 onChange={(v) => updateForm((f) => ({ ...f, base_location: v }))}
                 options={baseCityOptions}
                 remoteSearch={fetchCityOptions}
                 maxResults={50}
                 placeholder={contentKind === 'post'
-                  ? 'Optional — e.g. Chula Vista, CA'
-                  : 'City, ZIP, county, or area — e.g. Chula Vista, CA or 91910'}
+                  ? 'Optional — search and click cities to add several'
+                  : 'Search and click every city — e.g. Chula Vista, CA then Oceanside, CA'}
               />
               <p className="text-[10px] mt-1" style={{ color: 'var(--text-4)' }}>
-                {contentKind === 'post'
-                  ? 'Optional for blog. Leave blank for a national topic post, or set a base to expand cities / streets / counties.'
-                  : 'Starting point for expansion: cities, ZIP codes, streets, and counties nearby.'}
+                {extraLocations.length
+                  ? `${extraLocations.length} selected — generate will use only these places (no auto-fill).`
+                  : contentKind === 'post'
+                    ? 'Optional for blog. Leave blank for a national topic, or pick cities for one post each.'
+                    : 'Pick one or more cities. The nearby slider is used only if you have not selected any.'}
               </p>
               {nearbyError && (
                 <div className="mt-1.5 text-[10px]" style={{ color: 'var(--red)' }}>{nearbyError}</div>
@@ -1642,13 +1712,14 @@ export default function ContentPage() {
               <div className="mt-3">
                 <div className="flex justify-between items-center mb-2">
                   <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-3)' }}>
-                    How many locations
+                    {extraLocations.length > 0 ? 'Selected locations' : 'How many locations'}
                   </label>
                   <span className="text-sm font-bold" style={{ color: 'var(--brand)' }}>
-                    {form.num_cities}
-                    {extraLocations.length > 0 ? ` · ${extraLocations.length} chips` : ''}
+                    {extraLocations.length > 0 ? extraLocations.length : form.num_cities}
+                    {extraLocations.length > 0 ? ' selected' : ''}
                   </span>
                 </div>
+                {extraLocations.length === 0 && (
                 <input
                   type="range"
                   min="1"
@@ -1657,6 +1728,7 @@ export default function ContentPage() {
                   onChange={(e) => updateForm((f) => ({ ...f, num_cities: Number(e.target.value) }))}
                   className="w-full accent-indigo-500"
                 />
+                )}
               </div>
             </div>
             {error && (
@@ -1699,7 +1771,7 @@ export default function ContentPage() {
                 loading || !!asyncJobId
                 || !(form.business_type || '').trim()
                 || !targetKeywords.length
-                || (contentKind === 'page' && !(form.base_location || '').trim())
+                || (contentKind === 'page' && !extraLocations.length && !(form.base_location || '').trim())
               }
               className="btn-primary w-full py-2.5 rounded-lg text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
             >
@@ -1707,10 +1779,12 @@ export default function ContentPage() {
                 ? <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.2)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/></svg>Generating…</>
                 : <><Zap size={14} />{
                   contentKind === 'post'
-                    ? ((form.base_location || '').trim() || extraLocations.length
-                      ? `Generate ${form.num_cities || 1} posts`
-                      : 'Generate post')
-                    : `Generate ${form.num_cities || 1} pages`
+                    ? (extraLocations.length
+                      ? `Generate ${extraLocations.length} posts`
+                      : ((form.base_location || '').trim()
+                        ? `Generate ${form.num_cities || 1} posts`
+                        : 'Generate post'))
+                    : `Generate ${extraLocations.length || form.num_cities || 1} pages`
                 }</>}
             </button>
             <p className="text-[10px] text-center" style={{ color: 'var(--text-3)' }}>
@@ -1737,7 +1811,7 @@ export default function ContentPage() {
           <p className="text-[12px] mb-3 leading-relaxed" style={{ color: 'var(--text-4)' }}>
             {contentKind === 'post'
               ? <>Locations are <strong>optional</strong> for blog. Set a base and pin <strong>cities</strong>, <strong>streets</strong>, or <strong>counties</strong> only if you want place-tied posts. Otherwise leave blank — body still follows your keyword query.</>
-              : <>Pick a <strong>county</strong> (all 58 in California), then a city. Switching county reloads <strong>local areas</strong> and <strong>streets</strong> for that county only.</>}
+              : <>Click cities to select several. County filter reloads local areas and streets — click again to deselect.</>}
           </p>
           <div className="flex flex-col gap-2 mb-3">
             <div className="flex flex-col sm:flex-row gap-1.5">
@@ -1819,7 +1893,7 @@ export default function ContentPage() {
                 <button
                   key={`${sdLayer}-${name}-${i}`}
                   type="button"
-                  onClick={() => addExtraLocation(name)}
+                  onClick={() => toggleExtraLocation(name)}
                   className="text-[11px] px-2 py-0.5 rounded font-medium"
                   style={{
                     background: extraLocations.some((x) => locKey(x) === locKey(name)) ? '#ecfdf5' : '#fff',
@@ -1866,6 +1940,8 @@ export default function ContentPage() {
               </div>
             </div>
           )}
+          {extraLocations.length === 0 && (
+          <>
           <p className="text-[10px] mb-2" style={{ color: 'var(--text-3)' }}>
             Auto-fill preview (cities / counties / streets from base — fills remaining slots up to {form.num_cities || 1}):
           </p>
@@ -1884,7 +1960,7 @@ export default function ContentPage() {
                 <button
                   key={`near-${c.name}-${c.state}-${kind}`}
                   type="button"
-                  onClick={() => addExtraLocation(label)}
+                  onClick={() => toggleExtraLocation(label)}
                   className="text-[11px] px-2 py-0.5 rounded font-semibold"
                   style={style}
                   title="Click to pin"
@@ -1900,6 +1976,8 @@ export default function ContentPage() {
               <span className="text-xs" style={{ color: 'var(--text-3)' }}>Looking up nearby places…</span>
             )}
           </div>
+          </>
+          )}
         </div>
       </div>
       )}

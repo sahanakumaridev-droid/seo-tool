@@ -353,10 +353,8 @@ async def resolve_generation_cities(
 ) -> List[CityInfo]:
     """Build the page list for generate.
 
-    Automation path (no chips): expand from base_location into nearby cities,
-    plus local areas / streets when catalog data exists (e.g. San Diego County).
-
-    Legacy path: chips first, then nearby fill up to num_cities.
+    Pinned locations (multi-select) are generated exactly as chosen.
+    With no pins, expand from base_location into nearby cities up to num_cities.
     """
     default_state = ""
     if base_location and "," in base_location:
@@ -369,25 +367,22 @@ async def resolve_generation_cities(
     # ZIP in the base field (e.g. "92101" or "San Diego, CA 92101")
     base_place = city_from_label(loc, default_state=default_state) if loc else None
 
+    # Explicit multi-select: generate only the cities the user pinned.
+    if extras:
+        result = extras[:250]
+        enriched: List[CityInfo] = []
+        for info in result:
+            enriched.append(await enrich_zip_place(info))
+        return enriched
+
     nearby: List[CityInfo] = []
     try:
         if loc and not (base_place and base_place.kind == "zip"):
             nearby = await expand_places_from_base(loc, num)
-        elif extras:
-            seed = f"{extras[0].name}, {extras[0].state}".strip(", ")
-            if seed.strip(", ") and not re.fullmatch(r"\d{5}", extras[0].name or ""):
-                nearby = await expand_places_from_base(seed, num)
     except LocationNotResolvedError:
         nearby = []
 
-    if extras:
-        # Pinned chips are the source of truth — never truncate 90 ZIPs down to the slider.
-        target = min(250, max(num, len(extras)))
-        if len(extras) >= target:
-            result = extras[:target]
-        else:
-            result = merge_extra_locations(nearby, extra_labels)[:target]
-    elif base_place and (base_place.zip or base_place.kind == "zip"):
+    if base_place and (base_place.zip or base_place.kind == "zip"):
         result = [base_place]
         if nearby:
             result = merge_extra_locations(nearby, [loc])[:num]
@@ -396,7 +391,7 @@ async def resolve_generation_cities(
     else:
         result = nearby[:num]
 
-    seed = loc or (f"{extras[0].name}, {extras[0].state}" if extras else "")
+    seed = loc
     result = await _pad_places_to_count(result, num, seed)
 
     enriched: List[CityInfo] = []
