@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { spaPublicShells } from './vite.spa-shells.js'
 
+const apiTarget = process.env.SEO_API_URL || 'http://127.0.0.1:8000'
+
 export default defineConfig({
   plugins: [react(), tailwindcss(), spaPublicShells()],
   server: {
@@ -11,9 +13,9 @@ export default defineConfig({
     host: '127.0.0.1',
     proxy: {
       // Point at the SEO Tool FastAPI backend
-      '/api': 'http://127.0.0.1:8000',
+      '/api': apiTarget,
       '/p': {
-        target: 'http://127.0.0.1:8000',
+        target: apiTarget,
         bypass(req) {
           // `/p` is article slugs; do not steal marketing pages that start with "p".
           const url = req.url || ''

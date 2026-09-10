@@ -38,10 +38,10 @@ TITLE_VARIANTS = [
 ]
 
 META_VARIANTS = [
-    "Looking for {bt} in {city}? Our team delivers practical, results-driven {bt} services for {city} businesses. Call today.",
-    "Trusted {bt} in {city}, {state}. Clear process, fast turnaround, and local support. Get in touch.",
-    "{BT} services in {city}. We help local businesses grow with proven {bt} work. Licensed experts. Call for a consultation.",
-    "Need a trusted {bt} in {city}, {state}? We help {city} businesses get found online. Contact us today.",
+    "Need a site that brings in calls in {city}? ZeOrbit builds a clear, mobile-friendly WordPress or Shopify page so customers know what you do next.",
+    "ZeOrbit designs fast websites for {city} businesses — obvious offer, easy contact, no filler. WordPress or Shopify, built to get inquiries.",
+    "A {city} website should make the next step obvious. ZeOrbit builds that: mobile-friendly, simple, and ready for calls and form fills.",
+    "Get a website {city} customers can trust at a glance. ZeOrbit keeps it fast, readable, and easy to contact — WordPress or Shopify.",
 ]
 
 H1_VARIANTS = [
@@ -2032,6 +2032,18 @@ async def generate_seo_block(
         block.zip = zip
         apply_zip_faq_only(block, city, state or "", zip)
 
+    from services.zeorbit_local_seo import polish_quick_answer, clean_seo_title
+    if city:
+        block.title = clean_seo_title(block.title or "", city, state or "")
+        block.h1 = clean_seo_title(block.h1 or block.title or "", city, state or "")
+    block.meta_description = polish_quick_answer(
+        block.meta_description or "",
+        block.intro or "",
+        city or "",
+        primary_kw or "",
+        business_type or "",
+    )
+
     try:
         from services.image_service import generate_article_images, blog_image_plan
         plan = blog_image_plan(
@@ -2579,7 +2591,7 @@ NON-NEGOTIABLE:
 Generate a JSON response with EXACTLY this structure:
 {{
   "title": "{title_locked}",
-  "meta_description": "150-160 chars: helpful promise for {who} in {city} + ZeOrbit website help (no keyword stuffing)",
+  "meta_description": "One appealing 150-160 char quick answer: benefit first, city once, ZeOrbit, no 'Looking for X in Y' and never repeat the city.",
   "h1": "{title_locked}",
   "h2s": {h2_json},
   "h3s": ["WordPress and Shopify options", "Mobile-friendly and SEO-friendly structure", "Process and experience", "A clear next step"],

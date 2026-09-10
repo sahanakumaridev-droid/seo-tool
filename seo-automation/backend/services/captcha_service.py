@@ -17,7 +17,7 @@ MAX_LIVE = 4000
 MIN_FILL_MS = 2500
 RATE_WINDOW_S = 15 * 60
 RATE_MAX = 8
-_SKIP_CAPTCHA = frozenset({"manual", "prospecting", "instant-quote", "chat"})
+_SKIP_CAPTCHA = frozenset({"manual", "prospecting", "instant-quote", "chat", "intent", "stripe"})
 
 
 def is_public_source(source: str) -> bool:

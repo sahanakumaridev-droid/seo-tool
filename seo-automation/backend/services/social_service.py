@@ -2,10 +2,17 @@
 social_service.py
 Automates social media posting to Facebook, Twitter/X, LinkedIn, Instagram.
 """
+import json
+import logging
+from pathlib import Path
+
 import httpx
 from typing import List, Optional
 from models.schemas import SocialPostRequest, SocialPostResult, GBPPostRequest, GBPPostResult
 from config import settings
+
+logger = logging.getLogger(__name__)
+_POST_LOG = Path(__file__).resolve().parent.parent / "data" / "social_auto_posts.json"
 
 
 # Per-platform character limits (hard caps we truncate to).
@@ -110,9 +117,7 @@ async def post_to_facebook(req: SocialPostRequest) -> SocialPostResult:
         return SocialPostResult(platform="facebook", success=False, error="Facebook credentials not configured")
 
     caption = _build_caption(req, "facebook")
-    payload: dict = {"message": caption, "access_token": token}
-    if req.image_url:
-        payload["link"] = req.post_url
+    payload: dict = {"message": caption, "link": req.post_url, "access_token": token}
 
     try:
         async with httpx.AsyncClient(timeout=20) as client:
@@ -449,3 +454,85 @@ async def share_to_social(req: SocialPostRequest) -> List[SocialPostResult]:
         else:
             results.append(SocialPostResult(platform=platform, success=False, error=f"Unknown platform: {platform}"))
     return results
+
+
+def configured_platforms() -> list:
+    """Platforms that have API tokens and can post without a human share dialog."""
+    s = settings
+    out = []
+    if s.FACEBOOK_ACCESS_TOKEN and s.FACEBOOK_PAGE_ID:
+        out.append("facebook")
+    if s.TWITTER_API_KEY and s.TWITTER_ACCESS_TOKEN:
+        out.append("twitter")
+    if s.LINKEDIN_ACCESS_TOKEN and s.LINKEDIN_PERSON_URN:
+        out.append("linkedin")
+    if s.INSTAGRAM_ACCESS_TOKEN and s.INSTAGRAM_ACCOUNT_ID:
+        out.append("instagram")
+    if s.PINTEREST_ACCESS_TOKEN and s.PINTEREST_BOARD_ID:
+        out.append("pinterest")
+    if s.THREADS_ACCESS_TOKEN and s.THREADS_USER_ID:
+        out.append("threads")
+    if (s.GBP_REFRESH_TOKEN or s.GBP_ACCESS_TOKEN) and s.GBP_ACCOUNT_ID and s.GBP_LOCATION_ID:
+        out.append("gbp")
+    return out
+
+
+def _load_post_log() -> dict:
+    try:
+        if _POST_LOG.exists():
+            return json.loads(_POST_LOG.read_text(encoding="utf-8") or "{}")
+    except Exception:
+        pass
+    return {}
+
+
+def _save_post_log(data: dict) -> None:
+    try:
+        _POST_LOG.parent.mkdir(parents=True, exist_ok=True)
+        _POST_LOG.write_text(json.dumps(data, indent=2)[:200000], encoding="utf-8")
+    except Exception as e:
+        logger.warning("Could not save social auto-post log: %s", e)
+
+
+async def auto_share_on_publish(*, url: str, block) -> dict:
+    """Post a newly published page to every connected network. No manual Social page click."""
+    if not getattr(settings, "SOCIAL_AUTO_POST_ON_PUBLISH", True):
+        return {"skipped": True, "reason": "SOCIAL_AUTO_POST_ON_PUBLISH is off"}
+    plats = configured_platforms()
+    if not plats:
+        return {"skipped": True, "reason": "No social API tokens in .env", "platforms": []}
+    key = (url or "").strip()
+    if not key:
+        return {"skipped": True, "reason": "No public URL"}
+    log = _load_post_log()
+    if log.get(key, {}).get("ok"):
+        return {"skipped": True, "reason": "Already auto-posted this URL", "platforms": plats}
+    kws = []
+    if getattr(block, "keywords", None):
+        kws = list(getattr(block.keywords, "secondary", None) or [])[:5]
+        if getattr(block.keywords, "primary", None):
+            kws = [block.keywords.primary, *kws]
+    img = getattr(block, "featured_image_url", None) or ""
+    req = SocialPostRequest(
+        post_url=key,
+        title=getattr(block, "title", "") or "New ZeOrbit article",
+        meta_description=getattr(block, "meta_description", "") or "",
+        city=getattr(block, "city", "") or "",
+        business_type=getattr(block, "business_type", "") or "Website Design",
+        keywords=kws,
+        platforms=plats,
+        image_url=img or None,
+    )
+    results = await share_to_social(req)
+    ok_any = any(r.success for r in results)
+    log[key] = {
+        "ok": ok_any,
+        "platforms": [r.model_dump() if hasattr(r, "model_dump") else r.__dict__ for r in results],
+    }
+    _save_post_log(log)
+    logger.info("Auto social share for %s: %s", key, [(r.platform, r.success, r.error) for r in results])
+    return {
+        "skipped": False,
+        "platforms": plats,
+        "results": [r.model_dump() if hasattr(r, "model_dump") else r for r in results],
+    }

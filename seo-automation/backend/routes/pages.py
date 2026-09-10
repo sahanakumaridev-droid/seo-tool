@@ -406,6 +406,7 @@ async def publish_to_web(
         "automation": {
             "ads_auto_create": bool(settings.GOOGLE_ADS_AUTO_CREATE_ON_PUBLISH),
             "ads_auto_enable": bool(settings.GOOGLE_ADS_AUTO_ENABLE),
+            "social_auto_post": bool(getattr(settings, "SOCIAL_AUTO_POST_ON_PUBLISH", True)),
         },
     }
 
@@ -484,6 +485,7 @@ async def publish_to_web_bulk(
         "automation": {
             "ads_auto_create": bool(settings.GOOGLE_ADS_AUTO_CREATE_ON_PUBLISH),
             "ads_auto_enable": bool(settings.GOOGLE_ADS_AUTO_ENABLE),
+            "social_auto_post": bool(getattr(settings, "SOCIAL_AUTO_POST_ON_PUBLISH", True)),
         },
     }
 

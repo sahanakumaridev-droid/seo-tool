@@ -53,7 +53,7 @@ _APPLE_PATH = "M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1
 
 # Real ZeOrbit profile URLs — single source of truth, reused by both lists below.
 _URL_FACEBOOK = "https://www.facebook.com/zeorbit.web.designers.mobileapp.developers"
-_URL_X = "https://twitter.com/orbit_ze"
+_URL_X = "https://x.com/orbit_ze"
 _URL_LINKEDIN = "https://www.linkedin.com/company/zeorbit/"
 _URL_INSTAGRAM = "https://www.instagram.com/zeorbit/"
 _URL_YOUTUBE = "https://www.youtube.com/@ZeOrbit-Firm/"
@@ -579,10 +579,19 @@ def _contact_form_script() -> str:
 <script>
 (function(){
   try {
+    var sid='';
+    try { sid=localStorage.getItem('zo_vid')||''; if(!sid){ sid=(crypto.randomUUID&&crypto.randomUUID())||('v-'+Date.now()); localStorage.setItem('zo_vid',sid);} } catch(e) {}
     fetch('/api/leads/visit', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({path: location.pathname, referrer: document.referrer || ''}),
+      body: JSON.stringify({
+        path: location.pathname+(location.search||''),
+        referrer: document.referrer || '',
+        session_id: sid,
+        language: navigator.language||'',
+        timezone: (Intl.DateTimeFormat().resolvedOptions().timeZone)||'',
+        screen: (screen&&screen.width?screen.width+'x'+screen.height:'')
+      }),
       keepalive: true
     });
   } catch (e) {}
@@ -754,8 +763,21 @@ def render_public_html(block: SEOBlock, public_url: str = "") -> str:
         f'<a href="{href}">{_esc(label)}</a>' for label, href in site_nav
     )
 
-    title = _esc(block.title or block.h1 or f"{block.business_type} in {block.city}")
-    desc = _esc(block.meta_description or "")
+    from services.zeorbit_local_seo import clean_seo_title, polish_quick_answer
+    raw_title = clean_seo_title(
+        block.title or block.h1 or f"{block.business_type} in {block.city}",
+        block.city or "",
+        block.state or "",
+    )
+    raw_desc = polish_quick_answer(
+        block.meta_description or "",
+        block.intro or "",
+        block.city or "",
+        getattr(block, "focus_keyword", None) or "",
+        block.business_type or "",
+    )
+    title = _esc(raw_title)
+    desc = _esc(raw_desc)
     h1 = _esc(block.h1 or title)
     featured = block.featured_image_url or ""
     footer_img = getattr(block, "footer_image_url", None) or ""

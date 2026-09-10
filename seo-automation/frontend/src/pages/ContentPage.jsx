@@ -1343,6 +1343,7 @@ export default function ContentPage() {
     try {
       const res = await publishToWeb(publishPayload(block))
       const scheduled = res.data?.scheduled
+      const social = res.data?.indexing?.social
       setPublishResults(r => ({
         ...r,
         [index]: {
@@ -1351,6 +1352,11 @@ export default function ContentPage() {
           post_url: zeorbitArticleUrl(res.data.public_url || res.data.slug),
         },
       }))
+      if (!scheduled && social?.skipped) {
+        showToast(`Published. Social auto-post skipped: ${social.reason}`, 'warning')
+      } else if (!scheduled && social && social.skipped === false) {
+        showToast('Published and posted to connected social accounts')
+      }
     } catch (e) {
       setPublishResults(r => ({ ...r, [index]: { success: false, error: e.response?.data?.detail || e.message } }))
     }

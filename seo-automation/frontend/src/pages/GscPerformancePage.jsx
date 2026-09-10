@@ -1,21 +1,82 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { LineChart as ReLine, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react'
-import { getGscConnection, getGscPerformance } from '../api'
+import { CheckCircle2, AlertTriangle, Plus, Download, Copy, ExternalLink, Search, X } from 'lucide-react'
+import { getGscConnection, getGscPerformance, inspectSeoIndexingUrl } from '../api'
+
+const RANGES = [
+  { id: '1', label: '24 hours', days: 1 },
+  { id: '7', label: '7 days', days: 7 },
+  { id: '28', label: '28 days', days: 28 },
+  { id: '90', label: '3 months', days: 90 },
+  { id: 'custom', label: 'Custom', days: null },
+]
+
+const SEARCH_TYPES = [
+  { id: 'web', label: 'Web' },
+  { id: 'image', label: 'Image' },
+  { id: 'video', label: 'Video' },
+  { id: 'news', label: 'News' },
+  { id: 'discover', label: 'Discover' },
+]
+
+const FILTER_KINDS = [
+  { id: 'query', label: 'Query' },
+  { id: 'page', label: 'Page' },
+  { id: 'device', label: 'Device' },
+  { id: 'country', label: 'Country' },
+]
+
+function emptyDraft() {
+  return { query: '', page: '', device: '', country: '' }
+}
+
+function csvEscape(v) {
+  const s = String(v ?? '')
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
 
 export default function GscPerformancePage() {
-  const [days, setDays] = useState(28)
+  const [rangeId, setRangeId] = useState('28')
+  const [customStart, setCustomStart] = useState('')
+  const [customEnd, setCustomEnd] = useState('')
+  const [searchType, setSearchType] = useState('web')
+  const [applied, setApplied] = useState(emptyDraft)
+  const [addOpen, setAddOpen] = useState(false)
+  const [addKind, setAddKind] = useState('query')
+  const [addValue, setAddValue] = useState('')
+  const [typeOpen, setTypeOpen] = useState(false)
+  const [tab, setTab] = useState('pages')
+  const [sortKey, setSortKey] = useState('clicks')
+  const [sortDir, setSortDir] = useState('desc')
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [inspectMsg, setInspectMsg] = useState('')
 
-  const load = async (d = days) => {
+  const range = RANGES.find((r) => r.id === rangeId) || RANGES[2]
+  const params = useMemo(() => {
+    const p = { search_type: searchType }
+    if (rangeId === 'custom' && customStart && customEnd) {
+      p.start_date = customStart
+      p.end_date = customEnd
+      p.days = 28
+    } else {
+      p.days = range.days || 28
+    }
+    if (applied.query) p.query = applied.query
+    if (applied.page) p.page = applied.page
+    if (applied.device) p.device = applied.device
+    if (applied.country) p.country = applied.country
+    return p
+  }, [rangeId, range.days, customStart, customEnd, searchType, applied])
+
+  const load = async () => {
     setLoading(true)
     setError('')
     try {
       const [connRes, perfRes] = await Promise.all([
         getGscConnection().catch(() => null),
-        getGscPerformance(d),
+        getGscPerformance(params),
       ])
       const perf = perfRes?.data || {}
       const conn = { ...(perf.connection || {}), ...(connRes?.data || {}) }
@@ -28,59 +89,189 @@ export default function GscPerformancePage() {
     }
   }
 
-  useEffect(() => { load(days) }, [days])
+  useEffect(() => { load() }, [JSON.stringify(params)])
 
   const conn = data?.connection || {}
   const totals = data?.totals || { clicks: 0, impressions: 0, ctr: 0, position: 0 }
   const live = conn.configured !== false
-  const statusLabel = loading && data == null ? 'Checking…' : (conn.configured === false ? 'Not connected' : 'Connected')
+  const property = conn.gsc_site_url || 'https://zeorbit.com/'
+  const typeLabel = SEARCH_TYPES.find((t) => t.id === searchType)?.label || 'Web'
+
+  const commitFilter = (kind, value) => {
+    const v = (value || '').trim()
+    if (!v) return
+    setApplied((prev) => ({ ...prev, [kind]: v }))
+    setAddOpen(false)
+    setAddValue('')
+  }
+
+  const clearFilter = (kind) => {
+    setApplied((prev) => ({ ...prev, [kind]: '' }))
+  }
+
+  const rows = useMemo(() => {
+    const list = tab === 'pages' ? (data?.pages || []) : (data?.queries || [])
+    const key = tab === 'pages' ? 'page' : 'query'
+    const sorted = [...list].sort((a, b) => {
+      const av = a[sortKey] ?? 0
+      const bv = b[sortKey] ?? 0
+      if (typeof av === 'string') return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+      return sortDir === 'asc' ? av - bv : bv - av
+    })
+    return { key, list: sorted }
+  }, [data, tab, sortKey, sortDir])
+
+  const toggleSort = (key) => {
+    if (sortKey === key) setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))
+    else { setSortKey(key); setSortDir('desc') }
+  }
+
+  const exportCsv = () => {
+    const header = [tab === 'pages' ? 'Page' : 'Query', 'Clicks', 'Impressions', 'CTR', 'Position']
+    const lines = [header.join(',')]
+    rows.list.forEach((r) => {
+      lines.push([r[rows.key], r.clicks, r.impressions, r.ctr, r.position].map(csvEscape).join(','))
+    })
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `search-console-${tab}.csv`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  const inspectUrl = async (url) => {
+    setInspectMsg('Inspecting…')
+    try {
+      const res = await inspectSeoIndexingUrl({ url })
+      const d = res.data || {}
+      setInspectMsg(d.status || d.coverage_state || d.detail || 'Inspected')
+    } catch (e) {
+      setInspectMsg(e.response?.data?.detail || e.message || 'Inspect failed')
+    }
+  }
+
+  const copyText = async (text) => {
+    try { await navigator.clipboard.writeText(text) } catch { /* ignore */ }
+  }
 
   return (
-    <div className="space-y-6 fade-in">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+    <div className="gsc-perf fade-in">
+      <div className="gsc-perf-head">
         <div>
-          <h1 className="font-display" style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-1)' }}>
-            Search Console
-          </h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-3)', maxWidth: 640 }}>
-            Live Google Search traffic for the verified property. Data lags 2–3 days.
-            This is impressions and clicks — not ChatGPT citations and not a ranking guarantee.
+          <p className="crm-crumb">Search Console · {property}</p>
+          <h1>Performance</h1>
+          <p className="gsc-perf-sub">
+            Filter like Google Search Console. Data lags 2–3 days.
+            {data?.start_date && data?.end_date ? ` · ${data.start_date} → ${data.end_date}` : ''}
+            {loading ? ' · Updating…' : ' · Last update just now'}
           </p>
         </div>
-        <div className="flex gap-2">
-          {[7, 28, 90].map((n) => (
+        <button type="button" className="gsc-export" onClick={exportCsv}>
+          <Download size={14} /> Export
+        </button>
+      </div>
+
+      <div className="gsc-toolbar">
+        <div className="gsc-range" role="tablist" aria-label="Date range">
+          {RANGES.map((r) => (
             <button
-              key={n}
+              key={r.id}
               type="button"
-              className={days === n ? 'btn btn-primary' : 'btn btn-secondary'}
-              onClick={() => setDays(n)}
+              aria-pressed={rangeId === r.id}
+              className={rangeId === r.id ? 'is-on' : ''}
+              onClick={() => setRangeId(r.id)}
             >
-              {n}d
+              {r.label}
             </button>
           ))}
-          <button type="button" className="btn btn-secondary" onClick={() => load(days)} disabled={loading}>
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
-          </button>
+        </div>
+        {rangeId === 'custom' && (
+          <div className="gsc-custom">
+            <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} aria-label="Start date" />
+            <span>to</span>
+            <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} aria-label="End date" />
+          </div>
+        )}
+
+        <div className="gsc-chips">
+          <div className="gsc-chip-wrap">
+            <button type="button" className="gsc-chip" onClick={() => setTypeOpen((o) => !o)}>
+              Search type: {typeLabel}
+            </button>
+            {typeOpen && (
+              <div className="gsc-menu">
+                {SEARCH_TYPES.map((t) => (
+                  <button key={t.id} type="button" onClick={() => { setSearchType(t.id); setTypeOpen(false) }}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {FILTER_KINDS.filter((k) => applied[k.id]).map((k) => (
+            <span key={k.id} className="gsc-chip is-filter">
+              {k.label}: +{applied[k.id]}
+              <button type="button" aria-label={`Remove ${k.label} filter`} onClick={() => clearFilter(k.id)}>
+                <X size={12} />
+              </button>
+            </span>
+          ))}
+
+          <div className="gsc-chip-wrap">
+            <button type="button" className="gsc-add" onClick={() => setAddOpen((o) => !o)}>
+              <Plus size={14} /> Add filter
+            </button>
+            {addOpen && (
+              <div className="gsc-menu gsc-menu-wide">
+                <label>
+                  Filter
+                  <select value={addKind} onChange={(e) => setAddKind(e.target.value)}>
+                    {FILTER_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+                  </select>
+                </label>
+                {addKind === 'device' ? (
+                  <label>
+                    Device
+                    <select value={addValue} onChange={(e) => setAddValue(e.target.value)}>
+                      <option value="">Choose…</option>
+                      <option value="DESKTOP">Desktop</option>
+                      <option value="MOBILE">Mobile</option>
+                      <option value="TABLET">Tablet</option>
+                    </select>
+                  </label>
+                ) : (
+                  <label>
+                    Contains
+                    <input
+                      autoFocus
+                      value={addValue}
+                      onChange={(e) => setAddValue(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') commitFilter(addKind, addValue) }}
+                      placeholder={addKind === 'query' ? 'e.g. mobile' : addKind === 'page' ? 'e.g. /local-seo' : 'e.g. usa'}
+                    />
+                  </label>
+                )}
+                <button type="button" className="gsc-apply" onClick={() => commitFilter(addKind, addValue)}>Apply</button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       <div className="card p-4" style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         {live ? <CheckCircle2 size={18} style={{ color: 'var(--green)', marginTop: 2 }} /> : <AlertTriangle size={18} style={{ color: 'var(--amber)', marginTop: 2 }} />}
         <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5 }}>
-          <strong style={{ color: 'var(--text-1)' }}>{statusLabel}</strong>
-          {' · '}Property: {conn.gsc_site_url || '—'}
-          {conn.key_exists === false ? ' · key file missing' : conn.key_exists ? ' · key file found' : ''}
-          {conn.auth_error ? ` · ${conn.auth_error}` : ''}
-          {conn.probe ? ` · ${conn.probe}` : ''}
-          <div style={{ fontSize: 12, color: 'var(--text-4)', marginTop: 4 }}>
-            {data?.start_date && data?.end_date ? `Window ${data.start_date} → ${data.end_date}` : conn.note}
-          </div>
+          <strong style={{ color: 'var(--text-1)' }}>{live ? 'Connected' : 'Not connected'}</strong>
+          {' · '}{property}
+          {inspectMsg ? ` · ${inspectMsg}` : ''}
         </div>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
+      <div className="gsc-kpis">
         {[
           ['Clicks', totals.clicks],
           ['Impressions', totals.impressions],
@@ -88,17 +279,17 @@ export default function GscPerformancePage() {
           ['Avg position', totals.position || '—'],
         ].map(([label, value]) => (
           <div key={label} className="card p-4">
-            <div style={{ fontSize: 11, color: 'var(--text-4)', fontWeight: 600 }}>{label}</div>
-            <div style={{ fontSize: 22, fontWeight: 750, marginTop: 6, color: 'var(--text-1)' }}>{value}</div>
+            <div className="gsc-kpi-l">{label}</div>
+            <div className="gsc-kpi-v">{value}</div>
           </div>
         ))}
       </div>
 
       <div className="card p-5" style={{ height: 280 }}>
-        <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px', color: 'var(--text-1)' }}>Clicks and impressions</h2>
+        <h2 className="gsc-h2">Clicks and impressions</h2>
         {(data?.by_date || []).length === 0 ? (
-          <p style={{ fontSize: 13, color: 'var(--text-3)' }}>
-            {live ? 'No Search Analytics rows in this window yet. New sites often show zeros until Google has impressions.' : 'Search Console credentials are missing on the server.'}
+          <p className="gsc-empty">
+            {live ? 'No rows in this filter window yet.' : 'Search Console credentials are missing on the server.'}
           </p>
         ) : (
           <ResponsiveContainer width="100%" height={220}>
@@ -107,52 +298,75 @@ export default function GscPerformancePage() {
               <XAxis dataKey="date" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip />
-              <Line type="monotone" dataKey="clicks" name="Clicks" stroke="#2563EB" dot={false} strokeWidth={2} />
-              <Line type="monotone" dataKey="impressions" name="Impressions" stroke="#94a3b8" dot={false} strokeWidth={2} />
+              <Line type="monotone" dataKey="clicks" name="Clicks" stroke="#1a73e8" dot={false} strokeWidth={2} />
+              <Line type="monotone" dataKey="impressions" name="Impressions" stroke="#7b61ff" dot={false} strokeWidth={2} />
             </ReLine>
           </ResponsiveContainer>
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-        <div className="card p-5" style={{ overflowX: 'auto' }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px', color: 'var(--text-1)' }}>Top queries</h2>
-          <PerfTable rows={data?.queries} nameKey="query" />
+      <div className="card p-0 gsc-table-card">
+        <div className="gsc-table-head">
+          <div className="gsc-tabs">
+            <button type="button" className={tab === 'pages' ? 'is-on' : ''} onClick={() => setTab('pages')}>Top pages</button>
+            <button type="button" className={tab === 'queries' ? 'is-on' : ''} onClick={() => setTab('queries')}>Top queries</button>
+          </div>
+          <span className="gsc-muted">{rows.list.length} rows</span>
         </div>
-        <div className="card p-5" style={{ overflowX: 'auto' }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px', color: 'var(--text-1)' }}>Top pages</h2>
-          <PerfTable rows={data?.pages} nameKey="page" />
+        <div className="gsc-table-scroll">
+          <table className="gsc-table">
+            <thead>
+              <tr>
+                <th>{tab === 'pages' ? 'Pages' : 'Queries'}</th>
+                <th>
+                  <button type="button" className="gsc-sort" onClick={() => toggleSort('clicks')}>
+                    Clicks {sortKey === 'clicks' ? (sortDir === 'desc' ? '↓' : '↑') : ''}
+                  </button>
+                </th>
+                <th>
+                  <button type="button" className="gsc-sort is-impr" onClick={() => toggleSort('impressions')}>
+                    Impressions {sortKey === 'impressions' ? (sortDir === 'desc' ? '↓' : '↑') : ''}
+                  </button>
+                </th>
+                <th>
+                  <button type="button" className="gsc-sort" onClick={() => toggleSort('position')}>
+                    Pos {sortKey === 'position' ? (sortDir === 'desc' ? '↓' : '↑') : ''}
+                  </button>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.list.length === 0 && (
+                <tr><td colSpan={4} className="gsc-empty" style={{ padding: 20 }}>No rows for these filters.</td></tr>
+              )}
+              {rows.list.map((row) => {
+                const name = row[rows.key]
+                return (
+                  <tr key={name}>
+                    <td>
+                      <div className="gsc-url">
+                        <span title={name}>{name}</span>
+                        <span className="gsc-row-actions">
+                          <button type="button" title="Copy" onClick={() => copyText(name)}><Copy size={13} /></button>
+                          {tab === 'pages' && (
+                            <>
+                              <a href={name} target="_blank" rel="noreferrer" title="Open"><ExternalLink size={13} /></a>
+                              <button type="button" title="Inspect URL" onClick={() => inspectUrl(name)}><Search size={13} /></button>
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="num">{row.clicks}</td>
+                    <td className="num impr">{row.impressions}</td>
+                    <td className="num">{row.position}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
-  )
-}
-
-function PerfTable({ rows, nameKey }) {
-  const list = rows || []
-  if (!list.length) {
-    return <p style={{ fontSize: 13, color: 'var(--text-3)' }}>No rows.</p>
-  }
-  return (
-    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-      <thead>
-        <tr style={{ textAlign: 'left', color: 'var(--text-4)' }}>
-          <th style={{ padding: '6px 4px' }}> </th>
-          <th style={{ padding: '6px 4px' }}>Clicks</th>
-          <th style={{ padding: '6px 4px' }}>Impr.</th>
-          <th style={{ padding: '6px 4px' }}>Pos</th>
-        </tr>
-      </thead>
-      <tbody>
-        {list.slice(0, 25).map((row) => (
-          <tr key={row[nameKey]} style={{ borderTop: '1px solid var(--border)' }}>
-            <td style={{ padding: '7px 4px', wordBreak: 'break-all', maxWidth: 280 }}>{row[nameKey]}</td>
-            <td style={{ padding: '7px 4px' }}>{row.clicks}</td>
-            <td style={{ padding: '7px 4px' }}>{row.impressions}</td>
-            <td style={{ padding: '7px 4px' }}>{row.position}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
   )
 }

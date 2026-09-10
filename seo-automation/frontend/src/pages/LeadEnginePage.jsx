@@ -19,8 +19,57 @@ const TABS = [
   { id: 'funnels', label: 'Service Funnels' },
 ]
 
-function leadName(lead) {
-  return lead.contact_name || lead.name || lead.business_name || 'Untitled'
+function parseVisit(v) {
+  const msg = v.message || ''
+  let extra = {}
+  let ua = ''
+  let ref = v.referrer || v.contact_name || ''
+  if (msg.startsWith('{')) {
+    try { extra = JSON.parse(msg) } catch { extra = {} }
+    ua = extra.ua || ''
+    ref = extra.ref || ref
+  } else {
+    for (const line of String(msg).split('\n')) {
+      if (line.startsWith('ua=')) ua = line.slice(3)
+      if (line.startsWith('referrer=')) ref = line.slice(9)
+    }
+  }
+  let name = v.name
+  if (!name || name === 'Anonymous visitor' || name === 'Visitor') {
+    const u = ua.toLowerCase()
+    const device = (/mobile|iphone|android/.test(u) && !/ipad/.test(u)) ? 'Phone' : 'Desktop'
+    let browser = 'Browser'
+    if (u.includes('edg')) browser = 'Edge'
+    else if (u.includes('chrome')) browser = 'Chrome'
+    else if (u.includes('firefox')) browser = 'Firefox'
+    else if (u.includes('safari')) browser = 'Safari'
+    else if (u.includes('cursor')) browser = 'Cursor'
+    else if (u.includes('curl')) browser = 'curl'
+    name = `${browser} · ${device}`
+  }
+  let from = v.contact_name
+  if (!from) {
+    const r = (ref || '').toLowerCase()
+    if (!r) from = 'Direct'
+    else if (r.includes('google.')) from = 'Google'
+    else if (r.includes('127.0.0.1') || r.includes('localhost')) from = 'Same site'
+    else from = String(ref).replace(/^https?:\/\//, '').slice(0, 48)
+  }
+  let place = v.location || ''
+  if (place === '127.0.0.1' || place === 'localhost') {
+    place = extra.tz ? `Local · ${extra.tz}` : 'Local computer'
+  }
+  return {
+    ...v,
+    name,
+    contact_name: from,
+    location: place,
+    language: v.language || extra.lang || '',
+    screen: v.screen || extra.screen || '',
+    timezone: v.timezone || extra.tz || '',
+    referrer: v.referrer || extra.ref || ref || '',
+    page_title: v.page_title || extra.title || '',
+  }
 }
 
 function defaultOutreach(lead) {
@@ -50,7 +99,7 @@ function InboxTab() {
         getLeadStats(),
       ])
       setLeads(Array.isArray(l.data) ? l.data : [])
-      setVisitors(Array.isArray(v.data) ? v.data : [])
+      setVisitors(Array.isArray(v.data) ? v.data.map(parseVisit) : [])
       setStats(s.data || {})
     } catch (e) {
       setMsg(e.response?.data?.detail || 'Could not load inbox')
@@ -84,7 +133,7 @@ function InboxTab() {
     }
   }
 
-  const identified = leads.filter((l) => l.email || l.phone)
+  const identified = leads.filter((l) => l.email || l.phone || l.name || l.contact_name)
 
   return (
     <div className="space-y-4">
@@ -105,7 +154,7 @@ function InboxTab() {
 
       <div className="card p-4" style={{ background: '#fff' }}>
         <p className="text-sm" style={{ color: 'var(--text-2)', margin: 0 }}>
-          You cannot legally message a visitor from a pageview alone. Chat and the contact form capture name, email, and U.S. phone so you can email them from this inbox and move them New → Contacted → Qualified → Won.
+          You cannot get email or phone from a pageview. When someone clicks Chat, Quote, or Contact, they must leave a name, email, or U.S. phone — that is the lead.
         </p>
       </div>
 
@@ -117,7 +166,7 @@ function InboxTab() {
           ) : identified.length === 0 ? (
             <div className="card p-5">
               <p className="text-sm" style={{ color: 'var(--text-3)', margin: 0 }}>
-                No contacts yet. On zeorbit.com, visitors use the chat bubble to leave name, email, and phone — then they appear here.
+                No contacts yet. On the local site, click Get a Free Quote or the chat bubble and leave a name, email, or phone.
               </p>
             </div>
           ) : (
@@ -144,6 +193,9 @@ function InboxTab() {
           )}
 
           <h3 className="text-sm font-semibold mt-6 mb-2" style={{ color: 'var(--text-1)' }}>Recent visitors (anonymous)</h3>
+          <p className="text-xs mb-2" style={{ color: 'var(--text-3)' }}>
+            Device, referrer, timezone, language, and screen — click a row. Still no name or email from a visit alone.
+          </p>
           {visitors.length === 0 ? (
             <p className="text-xs" style={{ color: 'var(--text-3)' }}>No pageviews recorded yet.</p>
           ) : (
@@ -152,13 +204,28 @@ function InboxTab() {
                 <thead>
                   <tr>
                     <th>Page</th>
+                    <th>Device</th>
+                    <th>Came from</th>
+                    <th>Place</th>
+                    <th>Language</th>
+                    <th>Screen</th>
                     <th>When</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {visitors.slice(0, 15).map((v) => (
-                    <tr key={v.id}>
+                  {visitors.slice(0, 25).map((v) => (
+                    <tr
+                      key={v.id}
+                      className={selected?.id === v.id ? 'crm-row-active' : ''}
+                      onClick={() => pick(v)}
+                      style={{ cursor: 'pointer' }}
+                    >
                       <td className="text-xs">{v.website || '/'}</td>
+                      <td className="text-xs">{v.name || '—'}</td>
+                      <td className="text-xs">{v.contact_name || '—'}</td>
+                      <td className="muted-cell">{v.location || '—'}</td>
+                      <td className="muted-cell">{v.language || '—'}</td>
+                      <td className="muted-cell">{v.screen || '—'}</td>
                       <td className="muted-cell">{v.created_at ? new Date(v.created_at).toLocaleString() : '—'}</td>
                     </tr>
                   ))}
@@ -169,7 +236,31 @@ function InboxTab() {
         </div>
 
         <aside className="crm-drawer">
-          {selected ? (
+          {selected?.source === 'pageview' ? (
+            <>
+              <h2>Visit profile</h2>
+              <div className="crm-field"><label>Page</label><div>{selected.website || '/'}</div></div>
+              {selected.page_title ? <div className="crm-field"><label>Title</label><div>{selected.page_title}</div></div> : null}
+              <div className="crm-field"><label>Device / browser</label><div>{selected.name || '—'}</div></div>
+              <div className="crm-field"><label>Came from</label><div>{selected.contact_name || '—'}</div></div>
+              <div className="crm-field"><label>Full referrer</label><div style={{ wordBreak: 'break-all', fontSize: 12 }}>{selected.referrer || 'Direct'}</div></div>
+              <div className="crm-field"><label>Place / timezone</label><div>{selected.location || selected.timezone || '—'}</div></div>
+              <div className="crm-field"><label>Language</label><div>{selected.language || '—'}</div></div>
+              <div className="crm-field"><label>Screen</label><div>{selected.screen || '—'}</div></div>
+              <div className="crm-field"><label>Session</label><div style={{ wordBreak: 'break-all', fontSize: 12 }}>{selected.industry || '—'}</div></div>
+              {selected.industry ? (
+                <div className="crm-field">
+                  <label>Pages in this browser session</label>
+                  <div style={{ fontSize: 12 }}>
+                    {visitors.filter((x) => x.industry && x.industry === selected.industry).map((x) => x.website).join(', ') || selected.website}
+                  </div>
+                </div>
+              ) : null}
+              <p className="text-xs" style={{ color: 'var(--text-3)', marginTop: 12 }}>
+                This is first-party visit data. There is still no email until they submit chat or a form.
+              </p>
+            </>
+          ) : selected ? (
             <>
               <h2>{leadName(selected)}</h2>
               <div className="crm-field"><label>Email</label><div>{selected.email || '—'}</div></div>
@@ -203,9 +294,9 @@ function InboxTab() {
             </>
           ) : (
             <>
-              <h2>Message a lead</h2>
+              <h2>Visitor or contact</h2>
               <p style={{ marginTop: 8, fontSize: 13, color: '#6e6e73' }}>
-                Select a captured contact. SMTP must be set on the backend for email to send.
+                Click a visit for device and referrer. Click a captured contact to email them.
               </p>
               <Link to="/leads" className="text-xs" style={{ color: 'var(--brand)' }}>Open full Contacts CRM</Link>
             </>

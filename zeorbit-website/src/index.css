@@ -5493,10 +5493,94 @@ img {
   cursor: pointer;
 }
 
-.zo-site-chat-capture-status {
-  margin: 0;
-  font-size: 12px;
-  color: #b45309;
+.zo-identify-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(10, 10, 10, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.zo-identify-card {
+  position: relative;
+  width: min(420px, 100%);
+  background: #fff;
+  border-radius: 20px;
+  padding: 28px 24px 22px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.18);
+}
+
+.zo-identify-card h2 {
+  margin: 4px 0 8px;
+  font-size: 22px;
+}
+
+.zo-identify-card p {
+  margin: 0 0 16px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #5c5c5c;
+}
+
+.zo-identify-kicker {
+  font-size: 11px !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a8a8a !important;
+}
+
+.zo-identify-card form {
+  display: grid;
+  gap: 8px;
+}
+
+.zo-identify-card input {
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  padding: 0 12px;
+  font-size: 15px;
+}
+
+.zo-identify-card button[type='submit'] {
+  height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: #111;
+  color: #fff;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.zo-identify-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 10px;
+  background: #f4f4f4;
+  cursor: pointer;
+}
+
+.zo-identify-hint {
+  margin: 0 !important;
+  font-size: 12px !important;
+  color: #8a8a8a !important;
+}
+
+.zo-identify-stripe {
+  height: 44px;
+  border: 1px solid #635bff !important;
+  border-radius: 12px;
+  background: #fff !important;
+  color: #635bff !important;
+  font-weight: 650;
+  cursor: pointer;
 }
 
 .zo-site-chat-composer input {

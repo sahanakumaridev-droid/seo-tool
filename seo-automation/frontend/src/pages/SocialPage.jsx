@@ -77,7 +77,7 @@ const PLATFORMS = {
   },
   twitter: {
     label: 'Twitter / X',
-    profileUrl: 'https://twitter.com/orbit_ze',
+    profileUrl: 'https://x.com/orbit_ze',
     shareUrl: (u, t) => `https://twitter.com/intent/tweet?url=${encodeURIComponent(u)}&text=${encodeURIComponent(t)}`,
     bg: '#000000',
     color: '#1d9bf0',
@@ -133,7 +133,7 @@ const PLATFORMS = {
   },
   threads: {
     label: 'Threads',
-    profileUrl: 'https://www.threads.net/',
+    profileUrl: 'https://www.threads.net/@zeorbit',
     shareUrl: (u, t) => `https://www.threads.net/intent/post?text=${encodeURIComponent(t + ' ' + u)}`,
     bg: '#000000',
     color: '#2563EB',
@@ -163,7 +163,7 @@ function buildCaption(block, platform, projectWebsite, pagePublicUrl) {
 }
 
 /* ── Platform Card ───────────────────────────────────────────── */
-function PlatformCard({ id, platform, onShare, hasPage, connected }) {
+function PlatformCard({ id, platform, onShare, hasPage, connected, autoOn }) {
   return (
     <div className="soc-card">
       <div className="soc-card-top">
@@ -174,29 +174,31 @@ function PlatformCard({ id, platform, onShare, hasPage, connected }) {
           <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text-1)' }}>{platform.label}</div>
           <div style={{ fontSize: 12, color: 'var(--text-4)' }} className="truncate">{platform.handle}</div>
         </div>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#16a34a', background: '#dcfce7', padding: '3px 8px', borderRadius: 999 }}>
-          {connected ? 'Connected' : 'Visit'}
+        <span style={{
+          fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 999,
+          color: connected ? '#16a34a' : '#92400e',
+          background: connected ? '#dcfce7' : '#fef3c7',
+        }}>
+          {connected ? 'API connected' : 'Profile only'}
         </span>
       </div>
       <div className="soc-card-actions">
         <button type="button" className="btn btn-secondary" style={{ flex: 1, fontSize: 12 }}
           onClick={() => window.open(platform.profileUrl, '_blank', 'noopener')}>
-          {id === 'youtube' ? 'View Channel' : 'View Profile'}
+          {id === 'youtube' ? 'View Channel' : 'Open profile'}
         </button>
-        <button type="button" onClick={() => {
-          if (id === 'facebook' && platform.pageUrl) window.open(platform.pageUrl, '_blank', 'noopener')
-          else onShare(id)
-        }} disabled={id !== 'facebook' && !hasPage}
+        <button type="button" onClick={() => onShare(id)} disabled={!hasPage}
           style={{
             flex: 1, border: 0, borderRadius: 10, color: '#fff', fontSize: 12, fontWeight: 700, cursor: hasPage ? 'pointer' : 'not-allowed',
             opacity: hasPage ? 1 : 0.5, background: platform.bg, padding: '9px 10px',
           }}>
-          {id === 'facebook' ? 'Business Page →' : 'Share SEO Post'}
+          {connected ? 'Post now' : 'Share (manual)'}
         </button>
       </div>
       <div className="soc-card-foot">
-        <span style={{ color: '#16a34a', fontWeight: 700 }}>Auto-publish Enabled</span>
-        <button type="button" className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: 11 }}>Settings</button>
+        <span style={{ color: connected && autoOn ? '#16a34a' : 'var(--text-4)', fontWeight: 700 }}>
+          {connected && autoOn ? 'Auto-posts on publish' : connected ? 'API ready — click Post now' : 'Add API tokens for automatic posts'}
+        </span>
       </div>
     </div>
   )
@@ -205,7 +207,7 @@ function PlatformCard({ id, platform, onShare, hasPage, connected }) {
 /* ── Main Component ──────────────────────────────────────────── */
 export default function SocialPage() {
   const project = useProjectInfo()
-  const [apiStatus, setApiStatus] = useState({ facebook: false, twitter: false, linkedin: false, instagram: false, pinterest: false, threads: false })
+  const [apiStatus, setApiStatus] = useState({ facebook: false, twitter: false, linkedin: false, instagram: false, pinterest: false, threads: false, auto_post_on_publish: true, ready: [] })
   const [pages, setPages] = useState([])
   const [selected, setSelected] = useState(null)
   const [imageUrl, setImageUrl] = useState('')
@@ -219,7 +221,7 @@ export default function SocialPage() {
   const [toDate, setToDate] = useState('')
 
   useEffect(() => {
-    getSocialPlatforms().then(r => setApiStatus(r.data)).catch(() => {})
+    getSocialPlatforms().then(r => setApiStatus(r.data || {})).catch(() => {})
     listPages(0, 250).then(r => setPages(Array.isArray(r.data) ? r.data : [])).catch(() => {})
   }, [])
 
@@ -232,13 +234,37 @@ export default function SocialPage() {
     return true
   })
 
-  /* Open native share dialog for that platform */
-  const handleShare = (platformId) => {
+  const handleShare = async (platformId) => {
     if (!selected) { setError('Select a page first to share'); return }
     const block = selected.seo_block
     const postUrl = resolvePostUrl(block, project.website, selected.public_url)
     if (!postUrl) {
       setError('Publish this page to the web (or set your website in Onboarding) before sharing.')
+      return
+    }
+    if (apiStatus[platformId]) {
+      setApiLoading(true)
+      setError('')
+      setShareResult(null)
+      try {
+        const res = await shareToSocial({
+          post_url: postUrl,
+          title: block.title,
+          meta_description: block.meta_description,
+          city: block.city,
+          business_type: block.business_type,
+          keywords: block.keywords?.secondary?.slice(0, 5) || [],
+          platforms: [platformId],
+          image_url: imageUrl || block.featured_image_url || null,
+        })
+        setShareResult(res.data)
+        const fail = (res.data || []).find((r) => !r.success)
+        if (fail) setError(fail.error || `Could not post to ${platformId}`)
+      } catch (e) {
+        setError(e.response?.data?.detail || e.message)
+      } finally {
+        setApiLoading(false)
+      }
       return
     }
     const caption = buildCaption(block, platformId, project.website, selected.public_url)
@@ -315,7 +341,11 @@ export default function SocialPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold" style={{ color: 'var(--text-1)' }}>Social Media</h1>
-            <p className="text-sm mt-0.5" style={{ color: 'var(--text-3)' }}>Visit platforms, share posts, and auto-publish with AI-generated content.</p>
+            <p className="text-sm mt-0.5" style={{ color: 'var(--text-3)' }}>
+              {(apiStatus.ready || []).length
+                ? `Auto-post on publish is ${apiStatus.auto_post_on_publish === false ? 'off' : 'on'} for ${(apiStatus.ready || []).join(', ')}.`
+                : 'Profile links open the accounts. Add API tokens in backend .env so publish posts automatically — no share dialog.'}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -363,6 +393,13 @@ export default function SocialPage() {
         <div className="mb-3">
           <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: 'var(--text-1)' }}>Connected Platforms</h2>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-3)' }}>Manage your social platforms and share SEO content.</p>
+          {!(apiStatus.ready || []).length && (
+            <div className="mt-3 rounded-xl px-3 py-2.5 text-xs font-medium" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #f59e0b' }}>
+              Automatic posting is on, but no API tokens are in the backend .env yet — Facebook/X/LinkedIn cannot post without them.
+              Add FACEBOOK_ACCESS_TOKEN + FACEBOOK_PAGE_ID (and the same for X / LinkedIn), restart the API, then publish a page. It posts immediately.
+              {(apiStatus.missing || []).length ? ` Still needed: ${(apiStatus.missing || []).join('; ')}.` : ''}
+            </div>
+          )}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {Object.entries(PLATFORMS).map(([id, platform]) => (
@@ -373,6 +410,7 @@ export default function SocialPage() {
               onShare={handleShare}
               hasPage={!!selected}
               connected={!!apiStatus[id]}
+              autoOn={apiStatus.auto_post_on_publish !== false}
             />
           ))}
         </div>
@@ -382,7 +420,7 @@ export default function SocialPage() {
         <div>
           <h3 style={{ margin: 0, fontSize: 16 }}>AI-Powered Social Sharing</h3>
           <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-3)' }}>
-            ZeOrbit writes platform-ready captions from your published SEO page, then opens the native share dialog.
+            ZeOrbit posts to connected APIs the moment you publish a page. Without tokens, Post now opens a share dialog (manual).
           </p>
         </div>
         <div style={{ display: 'flex', gap: 18, fontSize: 12.5, color: 'var(--text-2)', fontWeight: 650 }}>
@@ -461,7 +499,11 @@ export default function SocialPage() {
         <div className="card p-5 flex flex-col gap-4">
           <div>
             <div className="text-sm font-semibold mb-1" style={{ color: 'var(--text-1)' }}>API Auto-Share</div>
-            <p className="text-xs text-slate-500 mb-3">Posts automatically using stored API tokens</p>
+            <p className="text-xs text-slate-500 mb-3">
+              {(apiStatus.ready || []).length
+                ? `Will post now to: ${(apiStatus.ready || []).join(', ')}`
+                : 'No API tokens yet — set FACEBOOK_ACCESS_TOKEN, TWITTER_*, LINKEDIN_* in .env'}
+            </p>
             <div className="grid grid-cols-2 gap-1.5 mb-3">
               {['facebook','twitter','linkedin','instagram','pinterest','threads'].map(id => {
                 const p = PLATFORMS[id]

@@ -17,7 +17,8 @@ async def share_post(req: SocialPostRequest):
 async def get_platforms():
     """Return configured social platforms status."""
     from config import settings
-    return {
+    from services.social_service import configured_platforms
+    connected = {
         "facebook": bool(settings.FACEBOOK_ACCESS_TOKEN and settings.FACEBOOK_PAGE_ID),
         "twitter": bool(settings.TWITTER_API_KEY and settings.TWITTER_ACCESS_TOKEN),
         "linkedin": bool(settings.LINKEDIN_ACCESS_TOKEN and settings.LINKEDIN_PERSON_URN),
@@ -29,4 +30,22 @@ async def get_platforms():
             and settings.GBP_ACCOUNT_ID
             and settings.GBP_LOCATION_ID
         ),
+    }
+    return {
+        **connected,
+        "auto_post_on_publish": bool(getattr(settings, "SOCIAL_AUTO_POST_ON_PUBLISH", True)),
+        "ready": configured_platforms(),
+        "missing": [
+            name
+            for name, ok in (
+                ("FACEBOOK_ACCESS_TOKEN + FACEBOOK_PAGE_ID", connected["facebook"]),
+                ("TWITTER_API_KEY + TWITTER_ACCESS_TOKEN", connected["twitter"]),
+                ("LINKEDIN_ACCESS_TOKEN + LINKEDIN_PERSON_URN", connected["linkedin"]),
+                ("INSTAGRAM_ACCESS_TOKEN + INSTAGRAM_ACCOUNT_ID", connected["instagram"]),
+                ("PINTEREST_ACCESS_TOKEN + PINTEREST_BOARD_ID", connected["pinterest"]),
+                ("THREADS_ACCESS_TOKEN + THREADS_USER_ID", connected["threads"]),
+                ("GBP_REFRESH_TOKEN + GBP_ACCOUNT_ID + GBP_LOCATION_ID", connected["gbp"]),
+            )
+            if not ok
+        ],
     }

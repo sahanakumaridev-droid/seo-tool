@@ -130,6 +130,13 @@ async def track_public_publish(
     except Exception as e:
         logger.error("track_public_publish failed for %s: %s", url, e)
         out["detail"] = str(e)
+
+    try:
+        from services.social_service import auto_share_on_publish
+        out["social"] = await auto_share_on_publish(url=url, block=block)
+    except Exception as e:
+        logger.warning("auto social share skipped for %s: %s", url, e)
+        out["social"] = {"skipped": True, "reason": str(e)}
     return out
 
 

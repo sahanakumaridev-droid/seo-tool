@@ -227,15 +227,43 @@ def _analytics_query(site_url: str, body: dict) -> dict:
         return {"ok": False, "detail": str(e), "rows": []}
 
 
-def fetch_performance(days: int = 28) -> dict:
+def fetch_performance(
+    days: int = 28,
+    start_date: str = "",
+    end_date: str = "",
+    search_type: str = "web",
+    query: str = "",
+    page: str = "",
+    device: str = "",
+    country: str = "",
+) -> dict:
     """Clicks / impressions / CTR / position for the verified GSC property."""
-    days = max(7, min(int(days or 28), 90))
+    days = max(1, min(int(days or 28), 93))
     site = (settings.GSC_SITE_URL or "").strip()
     # GSC Search Analytics is delayed ~2 days.
     end = date.today() - timedelta(days=2)
     start = end - timedelta(days=days - 1)
-    start_s, end_s = start.isoformat(), end.isoformat()
+    if (start_date or "").strip() and (end_date or "").strip():
+        start_s, end_s = start_date.strip()[:10], end_date.strip()[:10]
+    else:
+        start_s, end_s = start.isoformat(), end.isoformat()
     conn = connection_status()
+    st = (search_type or "web").strip().lower() or "web"
+    if st not in ("web", "image", "video", "news", "discover", "googleNews"):
+        st = "web"
+    filters = []
+    if (query or "").strip():
+        filters.append({"dimension": "query", "operator": "contains", "expression": query.strip()})
+    if (page or "").strip():
+        filters.append({"dimension": "page", "operator": "contains", "expression": page.strip()})
+    if (device or "").strip():
+        filters.append({"dimension": "device", "operator": "equals", "expression": device.strip().upper()})
+    if (country or "").strip():
+        filters.append({"dimension": "country", "operator": "equals", "expression": country.strip().upper()})
+    extra = {"searchType": st}
+    if filters:
+        extra["dimensionFilterGroups"] = [{"groupType": "and", "filters": filters}]
+
     if not conn.get("configured"):
         return {
             "ok": False,
@@ -243,17 +271,19 @@ def fetch_performance(days: int = 28) -> dict:
             "connection": conn,
             "start_date": start_s,
             "end_date": end_s,
+            "search_type": st,
+            "filters": {"query": query, "page": page, "device": device, "country": country},
             "totals": {"clicks": 0, "impressions": 0, "ctr": 0, "position": 0},
             "by_date": [],
             "queries": [],
             "pages": [],
         }
 
-    base_body = {"startDate": start_s, "endDate": end_s, "rowLimit": 250}
+    base_body = {"startDate": start_s, "endDate": end_s, "rowLimit": 250, **extra}
 
     by_date = _analytics_query(site, {**base_body, "dimensions": ["date"]})
-    queries = _analytics_query(site, {**base_body, "dimensions": ["query"], "rowLimit": 50})
-    pages = _analytics_query(site, {**base_body, "dimensions": ["page"], "rowLimit": 50})
+    queries = _analytics_query(site, {**base_body, "dimensions": ["query"], "rowLimit": 100})
+    pages = _analytics_query(site, {**base_body, "dimensions": ["page"], "rowLimit": 100})
 
     def rows_dim(result: dict, key: str) -> list:
         out = []
@@ -285,6 +315,8 @@ def fetch_performance(days: int = 28) -> dict:
         "start_date": start_s,
         "end_date": end_s,
         "days": days,
+        "search_type": st,
+        "filters": {"query": (query or "").strip(), "page": (page or "").strip(), "device": (device or "").strip(), "country": (country or "").strip()},
         "totals": {"clicks": clicks, "impressions": imps, "ctr": ctr, "position": pos},
         "by_date": date_rows,
         "queries": rows_dim(queries, "query"),

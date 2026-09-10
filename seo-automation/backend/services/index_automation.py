@@ -212,6 +212,27 @@ async def run_cycle(session, *, reason: str = "schedule") -> dict:
 
     await session.commit()
 
+    social_out = {"skipped": True, "reason": "no pages"}
+    try:
+        from models.schemas import SEOBlock
+        from services.social_service import auto_share_on_publish, configured_platforms
+        from db import PageRecord
+        if configured_platforms():
+            recs = (await session.execute(select(PageRecord).order_by(PageRecord.updated_at.desc()).limit(8))).scalars().all()
+            posted = []
+            for rec in recs:
+                blob = rec.seo_block if isinstance(rec.seo_block, dict) else {}
+                try:
+                    block = SEOBlock.model_validate(blob)
+                except Exception:
+                    continue
+                url = f"{_base()}/{rec.slug}"
+                posted.append(await auto_share_on_publish(url=url, block=block))
+            social_out = {"attempts": len(posted), "results": posted}
+    except Exception as e:
+        logger.warning("index automation social auto-post skipped: %s", e)
+        social_out = {"skipped": True, "reason": str(e)}
+
     now = datetime.now(timezone.utc)
     nxt = now + timedelta(seconds=interval_seconds())
     result = {
@@ -225,6 +246,7 @@ async def run_cycle(session, *, reason: str = "schedule") -> dict:
         "inspected": inspected,
         "inspect_count": len(inspected),
         "batch_size": INSPECT_BATCH,
+        "social": social_out,
         "note": (
             "Google does not allow a Request-indexing API for normal pages. "
             "This job submits sitemaps, pings Bing (IndexNow), crawl-checks, and "

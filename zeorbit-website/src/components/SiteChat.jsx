@@ -259,8 +259,8 @@ export default function SiteChat() {
     const name = capture.name.trim()
     const email = capture.email.trim()
     const phone = capture.phone.trim()
-    if (!name || !email || !phone) {
-      setCaptureStatus('Name, email, and U.S. phone are required.')
+    if (!name && !email && !phone) {
+      setCaptureStatus('Leave a name, email, or U.S. phone.')
       return
     }
     setSavingLead(true)
@@ -287,13 +287,16 @@ export default function SiteChat() {
         setCaptureStatus(typeof data.detail === 'string' ? data.detail : 'Could not save. Check the phone number.')
         return
       }
+      try {
+        localStorage.setItem('zo_lead_captured', JSON.stringify({ name, email, phone, at: Date.now() }))
+      } catch { /* ignore */ }
       setShowCapture(false)
       setMessages((prev) => [
         ...prev,
         {
           id: `a-saved-${Date.now()}`,
           role: 'assistant',
-          text: `Thanks ${name.split(' ')[0]} — we have your details and will follow up at ${email}.`,
+          text: `Thanks${name ? ` ${name.split(' ')[0]}` : ''} — we have your details${email ? ` and will follow up at ${email}` : phone ? ` and will call ${phone}` : ''}.`,
         },
       ])
     } catch {
@@ -313,7 +316,13 @@ export default function SiteChat() {
         aria-label={open ? 'Close chat' : 'Open chat'}
         aria-expanded={open}
         title="Chat"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setOpen((v) => {
+            const next = !v
+            if (next) setShowCapture(true)
+            return next
+          })
+        }}
       >
         {open ? <X size={20} strokeWidth={2.2} aria-hidden /> : <MessageCircle size={20} strokeWidth={2.2} aria-hidden />}
       </button>
@@ -385,9 +394,9 @@ export default function SiteChat() {
 
             {showCapture ? (
               <form className="zo-site-chat-capture" onSubmit={saveChatLead}>
-                <input value={capture.name} onChange={(e) => setCapture((c) => ({ ...c, name: e.target.value }))} placeholder="Your name" autoComplete="name" required />
-                <input type="email" value={capture.email} onChange={(e) => setCapture((c) => ({ ...c, email: e.target.value }))} placeholder="Work email" autoComplete="email" required />
-                <input type="tel" value={capture.phone} onChange={(e) => setCapture((c) => ({ ...c, phone: e.target.value }))} placeholder="U.S. phone" autoComplete="tel" required />
+                <input value={capture.name} onChange={(e) => setCapture((c) => ({ ...c, name: e.target.value }))} placeholder="Name (or email or phone)" autoComplete="name" />
+                <input type="email" value={capture.email} onChange={(e) => setCapture((c) => ({ ...c, email: e.target.value }))} placeholder="Email" autoComplete="email" />
+                <input type="tel" value={capture.phone} onChange={(e) => setCapture((c) => ({ ...c, phone: e.target.value }))} placeholder="U.S. phone" autoComplete="tel" />
                 {captureStatus ? <p className="zo-site-chat-capture-status">{captureStatus}</p> : null}
                 <button type="submit" disabled={savingLead}>{savingLead ? 'Saving…' : 'Save my details'}</button>
               </form>

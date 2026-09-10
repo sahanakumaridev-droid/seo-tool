@@ -146,6 +146,9 @@ class Settings(BaseSettings):
     # Dangerous for spend — leave false unless billing is intentional. Default keeps campaigns paused.
     GOOGLE_ADS_AUTO_ENABLE: bool = False
 
+    # Post to connected Facebook / X / LinkedIn / Instagram / etc. as soon as a page is published.
+    SOCIAL_AUTO_POST_ON_PUBLISH: bool = True
+
     # ── Website form notifications ────────────────────────────────
     # Emails website inquiries to the inbox below. Requires SMTP credentials
     # for a mailbox that is allowed to send (Google Workspace app password,
@@ -157,6 +160,13 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = "info@zeorbit.com"
     SMTP_STARTTLS: bool = True
+
+    # Stripe Checkout collects email on Stripe's form, then webhook saves the lead.
+    # This does not identify anonymous page visitors.
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_SUCCESS_URL: str = "http://127.0.0.1:5180/contact?stripe=ok"
+    STRIPE_CANCEL_URL: str = "http://127.0.0.1:5180/contact?stripe=cancel"
 
     # ── Demo mode (optional sales simulation ONLY when live APIs missing) ─
     # Production default: false. Prefer free live Google APIs + free Groq/Gemini.

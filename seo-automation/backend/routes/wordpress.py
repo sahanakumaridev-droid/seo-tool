@@ -100,6 +100,11 @@ async def _track_and_verify(result: PublishResult, block: SEOBlock, session: Asy
             record.coverage_state = inspect.get("coverage_state", "")
             record.last_inspected_at = datetime.now(timezone.utc)
         await session.commit()
+        try:
+            from services.social_service import auto_share_on_publish
+            await auto_share_on_publish(url=url, block=block)
+        except Exception as e:
+            logger.warning("auto social share after WordPress publish failed: %s", e)
     except Exception as e:
         logger.error(f"Publish tracking failed for {url}: {e}")
 

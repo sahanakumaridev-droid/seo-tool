@@ -11,15 +11,6 @@ const STAGES = [
   { id: 'closed', label: 'Won' },
 ]
 
-const DEMO_LEADS = [
-  { id: 'd1', business_name: 'Harbor Roofing', contact_name: 'Maya Chen', status: 'new', source: 'website', service: 'Local SEO pages', location: 'San Diego, CA', email: 'maya@harbor.co', phone: '(619) 555-0142', budget: '$2–4k', message: 'Wants service pages for 12 coastal cities.' },
-  { id: 'd2', business_name: 'Pacific Dental', contact_name: 'James Ortiz', status: 'new', source: 'instant-quote', service: 'Website + SEO', location: 'La Jolla, CA', email: 'james@pacificdental.com', phone: '(858) 555-0190', budget: '$8k', message: 'Quote request from homepage form.' },
-  { id: 'd3', business_name: 'North County HVAC', contact_name: 'Priya Shah', status: 'contacted', source: 'prospecting', service: 'Google Ads', location: 'Carlsbad, CA', email: 'priya@nchvac.com', phone: '(760) 555-0118', budget: '$1.5k/mo', message: 'Follow-up scheduled Thursday.' },
-  { id: 'd4', business_name: 'Solana Surf Co', contact_name: 'Evan Brooks', status: 'contacted', source: 'manual', service: 'Content', location: 'Solana Beach, CA', email: 'evan@solanasurf.co', budget: '$900', message: 'Sent draft outlines.' },
-  { id: 'd5', business_name: 'Vista Auto Care', contact_name: 'Luis Mendoza', status: 'qualified', source: 'website', service: 'GBP + reviews', location: 'Vista, CA', email: 'luis@vistaauto.com', budget: '$3k', message: 'Decision maker confirmed.' },
-  { id: 'd6', business_name: 'Coronado Inn', contact_name: 'Helen Park', status: 'closed', source: 'manual', service: 'SEO retainer', location: 'Coronado, CA', email: 'helen@coronadoinn.com', budget: '$2.2k/mo', message: 'Signed. Kickoff next week.' },
-]
-
 function greeting() {
   const h = new Date().getHours()
   if (h < 12) return 'Good morning'
@@ -54,15 +45,12 @@ export default function DashboardPage() {
         const [leadsRes, statsRes] = await Promise.all([getLeads(), getLeadStats()])
         if (cancelled) return
         const rows = Array.isArray(leadsRes.data) ? leadsRes.data : []
-        setLeads(rows.length ? rows : DEMO_LEADS)
-        setStats(statsRes.data?.total ? statsRes.data : {
-          total: DEMO_LEADS.length,
-          by_status: { new: 2, contacted: 2, qualified: 1, closed: 1 },
-        })
+        setLeads(rows)
+        setStats(statsRes.data || {})
       } catch {
         if (!cancelled) {
-          setLeads(DEMO_LEADS)
-          setStats({ total: DEMO_LEADS.length, by_status: { new: 2, contacted: 2, qualified: 1, closed: 1 } })
+          setLeads([])
+          setStats({})
         }
       } finally {
         if (!cancelled) setLoading(false)

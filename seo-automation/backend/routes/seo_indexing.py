@@ -612,10 +612,28 @@ async def gsc_connection():
 
 
 @router.get("/performance")
-async def gsc_performance(days: int = 28):
+async def gsc_performance(
+    days: int = 28,
+    start_date: str = "",
+    end_date: str = "",
+    search_type: str = "web",
+    query: str = "",
+    page: str = "",
+    device: str = "",
+    country: str = "",
+):
     from services.search_console_service import fetch_performance
 
-    return fetch_performance(days)
+    return fetch_performance(
+        days,
+        start_date=start_date,
+        end_date=end_date,
+        search_type=search_type,
+        query=query,
+        page=page,
+        device=device,
+        country=country,
+    )
 
 
 @router.get("/automation")

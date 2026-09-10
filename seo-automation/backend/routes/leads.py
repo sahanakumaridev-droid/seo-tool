@@ -10,6 +10,9 @@ from services.prospecting_service import discover_businesses
 from services.email_service import notify_lead, send_lead_message
 from services import captcha_service
 from services import form_guard
+from services.visit_intel import enrich_visit, visitor_card
+from services import stripe_lead_service
+import json
 from typing import List, Optional
 
 router = APIRouter()
@@ -65,21 +68,11 @@ async def issue_captcha():
 
 @router.post("/visit")
 async def track_visit(payload: dict, request: Request, session: AsyncSession = Depends(get_session)):
-    """Anonymous pageview. Cannot be messaged until the visitor shares email or phone."""
-    path = str(payload.get("path") or payload.get("page_url") or "")[:300]
-    referrer = str(payload.get("referrer") or "")[:400]
-    ua = (request.headers.get("user-agent") or "")[:180]
-    rec = LeadRecord(
-        source="pageview",
-        name="Anonymous visitor",
-        website=path,
-        location=_client_ip(request)[:80],
-        message=f"referrer={referrer}\nua={ua}",
-        status="new",
-    )
+    """Anonymous pageview with first-party intel (device, referrer, locale). No email."""
+    rec = _record_from(enrich_visit(payload or {}, request))
     session.add(rec)
     await session.commit()
-    return {"ok": True, "note": "Pageview stored. Identify the visitor via chat or contact form to message them."}
+    return {"ok": True, "page": rec.website, "device": rec.service, "from": rec.contact_name}
 
 
 @router.get("/visitors")
@@ -92,7 +85,7 @@ async def list_visitors(skip: int = 0, limit: int = 50, session: AsyncSession = 
         .limit(min(limit, 100))
     )
     rows = (await session.execute(stmt)).scalars().all()
-    return [_to_dict(r) for r in rows]
+    return [visitor_card(_to_dict(r)) for r in rows]
 
 
 @router.get("/email-status")
@@ -101,23 +94,65 @@ async def email_status():
     return {"smtp_configured": smtp_configured()}
 
 
+@router.get("/stripe-status")
+async def stripe_status():
+    return {"configured": stripe_lead_service.stripe_configured()}
+
+
+@router.post("/stripe/checkout")
+async def stripe_checkout():
+    result = await asyncio.to_thread(stripe_lead_service.create_checkout_url)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("detail") or "Stripe is not configured")
+    return result
+
+
+@router.post("/stripe/webhook")
+async def stripe_webhook(request: Request, session: AsyncSession = Depends(get_session)):
+    raw = await request.body()
+    sig = request.headers.get("stripe-signature") or ""
+    if not stripe_lead_service.verify_webhook(raw, sig):
+        raise HTTPException(status_code=400, detail="Invalid Stripe signature")
+    try:
+        event = json.loads(raw.decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid payload")
+    if event.get("type") != "checkout.session.completed":
+        return {"ok": True, "ignored": event.get("type")}
+    session_obj = (event.get("data") or {}).get("object") or {}
+    lead = stripe_lead_service.lead_from_session(session_obj)
+    if not lead:
+        return {"ok": True, "empty": True}
+    rec = _record_from(lead)
+    session.add(rec)
+    await session.commit()
+    await session.refresh(rec)
+    saved = _to_dict(rec)
+    await asyncio.to_thread(notify_lead, saved)
+    return {"ok": True, "lead_id": rec.id}
+
+
 @router.post("/", response_model=dict)
 async def create_lead(lead: LeadCreate, request: Request, session: AsyncSession = Depends(get_session)):
     """Manually create a lead and email it to the ZeOrbit inbox."""
     public = captcha_service.is_public_source(lead.source)
-    chat = (lead.source or "").strip().lower() == "chat"
+    light = (lead.source or "").strip().lower() in {"chat", "intent"}
 
-    if public or chat:
+    if public or light:
         if captcha_service.honeypot_tripped(lead.website_url):
             return {"id": 0, "status": "new", "source": lead.source}
         if captcha_service.rate_limited(_client_ip(request)):
             raise HTTPException(status_code=429, detail="Too many submissions. Please try again later.")
-        email_err = form_guard.email_reject_reason(lead.email or "")
-        if email_err:
-            raise HTTPException(status_code=400, detail=email_err)
-        if not form_guard.is_valid_us_phone(lead.phone or ""):
-            raise HTTPException(status_code=400, detail="Enter a valid U.S. phone number.")
-        if public:
+        if light:
+            ident_err = form_guard.identifier_reject_reason(lead.name or lead.contact_name or "", lead.email or "", lead.phone or "")
+            if ident_err:
+                raise HTTPException(status_code=400, detail=ident_err)
+        else:
+            email_err = form_guard.email_reject_reason(lead.email or "")
+            if email_err:
+                raise HTTPException(status_code=400, detail=email_err)
+            if not form_guard.is_valid_us_phone(lead.phone or ""):
+                raise HTTPException(status_code=400, detail="Enter a valid U.S. phone number.")
             if captcha_service.too_fast(lead.started_at):
                 raise HTTPException(status_code=400, detail="Please complete the form and captcha, then send.")
             if not captcha_service.verify(lead.captcha_id, lead.captcha_answer):
@@ -127,7 +162,7 @@ async def create_lead(lead: LeadCreate, request: Request, session: AsyncSession 
     page_url = (data.pop("page_url", None) or "").strip()
     if page_url.startswith("https://") or page_url.startswith("http://"):
         data["website"] = page_url[:300]
-    if (public or chat) and data.get("phone"):
+    if (public or light) and data.get("phone"):
         data["phone"] = form_guard.format_us_phone(data["phone"])
     rec = _record_from({**data, "status": "new"})
     session.add(rec)
@@ -177,7 +212,14 @@ async def list_leads(
         stmt = stmt.where(LeadRecord.source != "pageview")
     stmt = stmt.offset(skip).limit(limit)
     rows = (await session.execute(stmt)).scalars().all()
-    return [_to_dict(r) for r in rows]
+    usable = []
+    for r in rows:
+        email_ok = form_guard.is_usable_contact_email(r.email or "")
+        phone_ok = form_guard.is_valid_us_phone(r.phone or "")
+        name_ok = len((r.name or r.contact_name or "").strip()) >= 2
+        if email_ok or phone_ok or name_ok:
+            usable.append(_to_dict(r))
+    return usable
 
 
 @router.get("/stats")

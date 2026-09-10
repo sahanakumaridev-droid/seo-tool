@@ -4,6 +4,7 @@ import ScrollToTop from './components/ScrollToTop'
 import PageJump from './components/PageJump'
 import RouteMeta from './components/RouteMeta'
 import VisitBeacon from './components/VisitBeacon'
+import IdentifyGate from './components/IdentifyGate'
 import LandingPage from './pages/LandingPage'
 
 const SiteDock = lazy(() => import('./components/SiteDock'))
@@ -39,6 +40,7 @@ export default function App() {
       <PageJump />
       <RouteMeta />
       <VisitBeacon />
+      <IdentifyGate />
       <DelayedChrome />
       <Suspense fallback={null}>
         <Routes>

@@ -489,15 +489,7 @@ def title_from_primary_keyword(
     """
     raw = re.sub(r"\s+", " ", (primary_keyword or "").strip())
     city_l = (city or "").strip()
-    city_low = city_l.lower()
-
-    # Drop trailing location fragments already in the keyword (full city or last token)
-    if city_low and raw.lower().endswith(city_low):
-        raw = raw[: -len(city_l)].strip(" ,-")
-    elif city_low:
-        # e.g. keyword ends with "san diego" while city is a neighborhood — keep as-is
-        # but avoid "… National City in National City"
-        pass
+    raw = strip_trailing_place(raw, city_l)
 
     if not raw:
         return format_title(intent, city, industry, index)
@@ -515,17 +507,7 @@ def title_from_primary_keyword(
         else:
             parts.append(w[:1].upper() + w[1:] if w else w)
     pretty = " ".join(parts)
-
-    pretty_low = pretty.lower()
-    if city_l and city_low not in pretty_low:
-        # Also skip append when every significant city token is already present
-        city_tokens = [t for t in re.split(r"[^a-z0-9]+", city_low) if len(t) > 2]
-        if not city_tokens or not all(t in pretty_low for t in city_tokens):
-            candidate = f"{pretty} in {city_l}"
-        else:
-            candidate = pretty
-    else:
-        candidate = pretty
+    candidate = clean_seo_title(pretty, city_l)
 
     if len(candidate) > 78:
         candidate = candidate[:75].rstrip(" -,") + "…"
@@ -989,20 +971,89 @@ def scrub_foreign_places(text: str, city: str, foreign: Sequence[str]) -> str:
     return out
 
 
+def collapse_repeated_place(text: str, city: str) -> str:
+    """Stop 'in Los Angeles in Los Angeles' and leftover 'in in City'."""
+    out = (text or "").strip()
+    c = (city or "").strip()
+    if not out:
+        return out
+    out = re.sub(r"\bin\s+in\s+", "in ", out, flags=re.I)
+    if c:
+        esc = re.escape(c)
+        out = re.sub(rf"(\bin\s+{esc}\b)(?:\s*,?\s*in\s+{esc}\b)+", r"\1", out, flags=re.I)
+        out = re.sub(rf"(\b{esc}\b)(?:\s*,?\s*{esc}\b)+", r"\1", out, flags=re.I)
+    out = re.sub(r"[ \t]{2,}", " ", out)
+    return out.strip(" ,-|")
+
+
+def strip_trailing_place(raw: str, city: str) -> str:
+    """Drop a city already sitting on the end of a keyword or title."""
+    out = re.sub(r"\s+", " ", (raw or "").strip())
+    c = (city or "").strip()
+    if not out or not c:
+        return out
+    esc = re.escape(c)
+    out = re.sub(rf"(?:[\s,|:\-–—]+|(?:\s+in|\s+near)\s+){esc}\s*$", "", out, flags=re.I)
+    out = re.sub(r"[\s,:\-–—]+(?:in|near)\s*$", "", out, flags=re.I)
+    return out.strip(" ,-|")
+
+
+def clean_seo_title(title: str, city: str, state: str = "") -> str:
+    """One location mention, no doubled 'in City'."""
+    t = collapse_repeated_place(strip_trailing_place(title or "", city), city)
+    c = (city or "").strip()
+    if c and c.lower() not in t.lower():
+        tokens = [x for x in re.split(r"[^a-z0-9]+", c.lower()) if len(x) > 2]
+        if not tokens or not all(tok in t.lower() for tok in tokens):
+            t = f"{t} in {c}".strip() if t else c
+    t = collapse_repeated_place(t, c)
+    if len(t) > 78:
+        t = t[:75].rstrip(" -,") + "…"
+    return t
+
+
+def polish_quick_answer(
+    meta: str,
+    intro: str = "",
+    city: str = "",
+    keyword: str = "",
+    business_type: str = "",
+) -> str:
+    """Featured-snippet style line: benefit first, city once, no 'Looking for…' filler."""
+    place = (city or "").strip() or "your area"
+    service = re.sub(r"\s+", " ", (keyword or business_type or "website design").strip())
+    service = strip_trailing_place(service, city) or "website design"
+    dull = re.compile(
+        r"^(looking for|need a trusted|trusted |get your free|.{0,40} services in )\b",
+        re.I,
+    )
+    blob = (intro or "").strip() or (meta or "").strip()
+    blob = collapse_repeated_place(blob, city)
+    sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+", blob) if s.strip()]
+    text = " ".join(sents[:2]).strip() if sents else ""
+    if not text or dull.match(text) or text.lower().count(place.lower()) >= 2:
+        text = (
+            f"Need {service.lower()} that actually brings in calls in {place}? "
+            f"ZeOrbit builds a clear, mobile-friendly WordPress or Shopify site so customers know what you do next."
+        )
+    text = collapse_repeated_place(text, city)
+    if place and place.lower() not in text.lower():
+        text = text.rstrip(" .") + f". Serving {place}."
+    if len(text) > 160:
+        text = text[:157].rstrip(" ,;") + "…"
+    return text
+
+
 def ensure_title_names_city(title: str, city: str, state: str = "") -> str:
     """Guarantee title/H1 includes this page's city (bulk pages must not share one title)."""
     t = (title or "").strip()
     c = (city or "").strip()
     if not c:
-        return t
+        return collapse_repeated_place(t, c)
     foreign = extract_foreign_places(t, c)
     if foreign:
         t = scrub_foreign_places(t, c, foreign)
-    if c.lower() in t.lower():
-        return t
-    place = f"{c}, {state}".strip(", ") if state else c
-    base = re.sub(r"[\s|,\-–—]+$", "", t) or "Website Design"
-    return f"{base} in {place}"
+    return clean_seo_title(t, c, state)
 
 
 def place_label(city: str, state: str = "", zip: str = "") -> str:
@@ -1233,11 +1284,7 @@ def force_zip_into_copy(text: str, city: str, state: str = "", zip: str = "") ->
 def ensure_zip_in_meta(meta: str, city: str, state: str = "", zip: str = "") -> str:
     """Meta must not contain ZIP."""
     out = strip_zip_from_copy(meta or "", zip)
-    if city and city.lower() not in out.lower():
-        place = place_label(city, state, "")
-        extra = f" in {place}." if place else ""
-        out = (out.rstrip(". ") + extra).strip()
-    return out[:160]
+    return polish_quick_answer(out, "", city, "", "")
 
 
 def ensure_zip_in_conclusion(text: str, city: str, state: str = "", zip: str = "") -> str:

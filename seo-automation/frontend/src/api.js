@@ -247,8 +247,10 @@ export const markHumanBing = (done = true) =>
 export const getGscConnection = () =>
   api.get('/seo-indexing/gsc')
 
-export const getGscPerformance = (days = 28) =>
-  api.get('/seo-indexing/performance', { params: { days }, timeout: 60000 })
+export const getGscPerformance = (daysOrParams = 28) => {
+  const params = typeof daysOrParams === 'number' ? { days: daysOrParams } : (daysOrParams || {})
+  return api.get('/seo-indexing/performance', { params, timeout: 60000 })
+}
 
 export const getSeoIndexingSetup = () =>
   api.get('/seo-indexing/setup')
