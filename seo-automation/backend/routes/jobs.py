@@ -78,6 +78,7 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
                 existing_bodies=bodies_snapshot,
                 zip=zip_code or "",
                 image_keyword=getattr(req, "image_keyword", "") or "",
+                blog_format=(getattr(req, "blog_format", None) or "") if (req.content_kind == "post") else "",
             )
         except Exception as e:
             print(f"[Jobs] {name} failed ({e}); writing a fallback page so none are skipped")
@@ -97,6 +98,7 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
                     keyword_index=keyword_index,
                     zip=zip_code or "",
                     image_keyword=getattr(req, "image_keyword", "") or "",
+                blog_format=(getattr(req, "blog_format", None) or "") if (req.content_kind == "post") else "",
                 )
             except Exception as e2:
                 print(f"[Jobs] fallback also failed for {name}: {e2}")
@@ -134,12 +136,15 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
                         if images:
                             from services.image_service import assign_canonical_images
                             feat, foot, cleaned = assign_canonical_images(images)
-                            if feat:
+                            if feat and normalize_image_key(feat) not in taken:
                                 block.in_content_images = cleaned
                                 block.featured_image_url = feat
                                 block.footer_image_url = foot
-                            else:
-                                print(f"[Image] uniqueness regen empty for {name}; keeping prior featured")
+                        if normalize_image_key(block.featured_image_url or "") in taken:
+                            from services.image_service import unused_featured_url
+                            alt = unused_featured_url(used_featured, seed=name)
+                            if alt:
+                                block.featured_image_url = alt
                     if block.featured_image_url:
                         used_featured.append(block.featured_image_url)
                 existing_bodies.append(f"{block.intro or ''}\n{block.content or ''}")

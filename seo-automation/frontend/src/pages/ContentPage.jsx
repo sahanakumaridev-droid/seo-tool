@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Zap, MapPin, Globe, Eye, X, RefreshCw, Save, CheckCircle, AlertTriangle,
-         FileJson, Tag, Plus, Megaphone, Trash2, FileText, Newspaper, Sparkles, Wand2, Layers } from 'lucide-react'
+         FileJson, Tag, Plus, Megaphone, Trash2, FileText, Newspaper, Sparkles, Wand2, Layers, ChevronDown, Check,
+         ArrowRight, Search, TrendingUp } from 'lucide-react'
 import { generateBulk, exportJson, generateSingle,
          saveEditedBlock, publishToWeb, startBulkGenerateJob, getJob, publishAllToWeb, zeorbitBlogUrl, zeorbitArticleUrl,
          getNearbyCities, getSanDiegoCounty, searchCities, getCounties, getPlaceCatalog, deletePage, listPages, suggestContentBrief } from '../api'
@@ -139,6 +140,16 @@ const US_CITY_OPTIONS = [
   'Atlanta, GA', 'Boston, MA', 'Philadelphia, PA', 'Washington, DC',
 ]
 
+function oneWordFromKeyword(raw) {
+  const stop = new Set(['near', 'me', 'the', 'a', 'an', 'for', 'to', 'in', 'on', 'of', 'and', 'or', 'best', 'top', 'how', 'my', 'your', 'guide'])
+  const prefer = ['wordpress', 'shopify', 'wix', 'website', 'web', 'design', 'seo', 'app']
+  const words = String(raw || '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w && !stop.has(w) && w.length > 2)
+  for (const p of prefer) {
+    if (words.includes(p)) return p
+  }
+  return words[0] || 'website'
+}
+
 function locKey(value) {
   return (value || '').toLowerCase().replace(/\s+/g, ' ').trim()
 }
@@ -163,6 +174,52 @@ function collectSdCatalog(sdCounty) {
   ;(sdCounty?.cities || []).forEach((c) => pushCity(c, c.name))
   if (sdCounty?.unincorporated) pushCity(sdCounty.unincorporated, 'Unincorporated')
   return { areas, streets }
+}
+
+function asCountyLabel(name) {
+  const n = (name || '').trim()
+  if (!n) return n
+  return n.includes(',') ? n : `${n}, CA`
+}
+
+function mergePlaceCatalogs(catalogs) {
+  const list = (catalogs || []).filter(Boolean)
+  if (!list.length) return null
+  if (list.length === 1) return list[0]
+  const nameCount = new Map()
+  list.forEach((cat) => {
+    ;(cat.incorporated_cities || []).forEach((n) => {
+      const k = locKey(n)
+      nameCount.set(k, (nameCount.get(k) || 0) + 1)
+    })
+  })
+  const incorporated = []
+  const cities = []
+  const seenInc = new Set()
+  list.forEach((cat) => {
+    const county = cat.county || ''
+    const short = county.replace(/ County$/i, '')
+    ;(cat.incorporated_cities || []).forEach((n) => {
+      const label = (nameCount.get(locKey(n)) || 0) > 1 ? `${n} (${short})` : n
+      const ik = locKey(label)
+      if (seenInc.has(ik)) return
+      seenInc.add(ik)
+      incorporated.push(label)
+    })
+    ;(cat.cities || []).forEach((c) => {
+      let name = c.name
+      if (locKey(name) === 'unincorporated') name = `Unincorporated (${county})`
+      else if ((nameCount.get(locKey(c.name)) || 0) > 1) name = `${c.name} (${short})`
+      cities.push({ ...c, name, county })
+    })
+  })
+  return {
+    county: list.map((c) => c.county).filter(Boolean).join(', '),
+    state: list[0].state || 'CA',
+    incorporated_cities: incorporated,
+    cities,
+    selected_city: 'All cities',
+  }
 }
 
 function placeChip(row) {
@@ -227,7 +284,7 @@ function BriefField({ label, hint, value, onChange, onAi, aiBusy, rows = 3, plac
 
 function SearchSelect({
   label, required, value, onChange, options, placeholder, maxResults = 40, remoteSearch = null,
-  multi = false, selected = [], onToggle,
+  multi = false, selected = [], onToggle, hint, hidePicked = false, inputClassName = '',
 }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
@@ -283,11 +340,13 @@ function SearchSelect({
 
   return (
     <div style={{ position: 'relative' }}>
-      <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-3)' }}>
+      {label ? (
+      <label className="loc-lbl">
         {label}
-        {required ? <span className="ml-2 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ background: 'var(--amber-soft)', color: 'var(--amber)' }}>Required</span> : null}
+        {required ? <span className="loc-req">Required</span> : null}
       </label>
-      {multi && picked.length > 0 && (
+      ) : null}
+      {multi && picked.length > 0 && !hidePicked && (
         <div className="flex flex-wrap gap-1.5 mb-2">
           {picked.map((loc) => (
             <span key={`sel-${loc}`} className="text-[11px] px-2 py-0.5 rounded font-semibold inline-flex items-center gap-1"
@@ -351,11 +410,12 @@ function SearchSelect({
         </div>
       )}
       <p className="mt-1 text-[10px]" style={{ color: 'var(--text-4)' }}>
-        {multi
-          ? 'Select as many cities as you want. Each selected place becomes its own page or blog.'
-          : remoteSearch
-            ? 'Type to search 30,000+ US cities, or enter a custom place — both are saved.'
-            : 'Search the list or type a custom value — both are saved.'}
+        {hint
+          || (multi
+            ? 'Select as many cities as you want. Each selected place becomes its own page or blog.'
+            : remoteSearch
+              ? 'Type to search 30,000+ US cities, or enter a custom place — both are saved.'
+              : 'Search the list or type a custom value — both are saved.')}
       </p>
     </div>
   )
@@ -736,6 +796,8 @@ export default function ContentPage() {
   const [nearbyError, setNearbyError] = useState('')
   const [extraLocations, setExtraLocations] = useState([])
   const [extraLocDraft, setExtraLocDraft] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({ kind: '', niche: '', keyword: '', location: '' })
+  const [locHint, setLocHint] = useState('')
   const [contentKind, setContentKind] = useState(() => {
     try {
       const saved = sessionStorage.getItem('seo_content_kind') || ''
@@ -744,13 +806,17 @@ export default function ContentPage() {
       return ''
     }
   })
+  const [blogFormat, setBlogFormat] = useState('auto')
   const [customRequirements, setCustomRequirements] = useState('')
   const [briefFields, setBriefFields] = useState(() => ({ ...EMPTY_BRIEF }))
   const [scheduleAt, setScheduleAt] = useState('')
   const [briefAiBusy, setBriefAiBusy] = useState('') // '' | 'all' | field key
   const [showAdvancedBrief, setShowAdvancedBrief] = useState(true)
   const [sdCounty, setSdCounty] = useState(null)
-  const [countyPick, setCountyPick] = useState('San Diego County')
+  const [countyPicks, setCountyPicks] = useState(['San Diego County'])
+  const [countyMenuOpen, setCountyMenuOpen] = useState(false)
+  const [countyQuery, setCountyQuery] = useState('')
+  const countyMenuRef = useRef(null)
   const [sdPick, setSdPick] = useState('Chula Vista')
   const [sdLayer, setSdLayer] = useState('areas')
   const [sdFilter, setSdFilter] = useState('')
@@ -818,17 +884,31 @@ export default function ContentPage() {
       .catch(() => setCountyOptions([]))
   }, [])
   useEffect(() => {
-    const countyLabel = countyPick.includes(',') ? countyPick : `${countyPick}, CA`
+    const onDoc = (e) => {
+      if (countyMenuRef.current && !countyMenuRef.current.contains(e.target)) {
+        setCountyMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [])
+  useEffect(() => {
+    const picks = countyPicks.length ? countyPicks : ['San Diego County']
     let cancelled = false
     const timer = setTimeout(() => {
-      getPlaceCatalog({
-        baseLocation: countyLabel,
-        county: countyLabel,
-        city: sdPick === 'All cities' || sdPick === 'Unincorporated' ? '' : sdPick,
-      })
-        .then((res) => {
+      Promise.all(
+        picks.map((name) => {
+          const countyLabel = asCountyLabel(name)
+          return getPlaceCatalog({
+            baseLocation: countyLabel,
+            county: countyLabel,
+            city: '',
+          }).then((res) => res.data)
+        }),
+      )
+        .then((catalogs) => {
           if (cancelled) return
-          const data = res.data
+          const data = mergePlaceCatalogs(catalogs)
           if (!data) return
           setSdCounty(data)
           const cities = data.incorporated_cities || []
@@ -837,6 +917,7 @@ export default function ContentPage() {
             && sdPick !== 'All cities'
             && sdPick !== 'Unincorporated'
             && !cities.some((n) => locKey(n) === locKey(sdPick))
+            && !locKey(sdPick).startsWith('unincorporated')
           ) {
             setSdPick('All cities')
           }
@@ -846,7 +927,7 @@ export default function ContentPage() {
         })
     }, 280)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [countyPick, sdPick])
+  }, [countyPicks, sdPick])
 
   // Prefill from Lead Engine "Generate in SEO Content"
   useEffect(() => {
@@ -995,6 +1076,11 @@ export default function ContentPage() {
   )
 
   const sdCityNames = sdCounty?.incorporated_cities || []
+  const countyChoices = countyOptions.length ? countyOptions : [{ name: 'San Diego County' }]
+  const countyVisible = countyChoices.filter((c) => locKey(c.name).includes(locKey(countyQuery)))
+  const countySummary = countyPicks.length <= 1
+    ? (countyPicks[0] || 'San Diego County')
+    : `${countyPicks.length} counties`
   const sdCatalog = useMemo(() => collectSdCatalog(sdCounty), [sdCounty])
   const baseCityOptions = useMemo(() => {
     const sd = (sdCityNames || []).map((n) => (n.includes(',') ? n : `${n}, CA`))
@@ -1039,7 +1125,7 @@ export default function ContentPage() {
     if (sdLayer !== 'cities' && sdPick && sdPick !== 'All cities' && sdPick !== 'Unincorporated') {
       rows = pool.filter((r) => locKey(r.city) === locKey(sdPick))
     } else if (sdPick === 'Unincorporated' && sdLayer !== 'cities') {
-      rows = pool.filter((r) => locKey(r.city) === 'unincorporated' || locKey(r.city).includes('unincorporated'))
+      rows = pool.filter((r) => locKey(r.city).includes('unincorporated'))
     }
     if (sdSearch) {
       rows = rows.filter(
@@ -1061,7 +1147,13 @@ export default function ContentPage() {
   }
   const addExtraLocation = (raw) => {
     const parts = splitLocations(raw || extraLocDraft)
-    if (!parts.length) return
+    if (!parts.length) {
+      setLocHint('Type a city, then click Add.')
+      setFieldErrors((e) => ({ ...e, location: 'Add at least one city' }))
+      return
+    }
+    setLocHint('')
+    setFieldErrors((e) => ({ ...e, location: '' }))
     setExtraLocations((prev) => {
       const next = [...prev]
       parts.forEach((loc) => {
@@ -1093,6 +1185,23 @@ export default function ContentPage() {
     syncBaseFromPins(next)
     return next
   })
+  const toggleCountyPick = (name) => {
+    const on = countyPicks.some((x) => locKey(x) === locKey(name))
+    setCountyPicks((prev) => {
+      const next = on
+        ? (prev.length <= 1 ? prev : prev.filter((x) => locKey(x) !== locKey(name)))
+        : [...prev, name]
+      updateForm((f) => ({ ...f, base_location: asCountyLabel(next[0]) }))
+      return next
+    })
+    if (on) removeExtraLocation(asCountyLabel(name))
+    else addExtraLocation(asCountyLabel(name))
+    setSdPick('All cities')
+    setSdFilter('')
+  }
+  const pinSelectedCounties = () => {
+    addExtraLocation(countyPicks.map((n) => asCountyLabel(n)).join('\n'))
+  }
 
   const updateBriefField = (key, value) => {
     setBriefFields((prev) => ({ ...prev, [key]: value }))
@@ -1196,11 +1305,8 @@ export default function ContentPage() {
     if (contentKind === 'page') {
       if (!(form.business_type || '').trim()) missing.push('Business Niche')
       if (!targetKeywords.length) missing.push('At least one Target Keyword')
-      if (!extraLocations.length && !(form.base_location || '').trim()) {
-        missing.push('Base city')
-      }
-      if (!(form.num_cities >= 1)) {
-        missing.push('How many locations')
+      if (!extraLocations.length) {
+        missing.push('Add at least one city')
       }
     }
     if (contentKind === 'post') {
@@ -1214,32 +1320,35 @@ export default function ContentPage() {
     e.preventDefault()
     const blockers = getGenerateBlockers()
     if (blockers.length) {
-      const msg = `Add: ${blockers.join('; ')}. Brief fields are managed in the backend.`
+      const nextErr = {
+        kind: contentKind !== 'page' && contentKind !== 'post' ? 'Choose Page or Post / Blog' : '',
+        niche: contentKind === 'page' && !(form.business_type || '').trim() ? 'Enter a business niche' : '',
+        keyword: !targetKeywords.length ? 'Add at least one keyword' : '',
+        location: contentKind === 'page' && !extraLocations.length ? 'Add at least one city' : '',
+      }
+      setFieldErrors(nextErr)
+      if (nextErr.location) setLocHint('Add a city here, then generate.')
+      const msg = blockers.join(' · ')
       setError(msg)
-      showToast('Add keyword, niche, and location', 'warning')
-      const scrollId = !contentKind ? 'content-kind-section'
-        : !targetKeywords.length ? 'target-keywords-section'
-          : !(form.business_type || '').trim() ? 'business-niche-section'
+      showToast(msg, 'warning')
+      const scrollId = nextErr.kind ? 'content-kind-section'
+        : nextErr.keyword ? 'target-keywords-section'
+          : nextErr.niche ? 'business-niche-section'
             : 'target-locations-panel'
       document.getElementById(scrollId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
+    setFieldErrors({ kind: '', niche: '', keyword: '', location: '' })
+    setLocHint('')
 
     setLoading(true)
     setError('')
     setUseAi(true)
 
     const niche = (form.business_type || '').trim()
-    const hasBlogLocations = contentKind === 'post' && (
-      !!(form.base_location || '').trim() || extraLocations.length > 0
-    )
-    const useLocations = contentKind === 'page' || hasBlogLocations
-    const selectedOnly = extraLocations.length > 0
-    const pageCount = !useLocations
-      ? 1
-      : selectedOnly
-        ? extraLocations.length
-        : Math.max(Number(form.num_cities) || 1, 1)
+    const customLocs = extraLocations.map((s) => String(s || '').trim()).filter(Boolean)
+    const useLocations = customLocs.length > 0
+    const pageCount = useLocations ? customLocs.length : 1
     setGenerateRequested(pageCount)
     // Auto async for large batches
     const runAsync = useAsync || pageCount >= 20
@@ -1258,11 +1367,11 @@ export default function ContentPage() {
         })(),
         audience: (form.audience || '').trim(),
         num_cities: pageCount,
-        base_location: useLocations ? (extraLocations[0] || form.base_location || '') : '',
+        base_location: useLocations ? customLocs[0] : '',
+        extra_locations: useLocations ? [...customLocs] : [],
         target_keywords: targetKeywords.length
           ? [...targetKeywords]
           : ['website design'],
-        extra_locations: useLocations && selectedOnly ? [...extraLocations] : [],
         content_kind: contentKind,
         custom_requirements: (() => {
           const composed = composeBriefFromParts(briefFields, customRequirements)
@@ -1274,7 +1383,10 @@ export default function ContentPage() {
         })(),
         use_ai: true,
         llm_provider: llmProvider || null,
-        image_keyword: (form.image_keyword || '').trim(),
+        image_keyword: oneWordFromKeyword(
+          (form.image_keyword || '').trim() || targetKeywords[0] || form.business_type || 'website'
+        ),
+        blog_format: contentKind === 'post' ? (blogFormat || 'auto') : 'auto',
       }
       if (runAsync) {
         const res = await startBulkGenerateJob(payload)
@@ -1391,34 +1503,69 @@ export default function ContentPage() {
           <button onClick={() => setToast(null)} className="ml-2 opacity-70 hover:opacity-100 flex-shrink-0"><X size={14} /></button>
         </div>
       )}
-      {/* Page header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="scale-hero">
         <div>
-          <p className="crm-crumb">SEO Content &gt; Content Generation</p>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-1)' }}>Content Generation</h1>
-          <p className="text-sm mt-0.5" style={{ color: 'var(--text-3)' }}>
-            Choose Page or Post first — each uses its own workflow and sitemap.
-            Writer is <strong>Google Gemini</strong> unless you pick another model.
-            Blog posts answer the keyword (about 320–480 words) so Google can index them; pages are location landers.
+          <div className="scale-kicker"><Sparkles size={12} /> AI powered</div>
+          <h1>
+            Create {contentKind === 'post' ? 'Blog Posts' : 'Location Pages'} <em>at Scale</em>
+          </h1>
+          <p>
+            {contentKind === 'post'
+              ? 'Generate keyword-led posts for every city you pin. More visibility. More traffic.'
+              : 'Generate SEO-optimized location pages for every city you target. More visibility. More traffic. More business.'}
           </p>
+          <div id="content-kind-section" className="flex gap-2 mt-4">
+            <button type="button" aria-pressed={contentKind === 'page'} onClick={() => setContentKind('page')}
+              className="kind-card text-left flex-1" data-active={contentKind === 'page' ? 'true' : 'false'}>
+              <div className="flex items-center gap-2 mb-1"><FileText size={15} /><span className="text-sm font-semibold">Page</span></div>
+              <p className="text-xs" style={{ color: 'var(--text-3)' }}>Service and location pages → page-sitemap.xml</p>
+            </button>
+            <button type="button" aria-pressed={contentKind === 'post'} onClick={() => {
+              setContentKind('post')
+              if (!(form.num_cities >= 1)) updateForm((f) => ({ ...f, num_cities: 1 }))
+            }} className="kind-card text-left flex-1" data-active={contentKind === 'post' ? 'true' : 'false'}>
+              <div className="flex items-center gap-2 mb-1"><Newspaper size={15} /><span className="text-sm font-semibold">Post / Blog</span></div>
+              <p className="text-xs" style={{ color: 'var(--text-3)' }}>How-to articles → post-sitemap.xml</p>
+            </button>
+          </div>
+          {fieldErrors.kind ? <p className="field-err mt-2">{fieldErrors.kind}</p> : null}
+        </div>
+        <div className="scale-illus" aria-hidden="true">
+          <div className="scale-doc">
+            <b>City Page</b>
+            <div className="mt-3 h-2 rounded-full" style={{ background: '#c7d2fe', width: '72%' }} />
+            <div className="mt-2 h-2 rounded-full" style={{ background: '#e0e7ff', width: '88%' }} />
+            <div className="mt-2 h-2 rounded-full" style={{ background: '#e0e7ff', width: '54%' }} />
+            <div className="scale-pin"><MapPin size={16} /></div>
+          </div>
+          <div className="scale-pills">
+            <div className="scale-pill"><i /><TrendingUp size={12} /> Higher Rankings</div>
+            <div className="scale-pill"><i /> More Local Traffic</div>
+            <div className="scale-pill"><i /> Automated Creation</div>
+          </div>
+          <div className="scale-note">Turn locations into opportunities</div>
         </div>
       </div>
-      <div className="crm-stepper" aria-label="Generation steps">
+
+      <div className="scale-steps" aria-label="Generation steps">
         {[
-          ['1', 'Page or Post', !!contentKind],
-          ['2', 'Keywords', targetKeywords.length > 0],
-          ['3', contentKind === 'post' ? 'Niche (+ location optional)' : 'Niche + location', !!contentKind && (
-            contentKind === 'post'
-              ? !!(form.business_type || '').trim()
-              : (!!(form.business_type || '').trim() && (!!extraLocations.length || !!(form.base_location || '').trim()))
-          )],
-          ['4', 'Generate', pages.length > 0],
-        ].map(([n, label, on]) => (
-          <span key={label} className={`crm-step${on ? ' is-on' : ''}`}><b>{n}</b> {label}</span>
+          ['1', 'Business & Keywords', 'Tell us about your business', !!(form.business_type || '').trim() && targetKeywords.length > 0],
+          ['2', 'Select Locations', 'Choose cities or areas', extraLocations.length > 0 || contentKind === 'post'],
+          ['3', 'Review & Generate', 'Create and publish', pages.length > 0],
+        ].map(([n, label, hint, on]) => (
+          <div key={label} className={`scale-step${on ? ' is-on' : ''}`}>
+            <b>{n}</b>
+            <div><span>{label}</span><small>{hint}</small></div>
+          </div>
         ))}
       </div>
 
-      <div id="content-kind-section" className="grid sm:grid-cols-2 gap-3">
+      {!contentKind && (
+        <p className="text-xs" style={{ color: 'var(--amber)' }}>Select Page or Post / Blog to open the matching generator.</p>
+      )}
+
+      <div className="hidden">
+      <div className="grid sm:grid-cols-2 gap-3">
         <button
           type="button"
           aria-pressed={contentKind === 'page'}
@@ -1461,14 +1608,12 @@ export default function ContentPage() {
           </p>
         </button>
       </div>
-      {!contentKind && (
-        <p className="text-xs" style={{ color: 'var(--amber)' }}>Select Page or Post / Blog to open the matching generator.</p>
-      )}
+      </div>
 
       {contentKind === 'page' && (
       <div
-        id="target-keywords-section"
-        className="card p-5"
+        id="legacy-page-keywords"
+        className="hidden"
         style={targetKeywords.length
           ? { borderColor: 'rgba(91,92,230,0.25)' }
           : { borderColor: 'var(--amber)', boxShadow: '0 0 0 1px var(--amber-soft)' }}
@@ -1567,11 +1712,44 @@ export default function ContentPage() {
       )}
 
       {contentKind === 'post' && (
-        <div id="target-keywords-section" className="card p-5"
-          style={targetKeywords.length
-            ? { borderColor: 'rgba(91,92,230,0.25)' }
-            : { borderColor: 'var(--amber)', boxShadow: '0 0 0 1px var(--amber-soft)' }}
-        >
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <Newspaper size={15} style={{ color: 'var(--brand)' }} />
+            <span className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>Blog format</span>
+          </div>
+          <p className="text-[12px] mb-3 leading-relaxed" style={{ color: 'var(--text-4)' }}>
+            Each post uses one of three designs and writing structures. <strong>Auto</strong> rotates them across a batch so posts do not look the same.
+          </p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            {[
+              ['auto', 'Auto rotate', 'Guide, briefing, then feature — cycles with each generated post.'],
+              ['guide', 'How-to guide', 'Numbered steps, checklists, blue how-to layout.'],
+              ['briefing', 'Q&A briefing', 'Question headings, definition box, teal explainer layout.'],
+              ['feature', 'Feature story', 'Narrative, pull-quote, magazine layout.'],
+            ].map(([id, label, hint]) => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={blogFormat === id}
+                onClick={() => setBlogFormat(id)}
+                className="text-left rounded-xl px-3 py-2.5 active:scale-[0.99]"
+                style={{
+                  border: `1px solid ${blogFormat === id ? 'var(--brand)' : 'var(--border)'}`,
+                  background: blogFormat === id ? 'var(--brand-soft, #eef2ff)' : '#fff',
+                  color: 'var(--text-1)',
+                  transition: 'transform 100ms ease-out, border-color 160ms ease-out',
+                }}
+              >
+                <div className="text-sm font-semibold">{label}</div>
+                <div className="text-[11px] mt-0.5 leading-snug" style={{ color: 'var(--text-3)' }}>{hint}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {contentKind === 'post' && (
+        <div id="legacy-post-keywords" className="hidden">
           <div className="flex items-center gap-2 mb-3 flex-wrap">
             <Tag size={15} style={{ color: 'var(--brand)' }} />
             <span className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>Target Keywords</span>
@@ -1630,21 +1808,37 @@ export default function ContentPage() {
       )}
 
       {contentKind && (
-      <div className="grid lg:grid-cols-3 gap-4">
-        <div className="card p-5">
-          <h3 className="text-sm font-semibold mb-1 flex items-center gap-2" style={{ color: 'var(--text-1)' }}>
-            <Zap size={14} style={{ color: 'var(--brand)' }} />
-            {contentKind === 'post' ? 'Blog — AI automation' : 'Location pages — AI automation'}
-          </h3>
-          <p className="text-[11px] mb-4" style={{ color: 'var(--text-4)' }}>
-            {contentKind === 'post'
-              ? 'Keyword + niche required. Select multiple cities if you want one post per place; leave locations empty for a national topic.'
-              : 'Type keyword + niche + industry, then select every city you want. Generate creates one page per selected location.'}
+      <div className="scale-grid">
+        <div className="scale-card">
+          <h3 className="text-base font-semibold mb-1" style={{ color: 'var(--text-1)' }}>Business Details</h3>
+          <p className="text-[12px] mb-4" style={{ color: 'var(--text-4)' }}>
+            Set up your business niche and target keywords
           </p>
           <form onSubmit={handleGenerate} className="space-y-4">
             <div id="business-niche-section" className="space-y-3">
+              <div id="target-keywords-section">
+                <label className="loc-lbl">Target keyword <span className="loc-req">Required</span></label>
+                <div className="flex gap-2">
+                  <input type="text" value={kwInput}
+                    onChange={e => setKwInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword() } }}
+                    placeholder="e.g. web design san diego"
+                    className="flex-1 rounded-lg px-3 py-2.5 text-sm"
+                    style={{ background: '#fff', border: '1px solid var(--border-bright)' }} />
+                  <button type="button" onClick={() => addKeyword()} className="px-3 rounded-lg text-sm font-semibold"
+                    style={{ background: 'var(--brand-soft)', color: 'var(--brand-dark)' }}>Add</button>
+                </div>
+                {targetKeywords.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {targetKeywords.map(kw => (
+                      <span key={kw} className="scale-chip">{kw}<button type="button" onClick={() => removeKeyword(kw)}><X size={10} /></button></span>
+                    ))}
+                  </div>
+                )}
+                {fieldErrors.keyword ? <p className="field-err">{fieldErrors.keyword}</p> : null}
+              </div>
               <SearchSelect
-                label="Business niche / category"
+                label="Business Niche / Category"
                 required
                 value={form.business_type}
                 onChange={(v) => updateForm((f) => {
@@ -1660,6 +1854,7 @@ export default function ContentPage() {
                 options={BUSINESS_TYPES}
                 placeholder="e.g. Web Design, WordPress, Mobile Apps…"
               />
+              {fieldErrors.niche ? <p className="field-err">{fieldErrors.niche}</p> : null}
               <SearchSelect
                 label="Industry"
                 required={false}
@@ -1675,67 +1870,29 @@ export default function ContentPage() {
                 Who the content is for (buyer vertical). Used in titles/examples — not forced into the slug as “Professional Services”.
               </p>
               <label className="block">
-                <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-3)' }}>Image keyword</span>
+                <span className="loc-lbl">Image keyword</span>
                 <input
                   type="text"
                   value={form.image_keyword || ''}
                   onChange={(e) => updateForm((f) => ({ ...f, image_keyword: e.target.value }))}
-                  placeholder="1–2 words: dentist, used car, HVAC tech"
+                  placeholder="One word from your keyword (auto: website)"
                   className="mt-1 w-full rounded-lg px-3 py-2 text-sm"
                   style={{ background: '#fff', border: '1px solid #94a3b8', color: '#0f172a' }}
                 />
                 <span className="mt-1 block text-[10px]" style={{ color: 'var(--text-4)' }}>
-                  Photos only. One word or two (`used car`, `primary care`). Each page gets a unique photo — not the same laptop stock on every URL.
+                  Photos follow one word from the target keyword (e.g. website design near me → website). Unrelated words like Cafe are ignored.
                 </span>
               </label>
             </div>
-            <div>
-              <SearchSelect
-                label="Select locations"
-                required={contentKind === 'page'}
-                multi
-                selected={extraLocations}
-                onToggle={toggleExtraLocation}
-                value={form.base_location}
-                onChange={(v) => updateForm((f) => ({ ...f, base_location: v }))}
-                options={baseCityOptions}
-                remoteSearch={fetchCityOptions}
-                maxResults={50}
-                placeholder={contentKind === 'post'
-                  ? 'Optional — search and click cities to add several'
-                  : 'Search and click every city — e.g. Chula Vista, CA then Oceanside, CA'}
-              />
-              <p className="text-[10px] mt-1" style={{ color: 'var(--text-4)' }}>
-                {extraLocations.length
-                  ? `${extraLocations.length} selected — generate will use only these places (no auto-fill).`
-                  : contentKind === 'post'
-                    ? 'Optional for blog. Leave blank for a national topic, or pick cities for one post each.'
-                    : 'Pick one or more cities. The nearby slider is used only if you have not selected any.'}
-              </p>
-              {nearbyError && (
-                <div className="mt-1.5 text-[10px]" style={{ color: 'var(--red)' }}>{nearbyError}</div>
-              )}
-              <div className="mt-3">
-                <div className="flex justify-between items-center mb-2">
-                  <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-3)' }}>
-                    {extraLocations.length > 0 ? 'Selected locations' : 'How many locations'}
-                  </label>
-                  <span className="text-sm font-bold" style={{ color: 'var(--brand)' }}>
-                    {extraLocations.length > 0 ? extraLocations.length : form.num_cities}
-                    {extraLocations.length > 0 ? ' selected' : ''}
-                  </span>
-                </div>
-                {extraLocations.length === 0 && (
-                <input
-                  type="range"
-                  min="1"
-                  max="250"
-                  value={Math.min(250, Math.max(1, form.num_cities))}
-                  onChange={(e) => updateForm((f) => ({ ...f, num_cities: Number(e.target.value) }))}
-                  className="w-full accent-indigo-500"
-                />
-                )}
-              </div>
+            <div className="scale-tips">
+              <p className="text-xs font-bold mb-1" style={{ color: '#5b21b6' }}>Tips for better results</p>
+              <ul>
+                <li><Check size={14} /> Use your main service keyword</li>
+                <li><Check size={14} /> Be specific with your industry</li>
+                <li><Check size={14} /> Choose relevant images</li>
+                <li><Check size={14} /> Select all locations you want pages for</li>
+              </ul>
+              <div className="scale-quote">“Local pages can increase organic traffic by up to 300%.” <span style={{ color: '#7c3aed', fontWeight: 700 }}>— SEO Best Practice</span></div>
             </div>
             {error && (
               <div
@@ -1773,71 +1930,176 @@ export default function ContentPage() {
 
             <button
               type="submit"
-              disabled={
-                loading || !!asyncJobId
-                || !(form.business_type || '').trim()
-                || !targetKeywords.length
-                || (contentKind === 'page' && !extraLocations.length && !(form.base_location || '').trim())
-              }
-              className="btn-primary w-full py-2.5 rounded-lg text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
+              disabled={loading || !!asyncJobId}
+              className="scale-gen"
             >
               {loading || asyncJobId
-                ? <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.2)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/></svg>Generating…</>
-                : <><Zap size={14} />{
-                  contentKind === 'post'
-                    ? (extraLocations.length
-                      ? `Generate ${extraLocations.length} posts`
-                      : ((form.base_location || '').trim()
-                        ? `Generate ${form.num_cities || 1} posts`
-                        : 'Generate post'))
-                    : `Generate ${extraLocations.length || form.num_cities || 1} pages`
-                }</>}
+                ? <>Generating…</>
+                : <>
+                  {contentKind === 'post'
+                    ? (extraLocations.length ? `Generate ${extraLocations.length} posts` : 'Generate Blog Posts')
+                    : 'Generate Location Pages'}
+                  <ArrowRight size={16} />
+                </>}
             </button>
-            <p className="text-[10px] text-center" style={{ color: 'var(--text-3)' }}>
-              Backend fills intent, problem, FAQs, and tone. Locations below 90% are generated again right away until they pass — then all results are shown.
+            <p className="text-[10px] text-center mt-2" style={{ color: 'var(--text-3)' }}>
+              {contentKind === 'post'
+                ? 'Keyword is required. Cities are optional for blogs.'
+                : 'Add at least one city on the right, then generate.'}
             </p>
           </form>
         </div>
 
-        <div id="target-locations-panel" className="card p-5 lg:col-span-2">
-          <h4 className="text-sm font-semibold mb-1 flex items-center justify-between gap-2" style={{ color: 'var(--text-1)' }}>
-            <span className="inline-flex items-center gap-2">
-              <Globe size={14} style={{ color: 'var(--brand)' }} />
-              Locations — cities, streets &amp; counties
-            </span>
-            {extraLocations.length > 0 && (
-              <span className="inline-flex gap-2">
-                <button type="button" className="text-[11px]" style={{ color: 'var(--brand)' }}
-                  onClick={() => navigator.clipboard.writeText(extraLocations.join(', '))}>Copy</button>
-                <button type="button" className="text-[11px]" style={{ color: 'var(--red)' }}
-                  onClick={() => setExtraLocations([])}>Clear</button>
-              </span>
-            )}
+        <div id="target-locations-panel" className={`scale-card${fieldErrors.location ? ' loc-panel-error' : ''}`}>
+          <h4 className="text-base font-semibold mb-1 flex items-center justify-between gap-2" style={{ color: 'var(--text-1)' }}>
+            <span>Locations</span>
+            <span className="text-[11px] font-medium" style={{ color: 'var(--brand)' }}>View on map</span>
           </h4>
-          <p className="text-[12px] mb-3 leading-relaxed" style={{ color: 'var(--text-4)' }}>
+          <p className="text-[12px] mb-4" style={{ color: 'var(--text-4)' }}>
             {contentKind === 'post'
-              ? <>Locations are <strong>optional</strong> for blog. Set a base and pin <strong>cities</strong>, <strong>streets</strong>, or <strong>counties</strong> only if you want place-tied posts. Otherwise leave blank — body still follows your keyword query.</>
-              : <>Click cities to select several. County filter reloads local areas and streets — click again to deselect.</>}
+              ? 'Optional for blogs. Type a city and click Add, or skip and generate from the keyword.'
+              : 'Type a city and click Add. That list is what gets generated.'}
           </p>
-          <div className="flex flex-col gap-2 mb-3">
-            <div className="flex flex-col sm:flex-row gap-1.5">
-              <select
-                value={countyPick}
-                onChange={(e) => {
-                  const v = e.target.value
-                  setCountyPick(v)
-                  setSdPick('All cities')
-                  setSdFilter('')
-                  updateForm((f) => ({ ...f, base_location: `${v}, CA` }))
-                }}
-                className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--border)', color: 'var(--text-1)' }}
+          <div className="loc-field mb-4">
+            <span className="loc-lbl">Search location {contentKind === 'page' ? <span className="loc-req">Required</span> : <span className="text-[10px] font-medium" style={{ color: 'var(--text-4)' }}>Optional</span>}</span>
+            <div className="loc-row">
+              <div className="relative flex-1">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-4)' }} />
+                <input type="text" value={extraLocDraft}
+                  onChange={e => { setExtraLocDraft(e.target.value); if (locHint) setLocHint('') }}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addExtraLocation() } }}
+                  placeholder="e.g. Chula Vista, CA"
+                  className="w-full rounded-lg pl-8 pr-3 text-sm"
+                  style={{ background: '#fff', border: fieldErrors.location || locHint ? '1px solid #FCA5A5' : '1px solid var(--border-bright)', height: 42 }} />
+              </div>
+              <button type="button" onClick={() => addExtraLocation()}
+                className="px-4 rounded-lg text-sm font-semibold text-white flex-shrink-0"
+                style={{ background: 'linear-gradient(90deg,#6366f1,#7c3aed)', height: 42 }}>
+                Add
+              </button>
+            </div>
+            {locHint ? <p className="field-err">{locHint}</p> : null}
+            {fieldErrors.location && !locHint ? <p className="field-err">{fieldErrors.location}</p> : null}
+          </div>
+          <div className="scale-map mb-3">
+            <LocationMap places={extraLocations} city={extraLocations[0] || form.base_location || 'San Diego, CA'} />
+            {extraLocations.length > 0 && (
+              <div className="scale-map-pop">
+                {(extraLocations[0] || '').split(',')[0]}
+                <small>{extraLocations.length} selected</small>
+              </div>
+            )}
+          </div>
+          <details className="mb-4 text-[12px]" style={{ color: 'var(--text-3)' }}>
+            <summary className="cursor-pointer font-medium py-1">Browse city catalog</summary>
+            <SearchSelect
+            label="City catalog"
+            hidePicked
+            required={false}
+            multi
+            selected={extraLocations}
+            onToggle={toggleExtraLocation}
+            value={form.base_location}
+            onChange={(v) => updateForm((f) => ({ ...f, base_location: v }))}
+            options={baseCityOptions}
+            remoteSearch={fetchCityOptions}
+            maxResults={50}
+            placeholder="Type a city name"
+            hint=""
+          />
+          </details>
+          {nearbyError && (
+            <div className="mb-3 text-[12px]" style={{ color: 'var(--red)' }}>{nearbyError}</div>
+          )}
+          <details className="mb-3 text-[12px]" style={{ color: 'var(--text-3)' }}>
+            <summary className="cursor-pointer font-medium py-2">Browse counties, cities, and streets</summary>
+          <div className="loc-toolbar mb-3 mt-2">
+            <div className="loc-field" ref={countyMenuRef}>
+              <span className="loc-lbl">County</span>
+              <button
+                type="button"
+                onClick={() => setCountyMenuOpen((o) => !o)}
+                className="w-full bg-white border rounded-lg px-3 text-sm text-left flex items-center justify-between gap-2"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-1)', height: 42 }}
+                aria-haspopup="listbox"
+                aria-expanded={countyMenuOpen}
                 aria-label="County"
               >
-                {(countyOptions.length ? countyOptions : [{ name: 'San Diego County' }]).map((c) => (
-                  <option key={c.name} value={c.name}>{c.name}</option>
-                ))}
-              </select>
+                <span className="truncate">{countySummary}</span>
+                <ChevronDown size={14} className={countyMenuOpen ? 'rotate-180' : ''} style={{ color: 'var(--text-3)' }} />
+              </button>
+              {countyMenuOpen && (
+                <div
+                  className="absolute z-30 mt-1 w-full min-w-[16rem] bg-white border rounded-xl shadow-lg overflow-hidden"
+                  style={{ borderColor: 'var(--border)' }}
+                  role="listbox"
+                  aria-multiselectable="true"
+                >
+                  <div className="p-2 border-b" style={{ borderColor: 'var(--border)' }}>
+                    <input
+                      type="search"
+                      value={countyQuery}
+                      onChange={(e) => setCountyQuery(e.target.value)}
+                      placeholder="Search counties"
+                      className="w-full bg-white border rounded-lg px-2.5 py-1.5 text-sm"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text-1)' }}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="max-h-56 overflow-y-auto py-1">
+                    {countyVisible.map((c) => {
+                      const checked = countyPicks.some((x) => locKey(x) === locKey(c.name))
+                      return (
+                        <label
+                          key={c.name}
+                          className="flex items-center gap-2 px-2.5 py-1.5 text-sm cursor-pointer"
+                          style={{
+                            background: checked ? 'var(--brand-soft, #eef2ff)' : 'transparent',
+                            color: 'var(--text-1)',
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleCountyPick(c.name)}
+                            className="rounded border"
+                            style={{ accentColor: 'var(--brand, #4f46e5)' }}
+                          />
+                          <span className="flex-1 truncate">{c.name}</span>
+                          {checked ? <Check size={14} style={{ color: 'var(--brand)' }} /> : null}
+                        </label>
+                      )
+                    })}
+                    {!countyVisible.length && (
+                      <p className="px-3 py-2 text-xs" style={{ color: 'var(--text-4)' }}>No matching counties</p>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between gap-2 px-2.5 py-2 border-t text-[11px]" style={{ borderColor: 'var(--border)', color: 'var(--text-3)' }}>
+                    <span>{countyPicks.length} selected</span>
+                    <button
+                      type="button"
+                      className="font-semibold"
+                      style={{ color: 'var(--brand)' }}
+                      onClick={() => {
+                        setCountyPicks((prev) => {
+                          const next = [...prev]
+                          countyVisible.forEach((c) => {
+                            if (!next.some((x) => locKey(x) === locKey(c.name))) next.push(c.name)
+                          })
+                          updateForm((f) => ({ ...f, base_location: asCountyLabel(next[0]) }))
+                          return next
+                        })
+                        setSdPick('All cities')
+                      }}
+                    >
+                      Check visible
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="loc-field">
+              <span className="loc-lbl">City</span>
               <select
                 value={sdPick}
                 onChange={(e) => {
@@ -1847,142 +2109,132 @@ export default function ContentPage() {
                   updateForm((f) => ({
                     ...f,
                     base_location: v === 'Unincorporated' || v === 'All cities'
-                      ? `${countyPick}, CA`
+                      ? asCountyLabel(countyPicks[0])
                       : `${v}, CA`,
                   }))
                 }}
-                className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--border)', color: 'var(--text-1)' }}
-                aria-label="City in county"
+                className="w-full bg-white border rounded-lg px-3 text-sm"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-1)', height: 42 }}
+                aria-label="City"
               >
-                <option value="All cities">All cities in {countyPick.replace(/ County$/i, '')}</option>
+                <option value="All cities">
+                  All cities in {countyPicks.length <= 1
+                    ? (countyPicks[0] || 'San Diego County').replace(/ County$/i, '')
+                    : `${countyPicks.length} counties`}
+                </option>
                 {sdCityNames.map((n) => <option key={n} value={n}>{n}</option>)}
                 <option value="Unincorporated">Unincorporated</option>
               </select>
-              <div className="crm-seg" role="tablist" aria-label="Cities, local areas, or streets">
+            </div>
+            <div className="loc-field loc-field-wide">
+              <span className="loc-lbl">Place type</span>
+              <div className="crm-seg" role="tablist" aria-label="Place type">
                 <button type="button" aria-pressed={sdLayer === 'cities'} onClick={() => { setSdLayer('cities'); setSdFilter('') }}>Cities</button>
                 <button type="button" aria-pressed={sdLayer === 'areas'} onClick={() => { setSdLayer('areas'); setSdFilter('') }}>Local areas</button>
                 <button type="button" aria-pressed={sdLayer === 'streets'} onClick={() => { setSdLayer('streets'); setSdFilter('') }}>Streets</button>
               </div>
             </div>
-            <div className="flex gap-1.5">
+            <div className="loc-field" style={{ gridColumn: '1 / 2' }}>
+              <span className="loc-lbl">Filter {sdLayer === 'streets' ? 'streets' : sdLayer === 'cities' ? 'cities' : 'local areas'}</span>
               <input
                 type="search"
                 value={sdFilter}
                 onChange={(e) => setSdFilter(e.target.value)}
                 placeholder={
-                  sdLayer === 'streets'
-                    ? 'Search any street…'
-                    : sdLayer === 'cities'
-                      ? 'Search any city…'
-                      : 'Search any community / locality…'
+                  sdLayer === 'streets' ? 'Search streets' : sdLayer === 'cities' ? 'Search cities' : 'Search local areas'
                 }
-                className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--border)', color: 'var(--text-1)' }}
+                className="w-full bg-white border rounded-lg px-3 text-sm"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-1)', height: 42 }}
               />
-              <button
-                type="button"
-                disabled={!sdItems.length}
-                onClick={() => addSdItems(sdItems)}
-                className="px-3 py-2 rounded-lg text-xs font-semibold text-white flex-shrink-0 disabled:opacity-50"
-                style={{ background: 'var(--brand, #4f46e5)' }}
-              >
-                Add all {sdItems.length}
-              </button>
             </div>
-            <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>
-              Showing {sdLayer === 'streets' ? 'streets' : sdLayer === 'cities' ? 'cities' : 'local areas'} in <strong>{countyPick}</strong>
-              {sdPick && sdPick !== 'All cities' ? <> · {sdPick}</> : null}
-            </p>
-            <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto" key={`${countyPick}-${sdPick}-${sdLayer}`}>
+            <div className="loc-field" style={{ justifyContent: 'flex-end' }}>
+              <span className="loc-lbl">Bulk add</span>
+              <div className="loc-row">
+                <button
+                  type="button"
+                  disabled={!sdItems.length}
+                  onClick={() => addSdItems(sdItems)}
+                  className="flex-1 px-3 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
+                  style={{ background: 'var(--brand, #4f46e5)', height: 42 }}
+                >
+                  Add all {sdItems.length}
+                </button>
+                <button
+                  type="button"
+                  onClick={pinSelectedCounties}
+                  className="flex-1 px-3 rounded-lg text-xs font-semibold"
+                  style={{
+                    color: 'var(--brand)',
+                    background: 'var(--brand-soft, #eef2ff)',
+                    border: '1px solid var(--border)',
+                    height: 42,
+                  }}
+                >
+                  Add {countyPicks.length} count{countyPicks.length === 1 ? 'y' : 'ies'}
+                </button>
+              </div>
+            </div>
+          </div>
+          <p className="text-[11px] mb-3" style={{ color: 'var(--text-4)' }}>
+            Showing {sdLayer === 'streets' ? 'streets' : sdLayer === 'cities' ? 'cities' : 'local areas'} in {countySummary}
+            {sdPick && sdPick !== 'All cities' ? <> · {sdPick}</> : null}
+          </p>
+          <div className="loc-field mb-3">
+            <span className="loc-lbl">Available {sdLayer === 'streets' ? 'streets' : sdLayer === 'cities' ? 'cities' : 'local areas'}</span>
+            <div className="loc-picks" key={`${countyPicks.join('|')}-${sdPick}-${sdLayer}`}>
               {sdItems.slice(0, 80).map((name, i) => (
                 <button
                   key={`${sdLayer}-${name}-${i}`}
                   type="button"
                   onClick={() => toggleExtraLocation(name)}
-                  className="text-[11px] px-2 py-0.5 rounded font-medium"
-                  style={{
-                    background: extraLocations.some((x) => locKey(x) === locKey(name)) ? '#ecfdf5' : '#fff',
-                    border: '1px solid var(--border)',
-                    color: 'var(--text-2)',
-                  }}
+                  className={extraLocations.some((x) => locKey(x) === locKey(name)) ? 'is-on' : ''}
                 >
                   {name}
                 </button>
               ))}
               {sdItems.length > 80 && (
-                <span className="text-[11px]" style={{ color: 'var(--text-4)' }}>+{sdItems.length - 80} more</span>
+                <span className="text-[11px] self-center" style={{ color: 'var(--text-4)' }}>+{sdItems.length - 80} more</span>
               )}
             </div>
-            <div className="flex gap-1.5">
-              <input type="text" value={extraLocDraft}
-                onChange={e => setExtraLocDraft(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addExtraLocation() } }}
-                placeholder="Or type / paste City, State, ZIP (e.g. 91910) and press Add"
-                className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--border)', color: 'var(--text-1)' }} />
-              <button type="button" onClick={() => addExtraLocation()}
-                className="px-3 py-2 rounded-lg text-xs font-semibold text-white flex-shrink-0"
-                style={{ background: 'var(--brand, #4f46e5)' }}>
-                Add
-              </button>
-            </div>
           </div>
+          </details>
           {extraLocations.length > 0 && (
-            <div className="mb-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-3)' }}>
-                Pinned for generate ({extraLocations.length})
-              </p>
-              <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+            <div>
+              <div className="loc-lbl" style={{ justifyContent: 'space-between' }}>
+                Selected locations ({extraLocations.length})
+                <button type="button" className="text-[12px] font-semibold" style={{ color: 'var(--brand)' }}
+                  onClick={() => setExtraLocations([])}>Clear all</button>
+              </div>
+              <div className="loc-picks">
                 {extraLocations.map(loc => (
-                  <span key={`extra-${loc}`}
-                    className="text-[11px] px-2 py-0.5 rounded font-semibold inline-flex items-center gap-1"
-                    style={{ background: '#ecfdf5', border: '1px solid #059669', color: '#065f46' }}>
+                  <span key={`extra-${loc}`} className="scale-chip">
                     {loc}
-                    <button type="button" onClick={() => removeExtraLocation(loc)} aria-label={`Remove ${loc}`}
-                      className="leading-none opacity-70 hover:opacity-100">×</button>
+                    <button type="button" onClick={() => removeExtraLocation(loc)} aria-label={`Remove ${loc}`}>×</button>
                   </span>
                 ))}
               </div>
             </div>
           )}
-          {extraLocations.length === 0 && (
-          <>
-          <p className="text-[10px] mb-2" style={{ color: 'var(--text-3)' }}>
-            Auto-fill preview (cities / counties / streets from base — fills remaining slots up to {form.num_cities || 1}):
-          </p>
-          <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+          {extraLocations.length === 0 && nearbyCities.length > 0 && (
+          <div className="loc-field">
+            <span className="loc-lbl">Nearby suggestions</span>
+          <div className="loc-picks">
             {nearbyCities.slice(0, 40).map((c) => {
               const kind = c.kind || 'city'
               const label = `${c.name}${c.state ? `, ${c.state}` : ''}`
-              const style = kind === 'area'
-                ? { background: '#ecfdf5', border: '1px solid #059669', color: '#065f46' }
-                : kind === 'street'
-                  ? { background: '#fff7ed', border: '1px solid #ea580c', color: '#9a3412' }
-                  : kind === 'county'
-                    ? { background: '#eff6ff', border: '1px solid #2563eb', color: '#1e40af' }
-                  : { background: '#f8fafc', border: '1px solid #64748b', color: '#0f172a' }
               return (
                 <button
                   key={`near-${c.name}-${c.state}-${kind}`}
                   type="button"
                   onClick={() => toggleExtraLocation(label)}
-                  className="text-[11px] px-2 py-0.5 rounded font-semibold"
-                  style={style}
                   title="Click to pin"
                 >
-                  {kind !== 'city' && (
-                    <span className="uppercase text-[9px] mr-1" style={{ opacity: 0.85, fontWeight: 800 }}>{kind}</span>
-                  )}
-                  {label}
+                  {kind !== 'city' ? `${kind}: ${label}` : label}
                 </button>
               )
             })}
-            {!nearbyCities.length && !nearbyError && form.base_location.trim() && (
-              <span className="text-xs" style={{ color: 'var(--text-3)' }}>Looking up nearby places…</span>
-            )}
           </div>
-          </>
+          </div>
           )}
         </div>
       </div>
@@ -2188,6 +2440,15 @@ export default function ContentPage() {
             </tbody>
           </table>
           </div>
+        </div>
+      )}
+
+      {pages.length > 0 && (
+        <div className="scale-stats">
+          <div className="scale-stat"><strong>{pages.length}</strong><span>Pages Generated</span></div>
+          <div className="scale-stat"><strong>{(pages.length * 0.7).toFixed(1)}K</strong><span>Estimated Monthly Traffic</span></div>
+          <div className="scale-stat"><strong>{extraLocations.length || pages.length}</strong><span>Locations Covered</span></div>
+          <div className="scale-stat"><strong>~{Math.max(2, pages.length)} min</strong><span>Time to Generate</span></div>
         </div>
       )}
 

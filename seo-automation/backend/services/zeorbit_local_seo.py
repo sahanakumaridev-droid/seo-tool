@@ -444,18 +444,19 @@ def pick_search_intent(
     brief: str = "",
     keywords: Optional[Sequence[str]] = None,
 ) -> SearchIntent:
+    webby = keywords_imply_website_not_app(keywords, brief)
     forced = detect_intent_from_brief(brief, keywords or [])
+    if forced == "mobile_app" and webby:
+        forced = None
     if forced:
         for intent in SEARCH_INTENTS:
             if intent.id == forced:
                 return intent
-    # Rotate intents so many locations are not the same article shape.
-    # Prefer industry_local every 3rd page when an industry is set.
-    if industry and index % 3 == 2:
+    # Do not rotate into Healthcare / industry_local when the keyword is website design.
+    if industry and index % 3 == 2 and not webby:
         return next(i for i in SEARCH_INTENTS if i.id == "industry_local")
     pool = [i for i in SEARCH_INTENTS if i.id != "industry_local"]
-    # Never stamp a Mobile App title onto website-design keyword campaigns.
-    if keywords_imply_website_not_app(keywords, brief):
+    if webby:
         pool = [i for i in pool if i.id != "mobile_app"]
     if not pool:
         pool = [i for i in SEARCH_INTENTS if i.id == "discovery"]
@@ -489,6 +490,7 @@ def title_from_primary_keyword(
     """
     raw = re.sub(r"\s+", " ", (primary_keyword or "").strip())
     city_l = (city or "").strip()
+    raw = strip_other_places_from_phrase(raw, city_l)
     raw = strip_trailing_place(raw, city_l)
 
     if not raw:
@@ -986,6 +988,33 @@ def collapse_repeated_place(text: str, city: str) -> str:
     return out.strip(" ,-|")
 
 
+_OTHER_PLACE_RE = re.compile(
+    r"\b(san diego|chula vista|carlsbad|oceanside|escondido|el cajon|la mesa|"
+    r"national city|vista|san marcos|encinitas|poway|santee|imperial beach|"
+    r"coronado|del mar|solana beach|lemon grove|spring valley|bonita|"
+    r"los angeles|orange county|riverside|temecula|san marcos)\b",
+    re.I,
+)
+
+
+def strip_other_places_from_phrase(text: str, keep_city: str = "") -> str:
+    """Drop extra city/metro words so we do not title 'Web Design San Diego in Chula Vista'."""
+    out = re.sub(r"\s+", " ", (text or "").strip())
+    keep = (keep_city or "").strip().lower()
+    if not out:
+        return out
+
+    def repl(m: re.Match) -> str:
+        hit = m.group(0).lower()
+        if keep and (hit == keep or hit in keep or keep in hit):
+            return m.group(0)
+        return " "
+
+    out = _OTHER_PLACE_RE.sub(repl, out)
+    out = re.sub(r"\s+", " ", out).strip(" ,-|")
+    return out
+
+
 def strip_trailing_place(raw: str, city: str) -> str:
     """Drop a city already sitting on the end of a keyword or title."""
     out = re.sub(r"\s+", " ", (raw or "").strip())
@@ -1001,15 +1030,177 @@ def strip_trailing_place(raw: str, city: str) -> str:
 def clean_seo_title(title: str, city: str, state: str = "") -> str:
     """One location mention, no doubled 'in City'."""
     t = collapse_repeated_place(strip_trailing_place(title or "", city), city)
+    t = strip_other_places_from_phrase(t, city)
     c = (city or "").strip()
     if c and c.lower() not in t.lower():
         tokens = [x for x in re.split(r"[^a-z0-9]+", c.lower()) if len(x) > 2]
         if not tokens or not all(tok in t.lower() for tok in tokens):
-            t = f"{t} in {c}".strip() if t else c
+            if t.rstrip().endswith("?"):
+                t = f"{t.rstrip()} | {c}"
+            else:
+                t = f"{t} in {c}".strip() if t else c
     t = collapse_repeated_place(t, c)
     if len(t) > 78:
         t = t[:75].rstrip(" -,") + "…"
     return t
+
+
+def fit_meta_description(text: str, limit: int = 160) -> str:
+    """Keep a complete sentence (or two) at or under Google's ~160 char meta cap.
+
+    Never mid-word ellipsis or a fake period on a cut-off clause.
+    """
+    raw = re.sub(r"\s+", " ", (text or "").strip())
+    if not raw:
+        return ""
+    truncated = bool(re.search(r"(?:…|\.\.\.)$", raw)) or (
+        raw[-1:] not in ".!?" and bool(re.search(r"\b(what|the|a|an|to|for|and|or|of|with|so|that|know)\s*$", raw, re.I))
+    )
+    raw = re.sub(r"(?:…|\.\.\.)$", "", raw).strip()
+    parts = [s.strip() for s in re.split(r"(?<=[.!?])\s+", raw) if s.strip()]
+    kept: list[str] = []
+    for part in parts:
+        if part[-1:] not in ".!?":
+            truncated = True
+            break
+        cand = " ".join(kept + [part]) if kept else part
+        if len(cand) <= limit:
+            kept.append(part)
+        else:
+            break
+    if truncated and (not kept or len(" ".join(kept)) < 110):
+        return ""
+    return " ".join(kept)
+
+
+_JUNK_META_RE = re.compile(
+    r"(?is)(^\s*answer\s*:|practical decision points|a clear next step|"
+    r"people type [“\"']|straight answer, not a sales page|"
+    r"^looking for\b|^need a trusted\b|^get your free\b|"
+    r"promising an answer to)"
+)
+
+
+def _meta_is_junk(text: str, keyword: str = "") -> bool:
+    raw = (text or "").strip()
+    if not raw:
+        return True
+    if _JUNK_META_RE.search(raw):
+        return True
+    kw = re.sub(r"\s+", " ", (keyword or "").strip().lower())
+    kw_compact = re.sub(r"[^a-z0-9]+", "", kw)
+    if not kw_compact:
+        return False
+    head = re.sub(r"[^a-z0-9]+", "", raw.lower()[:90])
+    # "Answer: Is Restaurant a Cafe? …" is the keyword, not a description.
+    return head.startswith(kw_compact) or (
+        "answer" in head[:12] and kw_compact in head
+    )
+
+
+def meta_needs_rewrite(meta: str, keyword: str = "") -> bool:
+    m = (meta or "").strip()
+    if not m:
+        return True
+    if m.endswith("…") or m.endswith("...") or not re.search(r"[.!?]$", m):
+        return True
+    return _meta_is_junk(m, keyword)
+
+
+def compose_serp_meta(
+    *,
+    keyword: str = "",
+    intro: str = "",
+    city: str = "",
+    business_type: str = "",
+    content_kind: str = "",
+) -> str:
+    """Write a complete ~150–160 character SERP description for the actual query."""
+    place = re.sub(r"\s+", " ", (city or "").strip())
+    loc = f" in {place}" if place else ""
+    loc_end = f" in {place}." if place else "."
+    kw = re.sub(r"\s+", " ", (keyword or "").strip())
+    q = kw.lower().rstrip("?").strip()
+    kind = (content_kind or "").lower()
+
+    def _fit(s: str) -> str:
+        s = re.sub(r"\s+", " ", (s or "").strip())
+        if s and s[-1:] not in ".!?":
+            s += "."
+        fitted = fit_meta_description(s, 160)
+        return fitted if fitted and len(fitted) >= 80 else ""
+
+    m = re.match(r"^is\s+(?:an?\s+)?(.+?)\s+(?:just\s+)?(?:an?\s+)(.+?)$", q)
+    if m:
+        left = m.group(1).strip()
+        right = m.group(2).strip()
+        body = (
+            f"A {left} is not the same as a {right}. "
+            f"Menu, hours, and how guests use each one are different. "
+            f"This guide explains how to tell them apart{loc_end}"
+        )
+        return _fit(body) or body[:157].rsplit(" ", 1)[0] + "."
+
+    m = re.match(r"^what\s+is\s+(?:an?\s+)?(.+)$", q)
+    if m:
+        topic = m.group(1).strip()
+        body = (
+            f"What {topic} means in practice, when it matters, and what to check before you act{loc_end} "
+            f"Plain examples, not jargon."
+        )
+        return _fit(body) or _fit(
+            f"A plain-English definition of {topic}: when it matters and what to do next{loc_end}"
+        )
+
+    if re.match(r"^(how to|how do i|how does)\b", q):
+        body = (
+            f"{kw.rstrip('?')}: the steps that work, what to verify first, and mistakes that waste time{loc_end}"
+        )
+        return _fit(body)
+
+    if re.search(r"\b(vs\.?|versus|difference between)\b", q):
+        body = (
+            f"{kw.rstrip('?')}: a side-by-side look at what actually changes for customers{loc} "
+            f"so you can choose with a clear next step."
+        )
+        return _fit(body)
+
+    intro_one = ""
+    for sent in re.split(r"(?<=[.!?])\s+", re.sub(r"\s+", " ", (intro or "").strip())):
+        if sent and not _meta_is_junk(sent, keyword) and len(sent) >= 50:
+            intro_one = sent
+            break
+    if intro_one:
+        extra = f" Written for searches{loc}." if place and place.lower() not in intro_one.lower() else ""
+        fitted = _fit(intro_one + extra)
+        if fitted and not _meta_is_junk(fitted, keyword):
+            return fitted
+
+    if kind in ("service", "page", "location") or (not q and business_type):
+        return _canned_meta(business_type or "web design", place or "your area")
+
+    topic = kw.rstrip("?") or (business_type or "this topic")
+    body = (
+        f"A useful answer on {topic}: what it is, how to judge it, and what to do next{loc_end} "
+        f"Examples you can check yourself."
+    )
+    return _fit(body) or _canned_meta(business_type or "web design", place or "your area")
+
+
+def _canned_meta(service: str, place: str, limit: int = 160) -> str:
+    loc = re.sub(r"\s+", " ", (place or "your area").strip()) or "your area"
+    variants = [
+        f"ZeOrbit builds a clear, mobile-friendly WordPress or Shopify site in {loc} so visitors can see what you offer and call.",
+        f"Local businesses in {loc} get a fast, easy-to-use website from ZeOrbit with an obvious next step for customers.",
+        f"Get a site in {loc} that works on phones, names your offer, and makes contact simple. ZeOrbit builds WordPress and Shopify.",
+        f"ZeOrbit designs practical websites in {loc}: readable on mobile, easy to contact, ready for search.",
+    ]
+    for v in variants:
+        v = re.sub(r"\s+", " ", v).strip()
+        fitted = fit_meta_description(v, limit)
+        if fitted:
+            return fitted
+    return "ZeOrbit builds a clear website so customers know what you do."
 
 
 def polish_quick_answer(
@@ -1018,30 +1209,43 @@ def polish_quick_answer(
     city: str = "",
     keyword: str = "",
     business_type: str = "",
+    content_kind: str = "",
 ) -> str:
-    """Featured-snippet style line: benefit first, city once, no 'Looking for…' filler."""
-    place = (city or "").strip() or "your area"
-    service = re.sub(r"\s+", " ", (keyword or business_type or "website design").strip())
-    service = strip_trailing_place(service, city) or "website design"
+    """Complete meta under 160 chars. Real description — never a copy of the keyword."""
+    place = (city or "").strip()
     dull = re.compile(
-        r"^(looking for|need a trusted|trusted |get your free|.{0,40} services in )\b",
+        r"^(looking for|need a trusted|need [a-z].{0,80} that actually|trusted |get your free)\b",
         re.I,
     )
-    blob = (intro or "").strip() or (meta or "").strip()
-    blob = collapse_repeated_place(blob, city)
-    sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+", blob) if s.strip()]
-    text = " ".join(sents[:2]).strip() if sents else ""
-    if not text or dull.match(text) or text.lower().count(place.lower()) >= 2:
-        text = (
-            f"Need {service.lower()} that actually brings in calls in {place}? "
-            f"ZeOrbit builds a clear, mobile-friendly WordPress or Shopify site so customers know what you do next."
-        )
-    text = collapse_repeated_place(text, city)
-    if place and place.lower() not in text.lower():
-        text = text.rstrip(" .") + f". Serving {place}."
-    if len(text) > 160:
-        text = text[:157].rstrip(" ,;") + "…"
-    return text
+
+    composed = compose_serp_meta(
+        keyword=keyword,
+        intro=intro,
+        city=city,
+        business_type=business_type,
+        content_kind=content_kind,
+    )
+
+    for blob in ((meta or "").strip(), (intro or "").strip()):
+        blob = collapse_repeated_place(blob, city)
+        if _meta_is_junk(blob, keyword):
+            continue
+        text = fit_meta_description(blob)
+        if not text or len(text) < 90:
+            continue
+        city_hits = text.lower().count(place.lower()) if place else 0
+        if dull.match(text) or city_hits >= 2:
+            continue
+        if place and place.lower() not in text.lower():
+            extra = f" For {place} searches."
+            if len(text.rstrip(" .") + "." + extra) <= 160:
+                text = fit_meta_description(text.rstrip(" .") + "." + extra) or text
+        if len(text) <= 160 and re.search(r"[.!?]$", text) and not _meta_is_junk(text, keyword):
+            return text
+
+    if composed and not _meta_is_junk(composed, keyword):
+        return composed
+    return _canned_meta(business_type or "web design", place or "your area")
 
 
 def ensure_title_names_city(title: str, city: str, state: str = "") -> str:
@@ -1138,21 +1342,9 @@ EXTERNAL_LINK_LINE = (
     "for website and mobile app work in San Diego."
 )
 
-# Highlighted in-body words → third-party profiles ChatGPT/Gemini pull for "best of" lists.
-CITATION_HIGHLIGHTS = (
-    (
-        re.compile(r"\b(website design(?:ing|er|ers)?)\b", re.I),
-        "https://www.designrush.com/agency/profile/zeorbit",
-    ),
-    (
-        re.compile(r"\b(mobile apps?)\b", re.I),
-        "https://www.goodfirms.co/company/zeorbit",
-    ),
-    (
-        re.compile(r"\b(websites?)\b", re.I),
-        "https://www.yelp.com/biz/zeorbit-san-diego-2",
-    ),
-)
+# Directory names stay plain text (AI still sees the brands). Never wrap
+# "website" / "mobile app" as Yelp or GoodFirms — that made titles look spammy.
+CITATION_HIGHLIGHTS = ()
 
 _INTERNAL_LINE_RE = re.compile(
     r"(?:See \[ZeOrbit website design\].*?seo-ppc\)\.?)",
@@ -1577,17 +1769,25 @@ def score_page_quality(
     image = 0.0
     alt_l = (image_alt or "").lower()
     concept_l = (image_concept_text or "").lower()
-    bad_img = ("beach", "hotel", "resort", "skyline", "tourist", "landscape", "picsum", "pipe", "wrench")
-    if image_url and "picsum" not in (image_url or "").lower():
-        image += 4
-    if any(b in alt_l or b in concept_l for b in bad_img):
-        image = 0
-        reasons.append("Image appears tourism/unrelated")
+    url_l = (image_url or "").lower()
+    hosted_ok = bool(url_l) and "picsum" not in url_l and "flickr" not in url_l
+    bad_img = (
+        "tourist destination", "vacation resort", "cruise ship", "national park hike",
+        "picsum", "flickr",
+    )
+    if hosted_ok:
+        image += 6
+    if any(b in alt_l or b in concept_l or b in url_l for b in bad_img):
+        if not hosted_ok:
+            image = 0
+            reasons.append("Image appears tourism/unrelated")
+        else:
+            image = min(image, 6)
     else:
         if any(k in alt_l or k in concept_l for k in ("website", "laptop", "designer", "shopify", "wordpress", "business", "owner", "mockup", "app", "web design")):
-            image += 6
+            image += 4
         image = min(10.0, image)
-    if image < 5:
+    if image < 5 and not hosted_ok:
         reasons.append("Weak image relevance")
 
     # Natural language 5%
@@ -1621,10 +1821,11 @@ def score_page_quality(
     }
     total = sum(breakdown.values())
     # Hard gates from master rule + user floor (90+)
+    image_ok = image >= 5 or hosted_ok
     publishable = (
         factual >= 15
         and local >= 12
-        and image >= 5
+        and image_ok
         and unique >= 7
         and total >= MIN_PUBLISH_SCORE
         and (is_blog or copy_has_zip(zip_blob))
@@ -1649,7 +1850,14 @@ def build_template_page_copy(
 ) -> Dict[str, Any]:
     """Deep, intent-specific template copy when LLM is unavailable."""
     place = place_label(city, state, zip) or (f"{city}, {state}".strip(", ") if state else (city or "your area"))
-    ind = industry or "this business"
+    pk = (pretty_keyword or "").lower()
+    web_topic = bool(re.search(r"website|web design|wordpress|shopify", pk))
+    if web_topic and (not industry or (industry or "").lower() not in pk):
+        ind = "local businesses"
+    else:
+        ind = industry or "local businesses"
+    if web_topic and intent.id == "mobile_app":
+        intent = next(i for i in SEARCH_INTENTS if i.id == "wordpress")
     facts = facts_blurb(index)
     problem = intent.customer_problem
     title = title_from_primary_keyword(pretty_keyword, city, ind, intent, index)

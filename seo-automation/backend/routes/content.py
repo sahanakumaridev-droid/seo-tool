@@ -428,6 +428,7 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             existing_bodies=existing_bodies,
             zip=getattr(city_info, "zip", "") or "",
             image_keyword=getattr(req, "image_keyword", "") or "",
+            blog_format=(getattr(req, "blog_format", None) or "") if (req.content_kind == "post") else "",
             )
         except HTTPException:
             raise
@@ -448,6 +449,7 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
                 keyword_index=keyword_index,
                 zip=getattr(city_info, "zip", "") or "",
                 image_keyword=getattr(req, "image_keyword", "") or "",
+            blog_format=(getattr(req, "blog_format", None) or "") if (req.content_kind == "post") else "",
             )
             extra_attempts = 0
         if extra_attempts:
@@ -461,7 +463,8 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             taken = {normalize_image_key(u) for u in used_featured}
             key = normalize_image_key(block.featured_image_url)
             if key in taken:
-                images = await generate_article_images(
+                try:
+                    images = await generate_article_images(
                     focus,
                     f"{city_info.name}, {city_info.state} {getattr(city_info, 'zip', '') or ''}".strip(),
                     "ZeOrbit",
@@ -476,17 +479,25 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
                 match_query=(getattr(req, "image_keyword", "") or "").strip() or (focus if req.content_kind == "post" else (focus or req.business_type or "")),
                     audience=req.audience or "",
                     image_keyword=(getattr(req, "image_keyword", "") or "").strip(),
-                )
-                if images:
-                    from services.image_service import assign_canonical_images
-                    feat, foot, cleaned = assign_canonical_images(images)
-                    # Never wipe a good image with an empty uniqueness regen
-                    if feat:
-                        block.in_content_images = cleaned
-                        block.featured_image_url = feat
-                        block.footer_image_url = foot
-                    else:
-                        print(f"[Image] uniqueness regen empty for {city_info.name}; keeping prior featured")
+                    )
+                    if images:
+                        from services.image_service import assign_canonical_images
+                        feat, foot, cleaned = assign_canonical_images(images)
+                        if feat and normalize_image_key(feat) not in taken:
+                            block.in_content_images = cleaned
+                            block.featured_image_url = feat
+                            block.footer_image_url = foot
+                    if normalize_image_key(block.featured_image_url or "") in taken:
+                        from services.image_service import unused_featured_url
+                        alt = unused_featured_url(used_featured, seed=city_info.name)
+                        if alt:
+                            block.featured_image_url = alt
+                except Exception as e:
+                    print(f"[Image] uniqueness regen skipped for {city_info.name}: {e}")
+                    from services.image_service import unused_featured_url
+                    alt = unused_featured_url(used_featured, seed=city_info.name)
+                    if alt:
+                        block.featured_image_url = alt
             # Prefer unique featured across pages; body images may reuse after pool stretch
             if block.featured_image_url:
                 used_featured.append(block.featured_image_url)

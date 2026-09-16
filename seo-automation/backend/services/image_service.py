@@ -30,6 +30,11 @@ def normalize_image_key(url: str) -> str:
     return base.lower()
 
 
+def unused_featured_url(exclude_urls: Optional[Iterable[str]] = None, seed: str = "feat") -> str:
+    """Next unused curated photo so locations never silently reuse a featured image."""
+    return _curated_image_url("website design", seed=seed or "feat", exclude=exclude_urls) or ""
+
+
 def assign_canonical_images(images: List["ImageAsset"]) -> tuple:
     """One article → one image set. Featured = first; footer = first distinct non-featured.
 
@@ -325,6 +330,27 @@ _IMAGE_KEYWORD_STOP = {
     "near", "me", "best", "top", "how", "to", "a", "the", "my", "your", "website",
     "site", "page", "pages", "guide", "what", "is", "why",
 }
+
+
+def one_word_image_topic(text: str) -> str:
+    """Single visual search word derived from the target keyword (never a full phrase)."""
+    raw = re.sub(r"[^\w\s]", " ", (text or "").lower())
+    raw = re.sub(r"\s+", " ", raw).strip()
+    stop = {
+        "the", "in", "of", "and", "a", "an", "for", "to", "at", "on", "by", "with",
+        "near", "me", "best", "top", "how", "my", "your", "guide", "what", "is", "why",
+        "when", "that", "this", "from",
+    }
+    prefer = (
+        "wordpress", "shopify", "wix", "squarespace", "website", "web", "design",
+        "seo", "restaurant", "dental", "dentist", "plumber", "hvac", "lawyer",
+        "clinic", "app", "ecommerce",
+    )
+    words = [w for w in raw.split() if w not in stop and len(w) > 2]
+    for p in prefer:
+        if p in words:
+            return p
+    return words[0] if words else "website"
 
 
 def image_keyword_terms(text: str) -> dict:
@@ -1537,13 +1563,12 @@ def _curated_image_url(
 
 
 _OFFTOPIC_STOCK_MARKERS = (
-    "mountain", "mountains", "forest", "beach", "sunset", "sunrise", "ocean wave",
-    "nature landscape", "scenic", "waterfall", "desert dune", "flower field",
-    "wildlife", "snowy peak", "national park", "hiking trail", "autumn leaves",
-    "hotel", "resort", "skyline", "tourist", "tourism", "boardwalk", "cruise",
-    "landmark", "monument", "cathedral exterior", "museum exterior", "airport terminal",
-    # ZeOrbit sells websites — reject common Unsplash false positives
-    "camera", "dslr", "canon eos", "photo studio", "softbox", "tripod", "photographer",
+    # Only hard-reject clearly off-brief photos. Generic words like landscape,
+    # skyline, hotel, beach, mountain appear in normal Unsplash tags and were
+    # throwing away usable business/website images as "not appropriate".
+    "national park", "hiking trail", "waterfall", "desert dune",
+    "cruise ship", "tourist destination", "vacation resort pool",
+    "camera", "dslr", "canon eos", "photo studio", "softbox", "tripod",
     "classroom", "students at desk", "lecture hall", "chalkboard", "blackboard",
     "pipe wrench", "plumbing pipe", "restaurant kitchen food", "chef plating",
     "netflix", "facebook messenger", "messenger logo", "instagram logo",
@@ -1785,19 +1810,20 @@ async def generate_article_images(
         w for w in re.findall(r"[a-zA-Z]+", (location or "").lower()) if len(w) > 2
     }
     is_blog = (content_type or "").lower() in ("blog", "post")
-    seed_query = (image_keyword or match_query or focus_keyword or niche or industry or "").strip()
+    derived = one_word_image_topic(image_keyword or match_query or focus_keyword or niche or "")
+    ik = (image_keyword or "").strip()
+    seed = f"{match_query or ''} {focus_keyword or ''}".lower()
+    if not ik or len(ik.split()) > 2 or (ik.lower() not in seed and derived not in ik.lower()):
+        ik = derived
+    else:
+        ik = one_word_image_topic(ik) or derived
+    seed_query = ik
     plan = blog_image_plan(seed_query, niche=f"{niche or ''} {industry or ''}")
-    topic = plan["topic"]
-    modifiers = list(plan["modifiers"] or [])
-    fallback_topic = plan["category"]
-    visual_fam = topic_image_family(f"{seed_query} {industry or ''} {niche or ''}")
-    if (image_keyword or "").strip():
-        ik = image_keyword.strip()
-        topic = ik
-        modifiers = [ik, f"{ik} workplace", f"{ik} professional", f"{ik} studio", f"{ik} close up"]
-        fallback_topic = ik
-        visual_fam = topic_image_family(ik)
-    elif visual_fam == "healthcare":
+    topic = ik
+    modifiers = [ik, f"{ik} professional", f"{ik} workplace", f"{ik} close up", f"{ik} business"]
+    fallback_topic = ik
+    visual_fam = topic_image_family(f"{ik} {industry or ''} {niche or ''}")
+    if visual_fam == "healthcare" and ik not in {"website", "web", "design", "wordpress", "shopify"}:
         topic = plan["topic"] if plan.get("category") == "healthcare" else "doctor clinic medical office"
         modifiers = [
             "doctor with patient",
