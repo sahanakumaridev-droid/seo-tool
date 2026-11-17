@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search } from 'lucide-react'
-import { getLeads, getLeadStats, updateLeadStatus } from '../api'
+import { Plus, Search, Sparkles, FileText, Images, Zap, Settings } from 'lucide-react'
+import { getLeads, getLeadStats, updateLeadStatus, listPages } from '../api'
 import useProjectInfo from '../hooks/useProjectInfo'
 
 const STAGES = [
@@ -36,17 +36,23 @@ export default function DashboardPage() {
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [savedPages, setSavedPages] = useState([])
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       setLoading(true)
       try {
-        const [leadsRes, statsRes] = await Promise.all([getLeads(), getLeadStats()])
+        const [leadsRes, statsRes, pagesRes] = await Promise.all([
+          getLeads(),
+          getLeadStats(),
+          listPages(0, 250).catch(() => ({ data: [] })),
+        ])
         if (cancelled) return
         const rows = Array.isArray(leadsRes.data) ? leadsRes.data : []
         setLeads(rows)
         setStats(statsRes.data || {})
+        setSavedPages(Array.isArray(pagesRes.data) ? pagesRes.data : [])
       } catch {
         if (!cancelled) {
           setLeads([])
@@ -84,8 +90,147 @@ export default function DashboardPage() {
   const closed = stats.by_status?.closed || 0
   const total = stats.total || leads.length || 0
 
+  const articles = useMemo(() => {
+    return savedPages.filter((row) => {
+      const kind = String(row?.seo_block?.content_type || '').toLowerCase()
+      return kind === 'blog' || kind === 'post'
+    })
+  }, [savedPages])
+  const imageCount = savedPages.filter((row) => row?.seo_block?.featured_image_url).length
+  const month = new Date().getMonth()
+  const year = new Date().getFullYear()
+  const thisMonth = savedPages.filter((row) => {
+    const created = row?.created_at ? new Date(row.created_at) : null
+    return created && created.getMonth() === month && created.getFullYear() === year
+  }).length
+
+  const brand = project.business_name || 'ZeOrbit'
+  const [topics, setTopics] = useState(() => [
+    { id: 'guide', title: `${brand}: A Practical Beginner's Guide`, tag: 'guide', blurb: 'Built from the site topic, with a direct answer, sections, and a short reference list.' },
+    { id: 'choose', title: `How to Choose the Right ${brand} Option`, tag: 'comparison', blurb: 'A comparison article for people close to picking a service.' },
+    { id: 'mistakes', title: `${brand} Mistakes to Avoid`, tag: 'mistakes', blurb: 'A high-engagement list of mistakes, written for this niche.' },
+  ])
+
+  const startTopic = (topic) => {
+    try {
+      sessionStorage.setItem('seo_keywords', JSON.stringify([topic.title.toLowerCase()]))
+      sessionStorage.setItem('seo_content_kind', 'post')
+    } catch { /* ignore */ }
+    navigate('/content')
+  }
+
   return (
     <div className="crm-page fade-in">
+      <div style={{ background: '#0e1117', color: '#fff', borderRadius: 20, padding: 18, display: 'grid', gap: 16 }}>
+        <div style={{ background: 'linear-gradient(90deg, #7c5cff, #d946ef)', borderRadius: 18, padding: '26px 26px 22px' }}>
+          <h1 style={{ margin: 0, fontSize: 32, letterSpacing: '-0.03em' }}>Welcome to the SEO Tool</h1>
+          <p style={{ margin: '8px 0 16px', maxWidth: 640, color: 'rgba(255,255,255,.92)' }}>
+            Generate high-quality, SEO-optimized content with AI-powered research, images, and WordPress publishing.
+          </p>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Main option — choose what to generate</div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button type="button" onClick={() => { try { sessionStorage.setItem('seo_content_kind', 'page') } catch { /* ignore */ } navigate('/content') }} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#fff', color: '#1c305c', border: 0, borderRadius: 12, padding: '12px 16px', fontWeight: 700, cursor: 'pointer', textAlign: 'left' }}>
+              <FileText size={16} />
+              <span>Page<br /><span style={{ fontWeight: 500, fontSize: 12 }}>Service and location pages</span></span>
+            </button>
+            <button type="button" onClick={() => { try { sessionStorage.setItem('seo_content_kind', 'post') } catch { /* ignore */ } navigate('/content') }} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#1c305c', color: '#fff', border: 0, borderRadius: 12, padding: '12px 16px', fontWeight: 700, cursor: 'pointer', textAlign: 'left' }}>
+              <Sparkles size={16} />
+              <span>Post / Blog<br /><span style={{ fontWeight: 500, fontSize: 12, color: 'rgba(255,255,255,.8)' }}>How-to articles</span></span>
+            </button>
+          </div>
+        </div>
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            ['Generated Articles', String(articles.length), FileText, ''],
+            ['Images Created', String(imageCount), Images, ''],
+            ['Free API', '8 / hour', Zap, 'Starts over each hour, all day'],
+            ['This Month', String(thisMonth), Sparkles, ''],
+          ].map(([label, value, Icon, hint]) => (
+            <div key={label} style={{ background: '#171b24', border: '1px solid #2a3142', borderRadius: 14, padding: '14px 16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: 13 }}>{label}<Icon size={14} /></div>
+              <div style={{ fontSize: 28, fontWeight: 800, marginTop: 10 }}>{value}</div>
+              {hint ? <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 4 }}>{hint}</div> : null}
+            </div>
+          ))}
+        </div>
+
+        <div style={{ border: '1px solid #2a3142', borderRadius: 16, padding: 16 }}>
+          <div style={{ fontWeight: 700 }}>Your starter topics</div>
+          <p style={{ margin: '4px 0 12px', color: '#94a3b8', fontSize: 13 }}>Click a topic to open the generator with that title ready.</p>
+          <div className="grid md:grid-cols-3 gap-3">
+            {topics.map((topic) => (
+              <div key={topic.id} style={{ background: '#171b24', border: '1px solid #2a3142', borderRadius: 14, padding: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                  <strong>{topic.title}</strong>
+                  <button type="button" aria-label="Dismiss topic" onClick={() => setTopics((list) => list.filter((item) => item.id !== topic.id))} style={{ background: 'none', border: 0, color: '#94a3b8', cursor: 'pointer' }}>×</button>
+                </div>
+                <div style={{ marginTop: 8, fontSize: 11, color: '#c4b5fd' }}>{topic.tag}</div>
+                <p style={{ color: '#94a3b8', fontSize: 13, minHeight: 48 }}>{topic.blurb}</p>
+                <button type="button" onClick={() => startTopic(topic)} style={{ width: '100%', background: '#6d5efc', color: '#fff', border: 0, borderRadius: 8, padding: '8px 10px', fontWeight: 700, cursor: 'pointer' }}>Generate →</button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <h2 style={{ margin: 0, fontSize: 18 }}>Quick Actions</h2>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            ['New Article', 'Generate SEO content', '/content', Sparkles],
+            ['View Content', 'Manage articles', '/posted-blogs', FileText],
+            ['Bulk Generate', 'Create multiple articles', '/articles', Zap],
+            ['Settings', 'Configure integrations', '/integrations', Settings],
+          ].map(([title, sub, to, Icon]) => (
+            <button key={title} type="button" onClick={() => navigate(to)} className="text-left" style={{ background: '#171b24', color: '#fff', borderRadius: 14, padding: 16, border: '1px solid #2a3142' }}>
+              <Icon size={16} color="#a78bfa" />
+              <div style={{ fontWeight: 700, marginTop: 8 }}>{title}</div>
+              <div style={{ fontSize: 13, color: '#94a3b8' }}>{sub}</div>
+            </button>
+          ))}
+        </div>
+
+        <div style={{ border: '1px solid #6d5efc', borderRadius: 16, padding: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+            <strong>Premium Features</strong>
+            <span style={{ fontSize: 12, color: '#c4b5fd' }}>8 articles each hour, then the count starts over. Free all day.</span>
+          </div>
+          <div className="grid md:grid-cols-3 gap-3">
+            {[
+              ['Bulk Generation', 'Generate a batch of articles from one keyword and location.'],
+              ['WordPress Publishing', 'Publish a finished article to your WordPress site in one step.'],
+              ['Free API articles', 'About 8 full articles every hour. When the hour ends, you get another 8. That continues through the day.'],
+            ].map(([title, sub]) => (
+              <div key={title}>
+                <div style={{ fontWeight: 700 }}>{title}</div>
+                <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 4 }}>{sub}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <h2 style={{ margin: 0, fontSize: 18 }}>Recent Activity</h2>
+        <div style={{ background: '#171b24', border: '1px solid #2a3142', borderRadius: 16, padding: 20, minHeight: 180 }}>
+          {articles.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '36px 12px' }}>
+              <FileText size={28} color="#64748b" style={{ margin: '0 auto 10px' }} />
+              <div style={{ color: '#94a3b8', marginBottom: 12 }}>No articles generated yet</div>
+              <button type="button" onClick={() => navigate('/content')} style={{ background: '#1e293b', color: '#fff', border: '1px solid #334155', borderRadius: 8, padding: '8px 14px', cursor: 'pointer' }}>
+                Create Your First Article
+              </button>
+            </div>
+          ) : (
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 8 }}>
+              {articles.slice(0, 5).map((row) => (
+                <li key={row.id || row.slug} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                  <span>{row.seo_block?.title || row.slug}</span>
+                  <span style={{ color: '#94a3b8', fontSize: 12 }}>{row.city || ''}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
       <div className="crm-head">
         <div>
           <h1>{greeting()}, {project.business_name || 'there'}</h1>

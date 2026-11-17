@@ -1,12 +1,15 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
+from auth import get_optional_user
 from db import get_session, PageRecord, PublishedUrlRecord
+from services.post_owner import claim_slug, owner_clause
 from services.content_service import generate_seo_block
 from services.slug_utils import article_slug
 from models.schemas import SEOBlock
 from config import settings
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from typing import List, Optional
 from pydantic import BaseModel
 from urllib.parse import urlparse
@@ -180,6 +183,7 @@ async def list_landing_pages_for_ads(
     skip: int = 0,
     limit: int = 50,
     session: AsyncSession = Depends(get_session),
+    user=Depends(get_optional_user),
 ):
     """
     Published SEO landing pages ready to use as Google Ads final URLs.
@@ -191,7 +195,7 @@ async def list_landing_pages_for_ads(
 
     pages = []
     page_result = await session.execute(
-        select(PageRecord).order_by(PageRecord.created_at.desc()).limit(200)
+        select(PageRecord).where(owner_clause(getattr(user, "email", None))).order_by(PageRecord.created_at.desc()).limit(200)
     )
     for r in page_result.scalars().all():
         block = r.seo_block if isinstance(r.seo_block, dict) else {}
@@ -261,6 +265,7 @@ async def list_landing_pages_for_ads(
 async def publish_to_web(
     block: SEOBlock,
     request: Request,
+    user=Depends(get_optional_user),
     session: AsyncSession = Depends(get_session),
     force: bool = False,
 ):
@@ -268,6 +273,9 @@ async def publish_to_web(
 
     Refuses publish when master quality gates fail unless force=true.
     """
+    import os
+    if os.environ.get("SEO_BLOCK_BLOGS") == "1":
+        raise HTTPException(status_code=404, detail="404")
     from services.publish_pipeline import track_public_publish, maybe_auto_create_ads
     from services.zeorbit_local_seo import MIN_PUBLISH_SCORE, MIN_KEYWORD_USE_SCORE, scores_meet_floor
 
@@ -342,8 +350,8 @@ async def publish_to_web(
     except Exception:
         pass
 
-    result = await session.execute(select(PageRecord).where(PageRecord.slug == slug))
-    existing = result.scalar_one_or_none()
+    slug, existing, owner = await claim_slug(session, slug, getattr(user, "email", None))
+    block.slug = slug
     if not existing:
         from services.page_dedupe import find_duplicate_page
         conflict = await find_duplicate_page(
@@ -364,6 +372,7 @@ async def publish_to_web(
     if existing:
         existing.seo_block = block.model_dump()
         existing.updated_at = datetime.now(timezone.utc)
+        existing.owner_email = owner
     else:
         session.add(PageRecord(
             business_type=block.business_type,
@@ -371,6 +380,7 @@ async def publish_to_web(
             city=block.city,
             state=block.state or "",
             slug=slug,
+            owner_email=owner,
             seo_block=block.model_dump(),
         ))
     await session.commit()
@@ -416,6 +426,7 @@ async def publish_to_web_bulk(
     blocks: List[SEOBlock],
     request: Request,
     session: AsyncSession = Depends(get_session),
+    user=Depends(get_optional_user),
 ):
     """Publish many generated pages to public /p/{slug} URLs in one call."""
     from services.publish_pipeline import track_public_publish, maybe_auto_create_ads
@@ -435,8 +446,8 @@ async def publish_to_web_bulk(
         else:
             block.publish_status = "live"
             block.scheduled_at = None
-        result = await session.execute(select(PageRecord).where(PageRecord.slug == slug))
-        existing = result.scalar_one_or_none()
+        slug, existing, owner = await claim_slug(session, slug, getattr(user, "email", None))
+        block.slug = slug
         if not existing:
             from services.page_dedupe import find_duplicate_page
             conflict = await find_duplicate_page(
@@ -451,11 +462,13 @@ async def publish_to_web_bulk(
         if existing:
             existing.seo_block = block.model_dump()
             existing.updated_at = datetime.now(timezone.utc)
+            existing.owner_email = owner
         else:
             session.add(PageRecord(
                 business_type=block.business_type,
                 base_location=f"{block.city}, {block.state}",
                 city=block.city, state=block.state or "", slug=slug,
+                owner_email=owner,
                 seo_block=block.model_dump(),
             ))
         public_url = f"{base}/{slug}"
@@ -649,6 +662,167 @@ async def save_block(req: SaveBlockRequest, session: AsyncSession = Depends(get_
     saved["applied_globally"] = bool(req.apply_globally)
     return saved
 
+@router.get("/write-stats")
+async def write_stats(
+    session: AsyncSession = Depends(get_session),
+    user=Depends(get_optional_user),
+):
+    """Counts for the Generate blog screen: published, today, this month, crawled, successful."""
+    local = ZoneInfo("America/Los_Angeles")
+    now = datetime.now(local)
+    start_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_yesterday = start_day - timedelta(days=1)
+    start_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    today_label = now.strftime("%b %d").replace(" 0", " ")
+    yesterday_label = start_yesterday.strftime("%b %d").replace(" 0", " ")
+
+    def _when(value):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(local)
+
+    def _on_day(value, start, end):
+        stamp = _when(value)
+        return bool(stamp and start <= stamp < end)
+
+    owned_pages = (await session.execute(
+        select(PageRecord).where(owner_clause(getattr(user, "email", None)))
+    )).scalars().all()
+    owned_slugs = {page.slug for page in owned_pages if page.slug}
+    rows = (await session.execute(select(PublishedUrlRecord))).scalars().all()
+
+    def _owned_url(row) -> bool:
+        path = urlparse(row.url or "").path.strip("/")
+        slug = path.split("/")[-1] if path else ""
+        return bool(slug) and slug in owned_slugs
+
+    live = [r for r in rows if (r.status or "").lower() != "error" and _owned_url(r)]
+
+    def _crawled(row) -> bool:
+        coverage = (row.coverage_state or "").lower()
+        status = (row.status or "").lower()
+        if status in ("crawled", "indexed"):
+            return True
+        return "crawl" in coverage or coverage == "indexed" or "submitted and indexed" in coverage
+
+    if not live:
+        pages = owned_pages
+        blogs = []
+        for page in pages:
+            block = page.seo_block if isinstance(page.seo_block, dict) else {}
+            if block.get("content_html") or (block.get("content_type") or "").lower() in ("blog", "post"):
+                blogs.append(page)
+        return {
+            "published": len(blogs),
+            "today": sum(1 for page in blogs if _on_day(page.created_at, start_day, start_day + timedelta(days=1))),
+            "yesterday": sum(1 for page in blogs if _on_day(page.created_at, start_yesterday, start_day)),
+            "published_today": 0,
+            "published_yesterday": 0,
+            "month": sum(1 for page in blogs if _when(page.created_at) and _when(page.created_at) >= start_month),
+            "today_label": today_label,
+            "yesterday_label": yesterday_label,
+            "month_label": now.strftime("%B"),
+            "timezone": "US Pacific",
+            "crawled": 0,
+            "indexed": 0,
+            "successful": len(blogs),
+        }
+
+    pages = owned_pages
+    written = []
+    for page in pages:
+        block = page.seo_block if isinstance(page.seo_block, dict) else {}
+        if block.get("content_html") or (block.get("content_type") or "").lower() in ("blog", "post"):
+            written.append(page)
+    today_count = sum(1 for page in written if _on_day(page.created_at, start_day, start_day + timedelta(days=1)))
+    yesterday_count = sum(1 for page in written if _on_day(page.created_at, start_yesterday, start_day))
+    month_count = sum(1 for page in written if _when(page.created_at) and _when(page.created_at) >= start_month)
+
+    return {
+        "published": len(live),
+        "today": today_count,
+        "yesterday": yesterday_count,
+        "published_today": sum(1 for row in live if _on_day(row.created_at, start_day, start_day + timedelta(days=1))),
+        "published_yesterday": sum(1 for row in live if _on_day(row.created_at, start_yesterday, start_day)),
+        "month": month_count,
+        "today_label": today_label,
+        "yesterday_label": yesterday_label,
+        "month_label": now.strftime("%B"),
+        "timezone": "US Pacific",
+        "crawled": sum(1 for row in live if _crawled(row)),
+        "indexed": sum(1 for row in live if (row.status or "").lower() == "indexed" or "submitted and indexed" in (row.coverage_state or "").lower() or (row.coverage_state or "").lower() == "indexed"),
+        "successful": sum(1 for row in live if (row.status or "").lower() in ("published", "success", "live", "indexed", "crawled")),
+    }
+
+
+@router.get("/write-calendar")
+async def write_calendar(month: str = "", session: AsyncSession = Depends(get_session)):
+    """One month of clicks, impressions, and pages confirmed indexed."""
+    import asyncio
+    from calendar import monthrange
+    from datetime import date, timedelta
+
+    local = ZoneInfo("America/Los_Angeles")
+    now = datetime.now(local)
+    try:
+        year, mon = [int(part) for part in (month or now.strftime("%Y-%m")).split("-")[:2]]
+        start = date(year, mon, 1)
+    except ValueError:
+        start = now.date().replace(day=1)
+        year, mon = start.year, start.month
+    last_day = monthrange(year, mon)[1]
+    end = date(year, mon, last_day)
+    latest = date.today() - timedelta(days=2)
+    by_date = {}
+    gsc_ok = False
+    if start <= latest:
+        from services.search_console_service import fetch_performance
+        perf = await asyncio.to_thread(
+            fetch_performance,
+            31,
+            start.isoformat(),
+            min(end, latest).isoformat(),
+        )
+        gsc_ok = bool(perf.get("ok"))
+        by_date = {}
+        for row in perf.get("by_date") or []:
+            raw = str(row.get("date") or "")
+            if len(raw) == 8 and raw.isdigit():
+                raw = f"{raw[:4]}-{raw[4:6]}-{raw[6:]}"
+            by_date[raw[:10]] = row
+
+    rows = (await session.execute(select(PublishedUrlRecord))).scalars().all()
+    indexed = {}
+    for row in rows:
+        status = (row.status or "").lower()
+        coverage = (row.coverage_state or "").lower()
+        if status != "indexed" and "submitted and indexed" not in coverage and coverage != "indexed":
+            continue
+        stamp = row.last_inspected_at or row.updated_at or row.created_at
+        if stamp is None:
+            continue
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=timezone.utc)
+        day = stamp.astimezone(local).date()
+        if start <= day <= end:
+            key = day.isoformat()
+            indexed[key] = indexed.get(key, 0) + 1
+
+    days = []
+    for number in range(1, last_day + 1):
+        key = date(year, mon, number).isoformat()
+        stat = by_date.get(key) or {}
+        days.append({
+            "date": key,
+            "clicks": int(stat.get("clicks") or 0),
+            "impressions": int(stat.get("impressions") or 0),
+            "indexed": indexed.get(key, 0),
+        })
+    return {"month": f"{year:04d}-{mon:02d}", "days": days, "gsc_ok": gsc_ok}
+
+
 @router.get("/blog", response_model=dict)
 async def list_blog_posts(
     request: Request,
@@ -685,6 +859,8 @@ async def list_blog_posts(
 
     for r in page_rows:
         block = r.seo_block if isinstance(r.seo_block, dict) else {}
+        if str(block.get("publish_status") or "").lower() == "draft":
+            continue
         if not _is_blog_block(block):
             continue
         title = (block.get("title") or block.get("h1") or r.business_type or "Untitled").strip()
@@ -801,6 +977,7 @@ async def list_posted_blogs(
     skip: int = 0,
     limit: int = 100,
     session: AsyncSession = Depends(get_session),
+    user=Depends(get_optional_user),
 ):
     """Admin list: published URLs on zeorbit.com."""
     limit = max(1, min(limit, 500))
@@ -815,7 +992,7 @@ async def list_posted_blogs(
             status_by_slug[slug] = rec.status or "published"
 
     rows = (await session.execute(
-        select(PageRecord).order_by(PageRecord.updated_at.desc().nullslast(), PageRecord.created_at.desc())
+        select(PageRecord).where(owner_clause(getattr(user, "email", None))).order_by(PageRecord.updated_at.desc().nullslast(), PageRecord.created_at.desc())
     )).scalars().all()
     posts = []
     for r in rows:
@@ -925,11 +1102,12 @@ async def list_pages(
     skip: int = 0,
     limit: int = 20,
     session: AsyncSession = Depends(get_session),
+    user=Depends(get_optional_user),
 ):
     limit = max(1, min(int(limit or 20), 250))
     skip = max(0, int(skip or 0))
     result = await session.execute(
-        select(PageRecord).offset(skip).limit(limit).order_by(PageRecord.created_at.desc())
+        select(PageRecord).where(owner_clause(getattr(user, "email", None))).offset(skip).limit(limit).order_by(PageRecord.created_at.desc())
     )
     rows = result.scalars().all()
     base = _public_base(request)
@@ -954,13 +1132,76 @@ async def get_page(slug: str, session: AsyncSession = Depends(get_session)):
     row = result.scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Page not found")
+    block = row.seo_block if isinstance(row.seo_block, dict) else {}
+    try:
+        meta = (block.get("meta_description") or "").strip()
+        from services.zeorbit_local_seo import polish_quick_answer, meta_needs_rewrite
+        kw = block.get("focus_keyword") or block.get("title") or ""
+        if meta_needs_rewrite(meta, kw):
+            from sqlalchemy.orm.attributes import flag_modified
+            fixed = polish_quick_answer(
+                meta,
+                block.get("intro") or "",
+                row.city or "",
+                kw,
+                row.business_type or "",
+                block.get("content_type") or "",
+            )
+            if fixed and fixed != meta:
+                block = {**block, "meta_description": fixed}
+                row.seo_block = block
+                try:
+                    flag_modified(row, "seo_block")
+                except Exception:
+                    pass
+                await session.commit()
+    except Exception:
+        block = row.seo_block if isinstance(row.seo_block, dict) else {}
+    if isinstance(block, dict) and block.get("content_html"):
+        from routes.blog import _only_opening_image
+        from services.public_page_service import collapse_article_ctas, drop_banned_sections
+        from services.public_page_service import _keyword_in_body
+        keyword = str(block.get("primary_keyword") or block.get("keyword") or block.get("focus_keyword") or block.get("title") or "").split("|")[0]
+        html = collapse_article_ctas(drop_banned_sections(_only_opening_image(block.get("content_html") or "")))
+        from routes.blog import _is_length_template, _pack, _repair_topic, _safe_keyword_draft, _split_html_paragraphs
+        if _is_length_template(html):
+            topic = _repair_topic(keyword, row.city or "", row.state or "")
+            fresh = _pack(_safe_keyword_draft(topic), topic)
+            html = fresh.get("content_html") or html
+            from sqlalchemy.orm.attributes import flag_modified
+            block = {
+                **block,
+                "content_html": html,
+                "title": fresh.get("title") or block.get("title"),
+                "seo_title": fresh.get("seo_title") or block.get("seo_title"),
+                "meta_description": fresh.get("meta_description") or block.get("meta_description"),
+                "keyword": topic,
+            }
+            row.seo_block = block
+            try:
+                flag_modified(row, "seo_block")
+                await session.commit()
+            except Exception:
+                pass
+        split = _split_html_paragraphs(html)
+        if split != html:
+            html = split
+            from sqlalchemy.orm.attributes import flag_modified
+            block = {**block, "content_html": html}
+            row.seo_block = block
+            try:
+                flag_modified(row, "seo_block")
+                await session.commit()
+            except Exception:
+                pass
+        block = {**block, "content_html": _keyword_in_body(html, keyword)}
     return {
         "id": row.id,
         "business_type": row.business_type,
         "city": row.city,
         "state": row.state,
         "slug": row.slug,
-        "seo_block": row.seo_block,
+        "seo_block": block or row.seo_block,
         "public_url": f"{_reader_base()}/{row.slug}",
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }

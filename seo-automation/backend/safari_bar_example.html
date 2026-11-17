@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Open in Safari example</title>
+<style>
+  html, body { margin:0; background:#f5f5f7; }
+  body { font-family:-apple-system,BlinkMacSystemFont,sans-serif; color:#1d1d1f; }
+  article { max-width:390px; margin:0 auto; padding:28px 20px 140px; min-height:100vh; box-sizing:border-box; background:#f5f5f7; }
+  h1 { font-size:28px; letter-spacing:-0.03em; line-height:1.15; margin:0 0 12px; }
+  p { color:#3c4650; line-height:1.5; margin:0 0 12px; }
+</style>
+</head>
+<body>
+<article>
+  <h1>App Development Company</h1>
+  <p>An app development company builds the first version, then keeps it updated after launch.</p>
+  <p>On an iPhone, this bar only appears when the article is open in Chrome or an in-app browser, not when it is already in Safari.</p>
+</article>
+<style>#zoSafari[hidden]{display:none !important;}</style>
+<div id="zoSafari" hidden style="position:fixed;left:50%;transform:translateX(-50%);width:min(366px,calc(100% - 24px));bottom:calc(12px + env(safe-area-inset-bottom));z-index:80;display:flex;align-items:center;gap:12px;padding:12px 12px 12px 14px;border-radius:16px;background:rgba(255,255,255,.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 10px 30px rgba(0,0,0,.16);box-sizing:border-box;">
+  <div style="flex:1;min-width:0;">
+    <div style="font-size:15px;font-weight:650;letter-spacing:-0.02em;">Open in Safari</div>
+    <div style="margin-top:2px;font-size:13px;line-height:1.35;color:#6e6e73;">Easier to read on your iPhone.</div>
+  </div>
+  <button type="button" style="border:0;background:#0071e3;color:#fff;border-radius:999px;padding:8px 14px;font:600 14px/1 -apple-system,BlinkMacSystemFont,sans-serif;">Open</button>
+</div>
+<script>
+(function(){
+  var ua = navigator.userAgent || "";
+  var safari = /Safari/.test(ua) && /Version\//.test(ua) && !/CriOS|FxiOS|EdgiOS|Chrome|Chromium|Firefox|Edg/.test(ua);
+  if (safari) return;
+  var iphone = /iPhone|iPad|iPod/.test(ua);
+  var other = /CriOS|FxiOS|EdgiOS|Chrome|Chromium/.test(ua);
+  if (!iphone && !other) return;
+  document.getElementById("zoSafari").hidden = false;
+})();
+</script>
+</body>
+</html>

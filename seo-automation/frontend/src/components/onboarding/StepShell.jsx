@@ -16,6 +16,7 @@ export default function StepShell({
   subtitle,
   onBack,
   onNext,
+  onSkip,
   onSelectStep,
   nextLabel = 'Continue',
   nextDisabled,
@@ -84,6 +85,11 @@ export default function StepShell({
             {onBack ? (
               <button type="button" onClick={onBack} className="btn btn-ghost">
                 <ArrowLeft size={16} /> Back
+              </button>
+            ) : null}
+            {onSkip ? (
+              <button type="button" onClick={onSkip} className="btn btn-ghost">
+                Skip for now
               </button>
             ) : null}
             <button type="submit" disabled={nextDisabled || loading} className="btn btn-primary">

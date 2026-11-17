@@ -37,7 +37,11 @@ async def lifespan(app: FastAPI):
     from services import index_automation
 
     logger.info("Starting SEO Automation API v2.1")
+    from services.publish_config import apply_saved
+    apply_saved()
     await init_db()
+    from routes.marketplace_auth import ensure_local_admin
+    await ensure_local_admin()
     logger.info("Database initialized")
 
     stop = asyncio.Event()
@@ -69,12 +73,28 @@ async def lifespan(app: FastAPI):
             except asyncio.TimeoutError:
                 pass
 
+    async def _news_loop():
+        await asyncio.sleep(12)
+        while not stop.is_set():
+            try:
+                from services.news_rss import sync_enabled
+                async with AsyncSessionLocal() as session:
+                    await sync_enabled(session)
+            except Exception:
+                logger.exception("News RSS sync failed")
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=30 * 60)
+            except asyncio.TimeoutError:
+                pass
+
     task = asyncio.create_task(_index_loop())
     sched_task = asyncio.create_task(_schedule_loop())
+    news_task = asyncio.create_task(_news_loop())
     yield
     stop.set()
     task.cancel()
     sched_task.cancel()
+    news_task.cancel()
     logger.info("Shutting down SEO Automation API")
 
 
@@ -124,6 +144,8 @@ app.add_middleware(
             "http://127.0.0.1:5180",
             "https://zeorbit.com",
             "https://www.zeorbit.com",
+            "https://vation-olive.vercel.app",
+            "https://vation-seo-tool.vercel.app",
             os.getenv("FRONTEND_URL", ""),
         ] if origin
     ],
@@ -165,11 +187,21 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Core routes
 app.include_router(locations.router, prefix="/api/locations", tags=["Locations"])
 app.include_router(content.router,   prefix="/api/content",   tags=["Content"])
+from routes import blog as blog_routes
+app.include_router(blog_routes.router, prefix="/api/blog", tags=["Blog"])
 app.include_router(pages.router,     prefix="/api/pages",     tags=["Pages"])
+from routes import news as news_routes
+app.include_router(news_routes.router, prefix="/api/news", tags=["News"])
 app.include_router(keywords.router,  prefix="/api/keywords",  tags=["Keywords"])
 app.include_router(wordpress.router, prefix="/api/wordpress", tags=["WordPress"])
+from routes import shopify as shopify_routes
+app.include_router(shopify_routes.router, prefix="/api/shopify", tags=["Shopify"])
+from routes import publish_config as publish_config_routes
+app.include_router(publish_config_routes.router, prefix="/api/publish-config", tags=["Publish config"])
 app.include_router(social.router,    prefix="/api/social",    tags=["Social Media"])
 app.include_router(leads.router,     prefix="/api/leads",     tags=["Leads"])
+from routes import prospects as prospect_routes
+app.include_router(prospect_routes.router, prefix="/api/prospects", tags=["Prospects"])
 app.include_router(jobs.router,      prefix="/api/jobs",      tags=["Jobs"])
 app.include_router(images.router,    prefix="/api/images",    tags=["Images"])
 app.include_router(seo_audit.router, prefix="/api/seo-audit", tags=["Site Audit"])
@@ -210,6 +242,7 @@ app.include_router(marketplace.router,      prefix="/api/marketplace",  tags=["M
 
 # ── Health & Observability ─────────────────────────────────────
 @app.api_route("/health", methods=["GET", "HEAD"])
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 async def health_check():
     """Health check endpoint."""
     return {
@@ -318,8 +351,16 @@ _SITE_MENU_PATHS = (
     "/custom-software",
     "/portfolio",
     "/contact",
-    "/blog",
+    "/blogs",
+    "/news",
     "/areas",
+    "/industries",
+    "/website-design-san-diego",
+    "/wordpress-development-san-diego",
+    "/mobile-app-development-san-diego",
+    "/shopify-website-development",
+    "/custom-software-development",
+    "/seo-services-san-diego",
     "/web-designer-near-me",
     "/privacy-policy",
 )
@@ -328,10 +369,16 @@ _SITE_MENU_PATHS = (
 _RESERVED_ARTICLE_SLUGS = {
     "docs", "redoc", "openapi.json", "health", "metrics", "static",
     "robots.txt", "sitemap.xml", "page-sitemap.xml", "post-sitemap.xml", "favicon.ico", "api",
-    "blog", "contact", "portfolio", "areas", "privacy-policy",
+    "blog", "blogs", "news", "contact", "portfolio", "areas", "industries", "privacy-policy",
     f"{_INDEXNOW_KEY}.txt" if _INDEXNOW_KEY else "indexnow.txt",
     "website-designing", "mobile-apps", "seo-ppc", "custom-software",
     "web-designer-near-me",
+    "website-design-san-diego",
+    "wordpress-development-san-diego",
+    "mobile-app-development-san-diego",
+    "shopify-website-development",
+    "custom-software-development",
+    "seo-services-san-diego",
     "us-only", "revamp-preview",
 }
 
@@ -418,18 +465,38 @@ async def _render_public_article(slug: str, request: Request, session):
     result = await session.execute(select(PageRecord).where(PageRecord.slug == slug))
     row = result.scalar_one_or_none()
     if not row:
-        html = (
-            "<!doctype html><html lang='en'><head>"
-            "<meta charset='utf-8'/>"
-            "<meta name='robots' content='noindex,follow'/>"
-            "<title>Page not found — ZeOrbit</title>"
-            "</head><body><h1>Page not found</h1>"
-            "<p>This URL is not a published ZeOrbit page.</p>"
-            "<p><a href='https://zeorbit.com/'>ZeOrbit home</a></p>"
-            "</body></html>"
-        )
-        return HTMLResponse(html, status_code=404)
-    block = SEOBlock(**row.seo_block)
+        from routes.pages import _public_base
+        home = f"{_public_base(request).rstrip('/')}/"
+        return RedirectResponse(url=home, status_code=302)
+    raw = dict(row.seo_block or {})
+    if str(raw.get("publish_status") or "").lower() == "draft":
+        from routes.pages import _public_base
+        home = f"{_public_base(request).rstrip('/')}/"
+        return RedirectResponse(url=home, status_code=302)
+    title = raw.get("title") or raw.get("h1") or raw.get("keyword") or "Article"
+    raw.setdefault("city", "")
+    raw.setdefault("state", "")
+    raw.setdefault("business_type", raw.get("detected_industry") or "Blog")
+    raw.setdefault("title", title)
+    raw.setdefault("meta_description", title)
+    raw.setdefault("h1", title)
+    raw.setdefault("h2s", [])
+    raw.setdefault("h3s", [])
+    raw.setdefault("content", raw.get("content_html") or "")
+    raw.setdefault("faqs", [])
+    raw.setdefault("cta", raw.get("button_label") or "Start the brief")
+    raw.setdefault("schema_markup", {})
+    if not isinstance(raw.get("keywords"), dict):
+        raw["keywords"] = {
+            "primary": raw.get("primary_keyword") or raw.get("keyword") or title,
+            "secondary": raw.get("related_keywords") or [],
+            "long_tail": [],
+            "near_me": [],
+            "user_questions": [],
+        }
+    if raw.get("content_html"):
+        raw["content_type"] = "blog"
+    block = SEOBlock(**raw)
     public_url = f"{_public_base(request)}/{slug}"
     return HTMLResponse(render_public_html(block, public_url))
 

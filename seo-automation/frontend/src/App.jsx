@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { tokenExpired } from './api'
 import { useState, useEffect } from 'react'
 import Sidebar from './components/Sidebar'
 import Topbar from './components/Topbar'
@@ -24,6 +25,8 @@ import KeywordsPage from './pages/KeywordsPage'
 import RankingsPage from './pages/RankingsPage'
 import CompetitorsPage from './pages/CompetitorsPage'
 import ContentPage from './pages/ContentPage'
+import KeywordBlogPage from './pages/KeywordBlogPage'
+import BlogPreviewPage from './pages/BlogPreviewPage'
 import ArticlesPage from './pages/ArticlesPage'
 import Top3EnginePage from './pages/Top3EnginePage'
 import ReportsPage from './pages/ReportsPage'
@@ -32,6 +35,9 @@ import PagePreviewPage from './pages/PagePreviewPage'
 import LiveBlogsPage from './pages/LiveBlogsPage'
 import SocialPage from './pages/SocialPage'
 import LeadsPage from './pages/LeadsPage'
+import ProspectsPage from './pages/ProspectsPage'
+import CustomPluginPage from './pages/CustomPluginPage'
+import NewsFeedsPage from './pages/NewsFeedsPage'
 import LeadEnginePage from './pages/LeadEnginePage'
 import InstantQuotePage from './pages/InstantQuotePage'
 import LandingPage from './pages/LandingPage'
@@ -44,7 +50,15 @@ import CreditsPage from './pages/CreditsPage'
 import AdminPage from './pages/AdminPage'
 
 function useAuth() {
-  const [authed, setAuthed] = useState(() => localStorage.getItem('seo_auth') === 'true')
+  const [authed, setAuthed] = useState(() => {
+    const token = localStorage.getItem('access_token') || localStorage.getItem('mp_token')
+    if (localStorage.getItem('seo_auth') === 'true' && tokenExpired(token)) {
+      localStorage.removeItem('seo_auth')
+      sessionStorage.setItem('seo_session_expired', '1')
+      return false
+    }
+    return localStorage.getItem('seo_auth') === 'true' && !!token && !tokenExpired(token)
+  })
   const login = () => { localStorage.setItem('seo_auth', 'true'); setAuthed(true) }
   const logout = () => {
     localStorage.removeItem('seo_auth')
@@ -154,6 +168,16 @@ export default function App() {
           <DashboardLayout onLogout={logout}><ContentPage /></DashboardLayout>
         </RequireAuth>
       } />
+      <Route path="/write" element={
+        <RequireAuth authed={authed}>
+          <DashboardLayout onLogout={logout}><KeywordBlogPage /></DashboardLayout>
+        </RequireAuth>
+      } />
+      <Route path="/write/preview" element={
+        <RequireAuth authed={authed}>
+          <DashboardLayout onLogout={logout}><BlogPreviewPage /></DashboardLayout>
+        </RequireAuth>
+      } />
       <Route path="/articles" element={
         <RequireAuth authed={authed}>
           <DashboardLayout onLogout={logout}><ArticlesPage /></DashboardLayout>
@@ -207,6 +231,21 @@ export default function App() {
       } />
       <Route path="/leads" element={
         <DashboardLayout onLogout={logout}><LeadsPage /></DashboardLayout>
+      } />
+      <Route path="/prospects" element={
+        <RequireAuth authed={authed}>
+          <DashboardLayout onLogout={logout}><ProspectsPage /></DashboardLayout>
+        </RequireAuth>
+      } />
+      <Route path="/custom-plugin" element={
+        <RequireAuth authed={authed}>
+          <DashboardLayout onLogout={logout}><CustomPluginPage /></DashboardLayout>
+        </RequireAuth>
+      } />
+      <Route path="/news-feeds" element={
+        <RequireAuth authed={authed}>
+          <DashboardLayout onLogout={logout}><NewsFeedsPage /></DashboardLayout>
+        </RequireAuth>
       } />
       <Route path="/lead-engine" element={
         <RequireAuth authed={authed}>
@@ -278,7 +317,12 @@ export default function App() {
       } />
       <Route path="/admin" element={
         <RequireAuth authed={authed}>
-          <DashboardLayout onLogout={logout}><AdminPage /></DashboardLayout>
+          {(() => {
+            let role = ''
+            try { role = JSON.parse(localStorage.getItem('mp_user') || '{}').role || '' } catch { /* ignore */ }
+            if (role !== 'admin') return <Navigate to="/content" replace />
+            return <DashboardLayout onLogout={logout}><AdminPage /></DashboardLayout>
+          })()}
         </RequireAuth>
       } />
 

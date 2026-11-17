@@ -1,8 +1,9 @@
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { ArrowLeft, RefreshCw, Save, CheckCircle, Upload, Globe, ExternalLink, Megaphone, AlertTriangle, Wand2 } from 'lucide-react'
-import { generateSingle, saveEditedBlock, publishToWordPress, publishToWeb, zeorbitBlogUrl, zeorbitArticleUrl, boostPageScores, getPage } from '../api'
+import { generateSingle, generateBulk, saveEditedBlock, publishToWordPress, publishToWeb, zeorbitBlogUrl, zeorbitArticleUrl, boostPageScores, getPage, correctBlock } from '../api'
 import { relocalizeBlock } from '../utils/locationCopy'
+import { rateContent } from '../utils/contentRating'
 
 const MIN_SCORE = 90
 
@@ -54,6 +55,122 @@ function renderMdLinks(text) {
   }
   if (last < s.length) nodes.push(s.slice(last))
   return nodes.length ? nodes : s
+}
+
+function dynamicIndustryFit(industry, service) {
+  const name = String(industry || 'local business').replace(/\s+/g, ' ').trim() || 'local business'
+  const low = name.toLowerCase()
+  const work = String(service || 'website and mobile app').replace(/\s+/g, ' ').trim().toLowerCase()
+  const packs = [
+    [['biopharma', 'biotech', 'pharma', 'life science'], [
+      'laboratory service providers', 'genomics companies', 'genetic testing providers',
+      'molecular diagnostics companies', 'precision medicine providers', 'microbiology laboratories',
+      'medical diagnostics companies', 'medical device manufacturers', 'clinical research organizations',
+      'contract research organizations (CROs)', 'contract development and manufacturing organizations (CDMOs)',
+      'drug discovery companies',
+    ]],
+    [['health', 'medical', 'clinic', 'dental', 'hospital'], [
+      'clinics', 'specialty practices', 'diagnostic labs', 'outpatient centers',
+      'medical groups', 'urgent care providers', 'dental practices', 'home-health providers',
+    ]],
+    [['carpet', 'floor', 'contractor', 'construct', 'remodel'], [
+      'residential installers', 'commercial contractors', 'remodeling crews',
+      'property managers', 'builders', 'trade suppliers',
+    ]],
+    [['real estate', 'realtor', 'property'], [
+      'residential real estate agents', 'luxury real estate agents', 'commercial real estate brokers',
+      'property management companies', 'real estate developers', 'apartment leasing teams',
+      'vacation rental managers', 'title companies', 'mortgage brokers', 'home staging firms',
+      'real estate photography teams', 'HOA management companies',
+    ]],
+    [['restaurant', 'cafe', 'food', 'hospitality'], [
+      'independent restaurants', 'cafe groups', 'catering companies',
+      'hotel restaurants', 'food trucks', 'multi-unit restaurant brands',
+    ]],
+  ]
+  const extra = []
+  for (const [keys, rows] of packs) {
+    if (keys.some((k) => low.includes(k))) extra.push(...rows)
+  }
+  const roles = [
+    `${low} companies`, `${low} startups`, `regional ${low} firms`,
+    `multi-location ${low} operators`, `independent ${low} providers`, `${low} suppliers`,
+    `${low} consultants`, `franchise ${low} brands`, `specialty ${low} teams`,
+    `B2B ${low} vendors`, `${low} service networks`, `local ${low} businesses that need ${work}`,
+  ]
+  const seen = new Set()
+  const ordered = []
+  for (const item of [...extra, ...roles]) {
+    const key = item.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    ordered.push(item)
+  }
+  const join = (items) => (items.length <= 1 ? (items[0] || '') : `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`)
+  const mid = Math.max(6, Math.floor(ordered.length / 2))
+  return (
+    `<!--zo-fit-->\n`
+    + `We deliver industry-specific website design and iOS and Android mobile app development for ${join(ordered.slice(0, mid))}.\n\n`
+    + `We specialize in custom website design and iOS and Android mobile app development for ${join(ordered.slice(mid))}.`
+  )
+}
+
+function ArticleRead({ block, industryFit }) {
+  const body = (block.content || '').split('<!--zo-fit-->')[0].trim()
+  const blocks = []
+  let para = []
+  const flush = () => {
+    if (!para.length) return
+    blocks.push({ type: 'p', text: para.join(' ') })
+    para = []
+  }
+  for (const line of body.split('\n')) {
+    const t = line.trim()
+    if (!t) { flush(); continue }
+    if (t.startsWith('## ')) { flush(); blocks.push({ type: 'h2', text: t.replace(/^##\s+/, '').replace(/\*\*/g, '') }); continue }
+    if (t.startsWith('- ') || t.startsWith('* ')) { flush(); blocks.push({ type: 'li', text: t.replace(/^[-*]\s+/, '').replace(/\*\*/g, '') }); continue }
+    para.push(t.replace(/\*\*/g, ''))
+  }
+  flush()
+  const featured = block.featured_image_url
+  return (
+    <article className="rounded-xl p-6 sm:p-8" style={{ background: '#fff', border: '1px solid var(--border)', color: '#0f172a' }}>
+      <p className="text-[11px] font-semibold uppercase tracking-wider mb-2" style={{ color: '#64748b' }}>Full post preview</p>
+      <h2 className="text-2xl font-bold leading-tight" style={{ color: '#0f172a' }}>{block.h1 || block.title}</h2>
+      {block.meta_description ? (
+        <p className="mt-3 text-sm leading-relaxed" style={{ color: '#475569' }}>{block.meta_description}</p>
+      ) : null}
+      {featured ? (
+        <img src={featured} alt="" className="mt-5 w-full rounded-lg" style={{ maxHeight: 360, objectFit: 'cover' }} />
+      ) : null}
+      {block.intro ? <p className="mt-5 text-[15px] leading-7 whitespace-pre-wrap">{block.intro}</p> : null}
+      <div className="mt-4 space-y-3 text-[15px] leading-7">
+        {blocks.map((b, i) => (
+          b.type === 'h2'
+            ? <h3 key={i} className="text-lg font-bold pt-2" style={{ color: '#0f172a' }}>{b.text}</h3>
+            : b.type === 'li'
+              ? <p key={i} className="pl-4" style={{ borderLeft: '2px solid #e2e8f0' }}>{b.text}</p>
+              : <p key={i}>{b.text}</p>
+        ))}
+      </div>
+      {(block.faqs || []).length ? (
+        <div className="mt-6 pt-4" style={{ borderTop: '1px solid #e2e8f0' }}>
+          <h3 className="text-lg font-bold mb-3">FAQs</h3>
+          {block.faqs.map((f, i) => (
+            <div key={i} className="mb-3">
+              <p className="font-semibold">{f.question}</p>
+              <p className="text-sm mt-1" style={{ color: '#334155' }}>{f.answer}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {industryFit ? (
+        <p className="mt-6 text-xs" style={{ color: '#64748b' }}>
+          The industry list stays in the Industry list tab. It is hidden on the live blog.
+        </p>
+      ) : null}
+    </article>
+  )
 }
 
 function MetaRow({ label, value, multiline, onChange, hint }) {
@@ -143,10 +260,18 @@ export default function PagePreviewPage() {
   const [boostError, setBoostError] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [correction, setCorrection] = useState('')
+  const [regenNote, setRegenNote] = useState('')
 
   const businessType = state?.businessType || block?.business_type || ''
   const isPost = (state?.contentKind === 'post') || (block?.content_type === 'blog') || (block?.content_type === 'post')
   const fromLive = Boolean(state?.fromLive)
+  const fitFromBody = ((block?.content || '').split('<!--zo-fit-->')[1] || '').replace('<!--zo-fit-->', '').trim()
+  const industryFit = (block?.industry_fit || '').includes('<!--zo-fit-->')
+    ? block.industry_fit
+    : (block?.industry_fit || fitFromBody)
+      ? `<!--zo-fit-->\n${(block?.industry_fit || fitFromBody).replace('<!--zo-fit-->', '').trim()}`
+      : dynamicIndustryFit(businessType || block?.keywords?.primary || '', block?.keywords?.primary || '')
 
   useEffect(() => {
     if (state?.block || !slugQuery) return
@@ -184,7 +309,7 @@ export default function PagePreviewPage() {
     }
     setWebPublishing(true); setWebError('')
     try {
-      const res = await publishToWeb(block)
+      const res = await publishToWeb({ ...block, industry_fit: industryFit, content: (block.content || '').split('<!--zo-fit-->')[0].trim() })
       const liveUrl = zeorbitArticleUrl(res.data.public_url || res.data.slug)
       setWebUrl(liveUrl)
       window.open(liveUrl, '_blank', 'noopener')
@@ -242,11 +367,44 @@ export default function PagePreviewPage() {
     }
   }
 
-  const handleRegen = async () => {
+  const handleRegen = async (note) => {
+    const topic = (block?.keywords?.primary || block?.title || businessType || '').trim()
+    const place = [block?.city, block?.state].filter(Boolean).join(', ')
+    const instruction = (note || '').trim()
     setLoading(true)
+    setRegenNote('')
     try {
+      if (topic) {
+        const res = await generateBulk({
+          business_type: businessType || block.business_type || topic,
+          industry: block.industry || businessType || '',
+          num_cities: 1,
+          base_location: place,
+          extra_locations: place ? [place] : [],
+          target_keywords: [topic],
+          content_kind: isPost ? 'post' : 'page',
+          custom_requirements: instruction
+            ? `Rewrite this post. The current draft is not accurate. Follow this correction: ${instruction}`
+            : `Write the full post to answer this query: ${topic}`,
+          use_ai: true,
+          image_keyword: block.image_keyword || topic,
+        })
+        const next = (res.data.pages || [])[0]
+        if (!next) {
+          setRegenNote('Nothing came back. Try the correction again.')
+          return
+        }
+        setBlock({ ...next, city: next.city || block.city, state: next.state || block.state })
+        setRegenNote(instruction ? 'Rewritten from your correction. Read the preview, then save.' : 'Regenerated. Read the preview, then save.')
+        setCorrection('')
+        return
+      }
       const res = await generateSingle(businessType, block.city, block.state, true)
       setBlock(res.data)
+      setRegenNote('Regenerated. Read the preview, then save.')
+    } catch (e) {
+      const d = e.response?.data?.detail
+      setRegenNote(typeof d === 'string' ? d : 'Regenerate failed. Try again.')
     } finally { setLoading(false) }
   }
 
@@ -372,6 +530,7 @@ export default function PagePreviewPage() {
     { id: 'keywords', label: 'Keywords' },
     { id: 'questions', label: 'User Questions' },
     { id: 'faqs', label: `FAQs (${block.faqs?.length || 0})` },
+    { id: 'industry', label: 'Industry list' },
     { id: 'schema', label: 'Schema' },
   ]
 
@@ -400,11 +559,29 @@ export default function PagePreviewPage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           {!editAll ? (
-          <button onClick={handleRegen} disabled={loading}
+          <>
+          <button onClick={async () => {
+            setLoading(true)
+            setRegenNote('')
+            try {
+              const res = await correctBlock(block, correction)
+              setBlock({ ...res.data, city: block.city, state: block.state })
+              setRegenNote('Corrected. Read the preview, then save.')
+              setCorrection('')
+            } catch (e) {
+              const d = e.response?.data?.detail
+              setRegenNote(typeof d === 'string' ? d : 'Correct failed.')
+            } finally { setLoading(false) }
+          }} disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold btn-primary disabled:opacity-50">
+            <Wand2 size={13} /> {loading ? 'Correcting…' : 'Correct this'}
+          </button>
+          <button onClick={() => handleRegen('')} disabled={loading}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
             style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Regenerate
           </button>
+          </>
           ) : null}
           <button onClick={handleSave} disabled={saving}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
@@ -573,6 +750,63 @@ export default function PagePreviewPage() {
         ))}
       </div>
 
+      {(() => {
+        const rating = rateContent(block)
+        const tone = rating.score >= 8 ? '#047857' : rating.score >= 5 ? '#b45309' : '#b91c1c'
+        return (
+          <div className="card p-5 flex flex-col sm:flex-row gap-4 sm:items-start">
+            <div className="flex-shrink-0" style={{ minWidth: 88 }}>
+              <div className="text-3xl font-bold" style={{ color: tone }}>{rating.score}<span className="text-base font-semibold" style={{ color: '#64748b' }}>/10</span></div>
+              <div className="text-xs font-semibold mt-1" style={{ color: '#334155' }}>Content accuracy</div>
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                {rating.score >= 8
+                  ? 'Topic, slug, meta, industry, images, and location line up.'
+                  : 'This draft does not match every field you entered.'}
+              </p>
+              {rating.notes.length ? (
+                <ul className="mt-2 space-y-1 text-sm" style={{ color: '#0f172a' }}>
+                  {rating.notes.map((n) => <li key={n}>{n}</li>)}
+                </ul>
+              ) : null}
+            </div>
+          </div>
+        )
+      })()}
+
+      <ArticleRead block={block} industryFit={industryFit} />
+
+      <div className="card p-5 space-y-3">
+        <div>
+          <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Not accurate?</div>
+          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+            Say what is wrong. Regenerate rewrites the title, meta, and body from that note. Or edit the fields below and save.
+          </p>
+        </div>
+        <textarea
+          rows={3}
+          value={correction}
+          onChange={(e) => setCorrection(e.target.value)}
+          placeholder="Example: This should compare a restaurant and a cafe in San Diego, not a generic real estate page."
+          className="w-full text-sm leading-relaxed"
+          style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: 12, color: 'var(--text-primary)' }}
+        />
+        <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={loading || !correction.trim()} onClick={() => handleRegen(correction)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold btn-primary disabled:opacity-50">
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            {loading ? 'Rewriting…' : 'Regenerate with this correction'}
+          </button>
+          <button type="button" onClick={() => setTab('content')}
+            className="px-3 py-2 rounded-lg text-sm font-medium"
+            style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+            Edit the fields instead
+          </button>
+        </div>
+        {regenNote ? <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{regenNote}</p> : null}
+      </div>
+
       {/* Tabs */}
       <div className="card">
         <div className="flex border-b overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
@@ -599,8 +833,71 @@ export default function PagePreviewPage() {
                 onChange={v => setBlock(prev => ({ ...prev, h2s: v }))} />
               <EditableList label="H3 Headings" items={block.h3s || []} color="var(--brand-violet)"
                 onChange={v => setBlock(prev => ({ ...prev, h3s: v }))} />
-              <MetaRow label="Body Content" value={block.content} multiline
+              <MetaRow label="Body Content" value={(block.content || '').split('<!--zo-fit-->')[0]} multiline
                 onChange={v => setBlock(prev => ({ ...prev, content: v }))} />
+              <div className="rounded-xl p-4 space-y-2" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
+                <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Regenerate this body for every selected location</div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={correction}
+                    onChange={(e) => setCorrection(e.target.value)}
+                    placeholder="Pass a query, for example: contractor websites in Aguanga"
+                    className="flex-1 text-sm"
+                    style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', color: 'var(--text-primary)' }}
+                  />
+                  <button type="button" disabled={loading || !correction.trim()} onClick={async () => {
+                    setLoading(true)
+                    setRegenNote('')
+                    try {
+                      const res = await correctBlock(block, correction)
+                      const next = res.data || {}
+                      const master = {
+                        ...block,
+                        ...next,
+                        city: block.city,
+                        state: block.state,
+                        slug: block.slug,
+                        content: next.content || block.content,
+                      }
+                      let siblings = []
+                      try {
+                        const raw = JSON.parse(sessionStorage.getItem('seo_generated_pages') || '[]')
+                        if (Array.isArray(raw)) siblings = raw
+                      } catch { /* ignore */ }
+                      if (Array.isArray(state?.allBlocks) && state.allBlocks.length > siblings.length) {
+                        siblings = state.allBlocks
+                      }
+                      if (siblings.length > 1) {
+                        const slugify = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+                        const topicSlug = slugify(master.keywords?.primary || master.focus_keyword || '')
+                        const updated = siblings.map((p) => {
+                          const same = (p.slug && p.slug === block.slug) || (p.city === block.city && p.state === block.state)
+                          const next = same ? { ...master } : relocalizeBlock(master, p)
+                          const loc = slugify(next.city)
+                          if (topicSlug) next.slug = loc && !topicSlug.includes(loc) ? `${topicSlug}-${loc}` : topicSlug
+                          return next
+                        })
+                        try { sessionStorage.setItem('seo_generated_pages', JSON.stringify(updated)) } catch { /* quota */ }
+                        setBlock(master)
+                        setRegenNote(`Body regenerated for all ${updated.length} locations.`)
+                      } else {
+                        setBlock(master)
+                        setRegenNote('Body regenerated from your query.')
+                      }
+                    } catch (e) {
+                      const d = e.response?.data?.detail
+                      setRegenNote(typeof d === 'string' ? d : 'Could not regenerate the body.')
+                    } finally { setLoading(false) }
+                  }}
+                    className="px-3 py-2 rounded-lg text-sm font-semibold btn-primary disabled:opacity-50 whitespace-nowrap">
+                    {loading ? 'Regenerating…' : 'Regenerate body'}
+                  </button>
+                </div>
+                {regenNote ? <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{regenNote}</p> : null}
+              </div>
+              <MetaRow label="<!--zo-fit--> (hidden on the live blog)" value={industryFit} multiline
+                onChange={v => setBlock(prev => ({ ...prev, industry_fit: v.startsWith('<!--zo-fit-->') ? v : `<!--zo-fit-->\n${v}` }))} />
               <MetaRow label="Call to Action" value={block.cta} multiline
                 onChange={v => setBlock(prev => ({ ...prev, cta: v }))} />
             </>
@@ -624,7 +921,7 @@ export default function PagePreviewPage() {
                               const note = document.createElement('div')
                               note.setAttribute('data-broken-img', '1')
                               note.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:12px;text-align:center;font-size:12px;font-weight:600;color:#7f1d1d;background:#fef2f2'
-                              note.textContent = 'Image URL broken (404) — Regenerate or refresh images'
+                              note.textContent = 'Image URL broken (404) — Regenerate'
                               wrap.appendChild(note)
                             }
                           }} />
@@ -654,7 +951,8 @@ export default function PagePreviewPage() {
                   First 2–3 lines answer directly with location + keyword — optimized for Google AI Overviews, Bing Copilot, and ChatGPT retrieval.
                 </p>
               </div>
-              <MetaRow label="Intro Paragraph" value={block.intro || block.content?.split('\n\n')[0]} multiline />
+              <MetaRow label="Intro Paragraph" value={block.intro || ''} multiline
+                onChange={v => setBlock(prev => ({ ...prev, intro: v }))} />
             </>
           )}
 
@@ -688,6 +986,18 @@ export default function PagePreviewPage() {
                   <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{q}</span>
                 </div>
               ))}
+            </div>
+          )}
+
+          {tab === 'industry' && (
+            <div className="rounded-xl p-4 space-y-2" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                Separate from the post. This list is hidden on the live page.
+              </p>
+              <textarea rows={10} value={industryFit}
+                onChange={e => setBlock(prev => ({ ...prev, industry_fit: e.target.value.startsWith('<!--zo-fit-->') ? e.target.value : `<!--zo-fit-->\n${e.target.value}` }))}
+                className="w-full text-sm leading-relaxed"
+                style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: 12, color: 'var(--text-primary)' }} />
             </div>
           )}
 

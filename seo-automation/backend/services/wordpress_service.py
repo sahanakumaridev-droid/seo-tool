@@ -272,7 +272,7 @@ _AI_BAR_STYLE = """<style>
 .ai-ask-kicker{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#8A94A6;margin:0 0 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 .ai-ask-bar{margin:0;padding:0;display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
 .ai-ask-bar a{width:auto;min-width:64px;height:auto;border-radius:0;background:transparent!important;box-shadow:none;display:inline-flex;flex-direction:column;align-items:center;gap:6px;text-decoration:none;color:#5B6676}
-.ai-ask-bar a span.ico{width:36px;height:36px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #E6E3DD;background:#fff}
+.ai-ask-bar a span.ico{width:40px;height:40px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;border:0;background:#111}
 .ai-ask-bar a:hover{transform:none;color:#0B1220}
 .ai-ask-bar a:hover span.ico{border-color:#C5CAD3}
 .ai-ask-bar img{width:20px;height:20px;border-radius:4px;object-fit:contain}
@@ -297,26 +297,21 @@ def _ai_platform_bar(public_url: str = "", title: str = "") -> str:
     """Icon row — every assistant gets the same page prompt Perplexity uses."""
     q = _ai_prompt(public_url, title)
     platforms = (
-        ("ChatGPT", f"https://chatgpt.com/?q={q}", "chatgpt.com", "#10A37F"),
-        ("Claude", f"https://claude.ai/new?q={q}", "claude.ai", "#D97757"),
-        ("Gemini AI", f"https://gemini.google.com/app?q={q}", "gemini.google.com", "#8E75B2"),
-        ("Google AI", f"https://www.google.com/search?q={q}", "google.com", "#4285F4"),
-        ("Microsoft Copilot", f"https://copilot.microsoft.com/?q={q}", "copilot.microsoft.com", "#0078D4"),
-        ("Grok", f"https://grok.com/?q={q}", "grok.com", "#1A1A1A"),
-        ("Perplexity", f"https://www.perplexity.ai/search/new?q={q}", "perplexity.ai", "#20808D"),
+        ("ChatGPT", f"https://chatgpt.com/?q={q}", "openai", "#10A37F"),
+        ("Claude", f"https://claude.ai/new?q={q}", "anthropic", "#D97757"),
+        ("Gemini AI", f"https://gemini.google.com/app?q={q}", "googlegemini", "#8E75B2"),
+        ("Google AI", f"https://www.google.com/search?q={q}", "google", "#4285F4"),
+        ("Microsoft Copilot", f"https://copilot.microsoft.com/?q={q}", "microsoft", "#0078D4"),
+        ("Grok", f"https://grok.com/?q={q}", "x", "#1A1A1A"),
+        ("Perplexity", f"https://www.perplexity.ai/search/new?q={q}", "perplexity", "#20808D"),
     )
     links = []
-    for name, href, domain, color in platforms:
-        hosted = _AI_HOSTED_ICONS.get(domain)
-        if hosted:
-            mark = f'<img src="{hosted}" alt="{name}" width="22" height="22" />'
-        else:
-            icon = f"https://www.google.com/s2/favicons?sz=64&domain={domain}"
-            mark = f'<img src="{icon}" alt="{name}" width="22" height="22" />'
+    for name, href, icon, color in platforms:
+        mark = f'<img src="https://cdn.simpleicons.org/{icon}/ffffff" alt="{name}" width="22" height="22" />'
         links.append(
             f'<a href="{href}" target="_blank" rel="nofollow noopener noreferrer" '
             f'aria-label="Ask {name} about this ZeOrbit page" title="{name}">'
-            f'<span class="ico">{mark}</span><span class="ai-name">{name}</span></a>'
+            f'<span class="ico" style="background:{color}">{mark}</span><span class="ai-name">{name}</span></a>'
         )
     return (
         f'{_AI_BAR_STYLE}<div class="ai-ask-wrap">'
@@ -331,14 +326,22 @@ def _build_content_html(block: SEOBlock) -> str:
     parts = []
 
     if block.intro:
-        parts.append(f'<p class="seo-intro">{_inline_md_links(block.intro)}</p>')
+        # Multi-paragraph intros must become real <p> tags (single <p> collapses \n\n).
+        intro_html = _para_to_html(block.intro)
+        if intro_html:
+            # First paragraph gets the lead style class.
+            intro_html = intro_html.replace("<p>", '<p class="seo-intro">', 1)
+            parts.append(intro_html)
+        else:
+            parts.append(f'<p class="seo-intro">{_inline_md_links(block.intro.strip())}</p>')
 
-    # In-content images only — never re-show the hero/featured photo in the body.
+    # In-content images only — never re-show the hero/featured or footer photo in the body.
     from services.image_service import normalize_image_key
 
     featured_key = normalize_image_key(block.featured_image_url or "")
+    footer_key = normalize_image_key(getattr(block, "footer_image_url", None) or "")
     in_content_imgs = []
-    seen = {featured_key} if featured_key else set()
+    seen = {k for k in (featured_key, footer_key) if k}
     for img in (block.in_content_images or []):
         if _img_is_featured(img):
             continue
@@ -361,22 +364,26 @@ def _build_content_html(block: SEOBlock) -> str:
 
     section_bodies = _sections_aligned_to_h2s(block.content or "", block.h2s or [])
 
-    # One mid-article CALL NOW + one near the end — not after every section
-    call_btn = (
-        '<div class="call-now-wrap">'
-        '<a class="call-now-btn" href="tel:6197249517">CALL NOW : 619-724-9517</a>'
-        '</div>'
-    )
     n_h2 = len(block.h2s or [])
-    mid_cta_at = max(1, (n_h2 // 2) - 1) if n_h2 >= 3 else -1
+    fmt = (getattr(block, "layout_variant", "") or "").lower()
+    if fmt not in ("guide", "briefing", "feature"):
+        if (getattr(block, "content_type", "") or "").lower() in ("blog", "post"):
+            fmt = "guide"
 
     for i, h2 in enumerate(block.h2s or []):
-        parts.append(f'<h2>{h2}</h2>')
+        if fmt == "guide":
+            h2_html = f'<h2><span class="step-n">{i + 1}</span><span>{h2}</span></h2>'
+        else:
+            h2_html = f'<h2>{h2}</h2>'
+        section_body = section_bodies[i] if i < len(section_bodies) else ""
+        hide_fit = "<!--zo-fit-->" in section_body
+        if not hide_fit:
+            parts.append(h2_html)
         if i in img_positions:
             fig = _figure_html(img_positions[i], href=_INTERNAL_IMG_HREFS[i % len(_INTERNAL_IMG_HREFS)])
             if fig:
                 parts.append(fig)
-        body = section_bodies[i] if i < len(section_bodies) else ""
+        body = section_body
         html = _para_to_html(body) if body else ""
         plain = re.sub(r"<[^>]+>", " ", html or "")
         plain = re.sub(r"\s+", " ", plain).strip()
@@ -384,12 +391,17 @@ def _build_content_html(block: SEOBlock) -> str:
             extra = _para_to_html(_fallback_section_copy(h2))
             html = f"{html}\n{extra}".strip() if html else extra
         if html:
-            parts.append(html)
-        if i == mid_cta_at:
-            parts.append(call_btn)
-
-    if n_h2 >= 2:
-        parts.append(call_btn)
+            if hide_fit:
+                parts.append(f'<div class="zo-industry-fit" hidden>{h2_html}{html}</div>')
+            else:
+                parts.append(html)
+    fit = (getattr(block, "industry_fit", None) or "").strip()
+    if fit:
+        parts.append(
+            '<div class="zo-industry-fit" hidden>'
+            + _para_to_html(fit)
+            + "</div>"
+        )
 
     if block.h3s:
         # These are short trust/benefit statements ("Fast Turnaround for

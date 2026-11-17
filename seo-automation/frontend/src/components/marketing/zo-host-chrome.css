@@ -678,7 +678,7 @@
 
 @media (max-width: 1100px) {
   .zo-host-footer-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1fr 1fr;
   }
 }
 

@@ -43,9 +43,15 @@ def notify_lead(lead: dict) -> None:
     phone = _clean(lead.get("phone"))
     company = _clean(lead.get("business_name"))
     service = _clean(lead.get("service"))
+    if service.lower() in {"site click", "intent"}:
+        service = ""
     budget = _clean(lead.get("budget"))
-    source = _clean(lead.get("source")) or "website"
+    source = _clean(lead.get("source"))
+    if source.lower() in {"intent", "site click"}:
+        source = ""
     message = _clean(lead.get("message"))
+    if message.lower().startswith("clicked from"):
+        message = ""
     location = _clean(lead.get("location"))
     page = _clean(lead.get("website"))
     if page.startswith("http"):
@@ -64,14 +70,14 @@ def notify_lead(lead: dict) -> None:
         f"Email: {email or '—'}",
         f"Phone: {phone or '—'}",
         f"Company: {company or '—'}",
-        f"Service: {service or '—'}",
+        f"Service: {service or 'nil'}",
         f"Budget: {budget or '—'}",
         f"Location: {location or '—'}",
-        f"Source: {source}",
+        f"Source: {source or 'nil'}",
         f"Submitted from: {page_label or '—'}",
         "",
         "Message:",
-        message or "—",
+        message or "nil",
     ]
     text_body = "\n".join(text_lines)
 
@@ -87,15 +93,15 @@ def notify_lead(lead: dict) -> None:
       {_row("Email", email)}
       {_row("Phone", phone)}
       {_row("Company", company)}
-      {_row("Service", service)}
+      {_row("Service", service or "nil")}
       {_row("Budget", budget)}
       {_row("Location", location)}
-      {_row("Source", source)}
+      {_row("Source", source or "nil")}
       {_row("Submitted from", page_label)}
     </table>
     <div style="padding:16px 24px 24px">
       <div style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Message</div>
-      <div style="white-space:pre-wrap;color:#0b1220">{escape(message or "—")}</div>
+      <div style="white-space:pre-wrap;color:#0b1220">{escape(message or "nil")}</div>
     </div>
   </div>
 </body></html>"""

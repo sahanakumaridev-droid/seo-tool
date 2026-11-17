@@ -1,0 +1,265 @@
+{
+  "enabled": true,
+  "cursor": 120,
+  "last_run_at": "2026-11-12T09:36:32.651327+00:00",
+  "next_run_at": "2026-11-12T15:36:32.651327+00:00",
+  "last_result": {
+    "ok": true,
+    "reason": "schedule",
+    "ran_at": "2026-11-12T09:36:32.651327+00:00",
+    "gsc_configured": true,
+    "hubs_tracked_new": 0,
+    "sitemap": [
+      {
+        "url": "https://zeorbit.com/sitemap.xml",
+        "ok": false,
+        "status": 403,
+        "detail": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"User does not have sufficient permission for site 'https://www.zeorbit.com/'. See also: https://support.google.com/webmasters/answer/2451999.\",\n    \"errors\": [\n      {\n        \"message\": \"User does not have sufficient permission for site 'https://www.z"
+      },
+      {
+        "url": "https://zeorbit.com/page-sitemap.xml",
+        "ok": false,
+        "status": 403,
+        "detail": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"User does not have sufficient permission for site 'https://www.zeorbit.com/'. See also: https://support.google.com/webmasters/answer/2451999.\",\n    \"errors\": [\n      {\n        \"message\": \"User does not have sufficient permission for site 'https://www.z"
+      },
+      {
+        "url": "https://zeorbit.com/post-sitemap.xml",
+        "ok": false,
+        "status": 403,
+        "detail": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"User does not have sufficient permission for site 'https://www.zeorbit.com/'. See also: https://support.google.com/webmasters/answer/2451999.\",\n    \"errors\": [\n      {\n        \"message\": \"User does not have sufficient permission for site 'https://www.z"
+      },
+      {
+        "url": "https://zeorbit.com/sitemap_index.xml",
+        "ok": false,
+        "status": 403,
+        "detail": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"User does not have sufficient permission for site 'https://www.zeorbit.com/'. See also: https://support.google.com/webmasters/answer/2451999.\",\n    \"errors\": [\n      {\n        \"message\": \"User does not have sufficient permission for site 'https://www.z"
+      }
+    ],
+    "indexnow": {
+      "ok": true,
+      "status": 200,
+      "detail": ""
+    },
+    "inspected": [
+      {
+        "url": "https://zeorbit.com/web-design-ramona",
+        "crawl_ok": false,
+        "error": "Response has X-Robots-Tag: noindex",
+        "gsc_status": null,
+        "coverage_state": "",
+        "last_crawl_time": "",
+        "inspect_link": "https://search.google.com/search-console/inspect?resource_id=https%3A%2F%2Fwww.zeorbit.com%2F&itemid=https%3A%2F%2Fzeorbit.com%2Fweb-design-ramona"
+      },
+      {
+        "url": "https://zeorbit.com/web-design-ranchita",
+        "crawl_ok": false,
+        "error": "Response has X-Robots-Tag: noindex",
+        "gsc_status": null,
+        "coverage_state": "",
+        "last_crawl_time": "",
+        "inspect_link": "https://search.google.com/search-console/inspect?resource_id=https%3A%2F%2Fwww.zeorbit.com%2F&itemid=https%3A%2F%2Fzeorbit.com%2Fweb-design-ranchita"
+      },
+      {
+        "url": "https://zeorbit.com/web-design-rancho-santa-fe",
+        "crawl_ok": false,
+        "error": "Response has X-Robots-Tag: noindex",
+        "gsc_status": null,
+        "coverage_state": "",
+        "last_crawl_time": "",
+        "inspect_link": "https://search.google.com/search-console/inspect?resource_id=https%3A%2F%2Fwww.zeorbit.com%2F&itemid=https%3A%2F%2Fzeorbit.com%2Fweb-design-rancho-santa-fe"
+      },
+      {
+        "url": "https://zeorbit.com/web-design-san-diego",
+        "crawl_ok": false,
+        "error": "Response has X-Robots-Tag: noindex",
+        "gsc_status": null,
+        "coverage_state": "",
+        "last_crawl_time": "",
+        "inspect_link": "https://search.google.com/search-console/inspect?resource_id=https%3A%2F%2Fwww.zeorbit.com%2F&itemid=https%3A%2F%2Fzeorbit.com%2Fweb-design-san-diego"
+      },
+      {
+        "url": "https://zeorbit.com/web-design-san-diego-core",
+        "crawl_ok": false,
+        "error": "Response has X-Robots-Tag: noindex",
+        "gsc_status": null,
+        "coverage_state": "",
+        "last_crawl_time": "",
+        "inspect_link": "https://search.google.com/search-console/inspect?resource_id=https%3A%2F%2Fwww.zeorbit.com%2F&itemid=https%3A%2F%2Fzeorbit.com%2Fweb-design-san-diego-core"
+      },
+      {
+        "url": "https://zeorbit.com/web-design-san-diego-downtown",
+        "crawl_ok": false,
+        "error": "Response has X-Robots-Tag: noindex",
+        "gsc_status": null,
+        "coverage_state": "",
+        "last_crawl_time": "",
+        "inspect_link": "https://search.google.com/search-console/inspect?resource_id=https%3A%2F%2Fwww.zeorbit.com%2F&itemid=https%3A%2F%2Fzeorbit.com%2Fweb-design-san-diego-downtown"
+      },
+      {
+        "url": "https://zeorbit.com/web-design-san-diego-east-village",
+        "crawl_ok": false,
+        "error": "Response has X-Robots-Tag: noindex",
+        "gsc_status": null,
+        "coverage_state": "",
+        "last_crawl_time": "",
+        "inspect_link": "https://search.google.com/search-console/inspect?resource_id=https%3A%2F%2Fwww.zeorbit.com%2F&itemid=https%3A%2F%2Fzeorbit.com%2Fweb-design-san-diego-east-village"
+      },
+      {
+        "url": "https://zeorbit.com/web-design-san-diego-gaslamp-quarter",
+        "crawl_ok": false,
+        "error": "Response has X-Robots-Tag: noindex",
+        "gsc_status": null,
+        "coverage_state": "",
+        "last_crawl_time": "",
+        "inspect_link": "https://search.google.com/search-console/inspect?resource_id=https%3A%2F%2Fwww.zeorbit.com%2F&itemid=https%3A%2F%2Fzeorbit.com%2Fweb-design-san-diego-gaslamp-quarter"
+      },
+      {
+        "url": "https://zeorbit.com/web-design-san-luis-rey",
+        "crawl_ok": false,
+        "error": "Response has X-Robots-Tag: noindex",
+        "gsc_status": null,
+        "coverage_state": "",
+        "last_crawl_time": "",
+        "inspect_link": "https://search.google.com/search-console/inspect?resource_id=https%3A%2F%2Fwww.zeorbit.com%2F&itemid=https%3A%2F%2Fzeorbit.com%2Fweb-design-san-luis-rey"
+      },
+      {
+        "url": "https://zeorbit.com/web-design-san-marcos",
+        "crawl_ok": false,
+        "error": "Response has X-Robots-Tag: noindex",
+        "gsc_status": null,
+        "coverage_state": "",
+        "last_crawl_time": "",
+        "inspect_link": "https://search.google.com/search-console/inspect?resource_id=https%3A%2F%2Fwww.zeorbit.com%2F&itemid=https%3A%2F%2Fzeorbit.com%2Fweb-design-san-marcos"
+      }
+    ],
+    "inspect_count": 10,
+    "batch_size": 10,
+    "social": {
+      "skipped": true,
+      "reason": "no pages"
+    },
+    "note": "Google does not allow a Request-indexing API for normal pages. This job submits sitemaps, pings Bing (IndexNow), crawl-checks, and reads live GSC coverage. Use inspect_link for the ~10/day GSC button only when last_crawl_time is older than this deploy."
+  },
+  "runs": [
+    {
+      "at": "2026-11-12T09:36:32.651327+00:00",
+      "reason": "schedule",
+      "inspected": 10,
+      "gsc": true
+    },
+    {
+      "at": "2026-11-12T09:34:03.235617+00:00",
+      "reason": "schedule",
+      "inspected": 10,
+      "gsc": true
+    },
+    {
+      "at": "2026-11-12T09:05:29.481510+00:00",
+      "reason": "schedule",
+      "inspected": 10,
+      "gsc": true
+    },
+    {
+      "at": "2026-10-27T14:53:27.520776+00:00",
+      "reason": "schedule",
+      "inspected": 10,
+      "gsc": true
+    },
+    {
+      "at": "2026-10-27T13:02:15.039542+00:00",
+      "reason": "schedule",
+      "inspected": 10,
+      "gsc": true
+    },
+    {
+      "at": "2026-10-27T12:55:20.239376+00:00",
+      "reason": "schedule",
+      "inspected": 10,
+      "gsc": true
+    },
+    {
+      "at": "2026-10-27T12:54:13.813665+00:00",
+      "reason": "schedule",
+      "inspected": 10,
+      "gsc": true
+    },
+    {
+      "at": "2026-10-27T12:32:19.993866+00:00",
+      "reason": "schedule",
+      "inspected": 10,
+      "gsc": true
+    },
+    {
+      "at": "2026-10-27T12:30:55.903953+00:00",
+      "reason": "schedule",
+      "inspected": 10,
+      "gsc": true
+    },
+    {
+      "at": "2026-10-27T12:29:40.972823+00:00",
+      "reason": "schedule",
+      "inspected": 10,
+      "gsc": true
+    },
+    {
+      "at": "2026-10-27T12:21:04.098939+00:00",
+      "reason": "schedule",
+      "inspected": 10,
+      "gsc": true
+    },
+    {
+      "at": "2026-10-27T12:19:26.382104+00:00",
+      "reason": "schedule",
+      "inspected": 10,
+      "gsc": true
+    },
+    {
+      "at": "2026-10-27T12:14:19.147546+00:00",
+      "reason": "schedule",
+      "inspected": 10,
+      "gsc": true
+    },
+    {
+      "at": "2026-10-27T12:13:26.546425+00:00",
+      "reason": "schedule",
+      "inspected": 10,
+      "gsc": true
+    },
+    {
+      "at": "2026-10-27T12:12:48.038340+00:00",
+      "reason": "schedule",
+      "inspected": 10,
+      "gsc": true
+    },
+    {
+      "at": "2026-10-27T12:07:15.762837+00:00",
+      "reason": "schedule",
+      "inspected": 10,
+      "gsc": true
+    },
+    {
+      "at": "2026-10-27T12:02:23.728720+00:00",
+      "reason": "schedule",
+      "inspected": 10,
+      "gsc": true
+    },
+    {
+      "at": "2026-10-27T12:01:31.681385+00:00",
+      "reason": "schedule",
+      "inspected": 10,
+      "gsc": true
+    },
+    {
+      "at": "2026-10-27T11:57:02.755915+00:00",
+      "reason": "schedule",
+      "inspected": 10,
+      "gsc": true
+    },
+    {
+      "at": "2026-10-27T11:56:19.015178+00:00",
+      "reason": "schedule",
+      "inspected": 10,
+      "gsc": true
+    }
+  ]
+}

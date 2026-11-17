@@ -2,20 +2,22 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Search, Newspaper, TrendingUp, BarChart2,
   HelpCircle, Share2, Users, Shield,
-  UserPlus, Target, ChevronDown, Megaphone, Activity, ScanSearch, Plug, Rocket, Globe2,
+  UserPlus, Target, ChevronDown, Megaphone, ScanSearch, Plug, Rocket, Globe2, Building2, Server,
   Trophy, Bot, Hand, LineChart, Rss,
 } from 'lucide-react'
 import Logo from './Logo'
 import useProjectInfo from '../hooks/useProjectInfo'
 
 const CRM_NAV = [
-  { to: '/dashboard', icon: Activity, label: 'Pipeline' },
+  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/leads',     icon: UserPlus, label: 'Contacts' },
+  { to: '/prospects', icon: Building2, label: 'Prospects' },
 ]
 
 const SEO_NAV = [
   { to: '/top3',       icon: Trophy,          label: 'Top 3 Engine' },
   { to: '/content',    icon: LayoutDashboard, label: 'SEO Content' },
+  { to: '/write',      icon: Newspaper,       label: 'Generate Blog' },
   { to: '/keywords',   icon: Search,          label: 'Keyword Research' },
   { to: '/site-audit', icon: Target,          label: 'Site Audit' },
   { to: '/sitemaps',   icon: Globe2,          label: 'Sitemaps' },
@@ -35,6 +37,8 @@ const CONTENT_AUTOMATION_NAV = [
   { to: '/google-ads',  icon: Megaphone,       label: 'Google Ads' },
   { to: '/lead-engine', icon: Rocket,          label: 'Lead Engine' },
   { to: '/integrations',icon: Plug,            label: 'API Integrations' },
+  { to: '/custom-plugin', icon: Server,        label: 'Custom Plugin' },
+  { to: '/news-feeds', icon: Rss,              label: 'News Feeds' },
 ]
 
 function NavItem({ to, icon: Icon, label, end }) {
@@ -59,8 +63,13 @@ function NavItem({ to, icon: Icon, label, end }) {
   )
 }
 
+function isAdmin() {
+  try { return JSON.parse(localStorage.getItem('mp_user') || '{}').role === 'admin' } catch { return false }
+}
+
 export default function Sidebar({ open = false }) {
   const project = useProjectInfo()
+  const admin = isAdmin()
   const projectName = project.business_name || (project.base_location ? `${project.base_location.split(',')[0]} Project` : 'New Workspace')
   const projectSub = project.website || 'zeorbit.com'
 
@@ -91,8 +100,12 @@ export default function Sidebar({ open = false }) {
         <div className="sidebar-section">Content Automation</div>
         {CONTENT_AUTOMATION_NAV.map(item => <NavItem key={item.to} {...item} />)}
 
-        <div className="sidebar-section">Admin</div>
-        <NavItem to="/admin" icon={Shield} label="Admin Panel" />
+        {admin && (
+          <>
+            <div className="sidebar-section">Admin</div>
+            <NavItem to="/admin" icon={Shield} label="Admin Panel" />
+          </>
+        )}
       </nav>
 
       <div className="sidebar-foot">

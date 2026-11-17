@@ -12,11 +12,12 @@ from config import settings
 import bcrypt
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
 # Token settings
 SECRET_KEY = settings.SECRET_KEY or "your-secret-key-change-in-production"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 
@@ -108,6 +109,16 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
         return User(user_id=user_id, email=email, name=email.split("@")[0])
     except JWTError:
         raise credentials_exception
+
+
+async def get_optional_user(token: Optional[str] = Depends(oauth2_scheme_optional)) -> Optional[User]:
+    """Signed-in account when a token is present. Public pages stay open."""
+    if not token:
+        return None
+    try:
+        return await get_current_user(token)
+    except HTTPException:
+        return None
 
 
 async def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:

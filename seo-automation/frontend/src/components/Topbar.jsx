@@ -7,8 +7,17 @@ function useBackendStatus() {
   const [status, setStatus] = useState('checking')
   useEffect(() => {
     const check = async () => {
-      try { await axios.get('/health', { timeout: 3000 }); setStatus('online') }
-      catch { setStatus('offline') }
+      try {
+        await axios.get('/api/content/llm-providers', { timeout: 8000 })
+        setStatus('online')
+        return
+      } catch { /* try /health */ }
+      try {
+        await axios.get('/health', { timeout: 8000 })
+        setStatus('online')
+      } catch {
+        setStatus('offline')
+      }
     }
     check()
     const id = setInterval(check, 15000)
@@ -17,10 +26,22 @@ function useBackendStatus() {
   return status
 }
 
+function signedInUser() {
+  try {
+    const user = JSON.parse(localStorage.getItem('mp_user') || '{}')
+    const email = (user.email || '').trim()
+    const name = (user.name || '').trim() || email.split('@')[0] || 'Account'
+    return { name, email, initial: (name[0] || 'A').toUpperCase() }
+  } catch {
+    return { name: 'Account', email: '', initial: 'A' }
+  }
+}
+
 export default function Topbar({ onLogout, onMenuClick }) {
   const status = useBackendStatus()
   const navigate = useNavigate()
   const [showMenu, setShowMenu] = useState(false)
+  const user = signedInUser()
 
   const S = {
     checking: { color: '#B45309', bg: 'rgba(180,83,9,0.08)', border: 'rgba(180,83,9,0.2)', label: 'Connecting' },
@@ -70,10 +91,10 @@ export default function Topbar({ onLogout, onMenuClick }) {
         <div style={{ position: 'relative' }}>
           <button onClick={() => setShowMenu(m => !m)}
             style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 12, background: 'none', border: 'none', cursor: 'pointer', borderLeft: '1px solid var(--border)' }}>
-            <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg,#6D6EF0,#5B5CE6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'white', flexShrink: 0 }}>A</div>
+            <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg,#6D6EF0,#5B5CE6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'white', flexShrink: 0 }}>{user.initial}</div>
             <div style={{ textAlign: 'left' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-1)', lineHeight: 1 }}>Admin</div>
-              <div style={{ fontSize: 10, color: 'var(--text-4)', marginTop: 2 }}>admin@zeorbit.com</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-1)', lineHeight: 1 }}>{user.name}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-4)', marginTop: 2 }}>{user.email}</div>
             </div>
             <ChevronDown size={12} style={{ color: 'var(--text-4)' }} />
           </button>
@@ -83,8 +104,8 @@ export default function Topbar({ onLogout, onMenuClick }) {
               <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setShowMenu(false)} />
               <div style={{ position: 'absolute', right: 0, top: 44, zIndex: 50, width: 164, borderRadius: 10, padding: 4, background: 'var(--bg-overlay)', border: '1px solid var(--border-bright)', boxShadow: 'var(--shadow-lg)' }}>
                 <div style={{ padding: '8px 10px 6px', borderBottom: '1px solid var(--border)', marginBottom: 2 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-1)' }}>Admin</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-4)', marginTop: 1 }}>admin@zeorbit.com</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-1)' }}>{user.name}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-4)', marginTop: 1 }}>{user.email}</div>
                 </div>
                 <button onClick={() => { onLogout?.(); navigate('/login') }}
                   style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 7, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', fontSize: 13, transition: 'background 0.15s' }}

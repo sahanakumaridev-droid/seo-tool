@@ -12,6 +12,9 @@ router = APIRouter()
 @router.post("/generate")
 async def start_bulk_generate_job(req: GenerateRequest, background_tasks: BackgroundTasks):
     """Start an async bulk content generation job. Returns job_id for polling."""
+    import os
+    if os.environ.get("SEO_BLOCK_BLOGS") == "1":
+        raise HTTPException(status_code=404, detail="404")
     from routes.content import ensure_brief_for_generate, _places_for_generate
     req = await ensure_brief_for_generate(req)
     cities = await _places_for_generate(req)
@@ -30,7 +33,7 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
         from services.image_service import topic_image_family
         niche = topic_image_family(req.business_type)
         async with AsyncSessionLocal() as session:
-            rows = (await session.execute(select(PageRecord))).scalars().all()
+            rows = (await session.execute(select(PageRecord).order_by(PageRecord.id.desc()).limit(30))).scalars().all()
             for row in rows:
                 block0 = row.seo_block if isinstance(row.seo_block, dict) else {}
                 fam = topic_image_family(f"{row.business_type or ''} {(block0 or {}).get('business_type') or ''}")
@@ -62,6 +65,9 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
             exclude = list(used_featured)
             bodies_snapshot = list(existing_bodies)
         try:
+            from services.job_service import update_job
+            update_job(job_id, error=f"Writing “{name}”…")
+            # Always auto-pick the fastest free cloud key (Groq → Gemini → …). UI no longer chooses.
             block, extra_attempts = await generate_seo_block_until_floor(
                 business_type=req.business_type,
                 city=name,
@@ -69,7 +75,7 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
                 target_keywords=req.target_keywords,
                 industry=req.industry,
                 use_ai=req.use_ai,
-                llm_provider=req.llm_provider,
+                llm_provider=None,
                 exclude_image_urls=exclude,
                 custom_requirements=req.custom_requirements,
                 content_kind=req.content_kind,
@@ -80,30 +86,14 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
                 image_keyword=getattr(req, "image_keyword", "") or "",
                 blog_format=(getattr(req, "blog_format", None) or "") if (req.content_kind == "post") else "",
             )
+        except HTTPException:
+            raise
         except Exception as e:
-            print(f"[Jobs] {name} failed ({e}); writing a fallback page so none are skipped")
-            try:
-                block = await generate_seo_block(
-                    req.business_type,
-                    name,
-                    state,
-                    req.target_keywords,
-                    req.industry,
-                    use_ai=False,
-                    llm_provider=None,
-                    exclude_image_urls=exclude,
-                    custom_requirements=req.custom_requirements,
-                    content_kind=req.content_kind,
-                    audience=req.audience,
-                    keyword_index=keyword_index,
-                    zip=zip_code or "",
-                    image_keyword=getattr(req, "image_keyword", "") or "",
-                blog_format=(getattr(req, "blog_format", None) or "") if (req.content_kind == "post") else "",
-                )
-            except Exception as e2:
-                print(f"[Jobs] fallback also failed for {name}: {e2}")
-                raise
-            extra_attempts = 0
+            print(f"[Jobs] {name} AI failed: {e}")
+            raise HTTPException(
+                status_code=502,
+                detail=f"AI generation failed for {name}. Template fallback is disabled. ({e})",
+            ) from e
         if extra_attempts:
             print(
                 f"[Jobs] {name} scored below 90% — generated again "
@@ -159,8 +149,8 @@ async def start_bulk_generate_job(req: GenerateRequest, background_tasks: Backgr
         job_id=job_id,
         items=indexed,
         task_fn=generate_task,
-        concurrency=4,
-        retry_count=2,
+        concurrency=24,
+        retry_count=1,
     )
 
     return {"job_id": job_id, "total": len(cities), "status": "started"}
@@ -195,5 +185,18 @@ async def get_job_status(job_id: str):
     """Poll job status and results."""
     job = get_job(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+        from datetime import datetime, timezone
+        from models.schemas import JobStatus
+        now = datetime.now(timezone.utc)
+        return JobStatus(
+            job_id=job_id,
+            status="expired",
+            total=0,
+            completed=0,
+            failed=0,
+            results=[],
+            error="Job expired after a server restart. Generate again.",
+            created_at=now,
+            updated_at=now,
+        )
     return job

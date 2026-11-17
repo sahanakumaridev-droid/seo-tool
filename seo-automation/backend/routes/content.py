@@ -1,5 +1,6 @@
 import uuid
 import re
+import asyncio
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +16,7 @@ from services.website_analysis_service import analyze_website
 from services.export_service import export_json, export_html, export_wordpress
 from db import get_session, PageRecord
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 router = APIRouter()
 
@@ -27,7 +28,13 @@ from services.llm_service import available_providers
 @router.get("/llm-providers")
 async def llm_providers():
     """Return which AI models are configured so the UI can enable/disable options."""
-    return available_providers()
+    data = available_providers()
+    from config import settings
+    data["anthropic_model"] = settings.ANTHROPIC_MODEL or "claude-3-haiku-20240307"
+    data["recommended"] = "anthropic" if data.get("anthropic") else (
+        "groq" if data.get("groq") else ("gemini" if data.get("gemini") else data.get("active"))
+    )
+    return data
 
 
 def _compose_brief_text(data: dict) -> str:
@@ -72,9 +79,6 @@ async def ensure_brief_for_generate(req: GenerateRequest) -> GenerateRequest:
         req.industry = resolve_industry_label(
             "", req.business_type or "", list(req.target_keywords or [])
         )
-    if not (req.audience or "").strip():
-        req.audience = "Small business owners"
-
     brief = (req.custom_requirements or "").strip()
     if not _brief_needs_autofill(brief):
         return req
@@ -92,10 +96,11 @@ async def ensure_brief_for_generate(req: GenerateRequest) -> GenerateRequest:
     )
     base = _template_brief_fields(suggest_req)
     try:
-        from services.llm_service import chat_json, llm_available
+        from services.llm_service import chat_json, llm_available, active_provider
         from services.master_custom_instruction import master_instruction_for_prompt
-        # Prefer LLM whenever available — frontend no longer sends a brief
-        if llm_available():
+        # Ollama is too slow for a brief + a full page in one HTTP request.
+        skip_llm_brief = (req.llm_provider or active_provider() or "") in ("ollama",)
+        if llm_available() and not skip_llm_brief:
             place = suggest_req.base_location or "United States"
             kind = "blog post" if req.content_kind == "post" else "location / service page"
             blog_extra = ""
@@ -138,14 +143,22 @@ Return ONLY JSON:
                 if isinstance(data.get("industry"), str) and data["industry"].strip():
                     from services.zeorbit_local_seo import is_generic_industry, resolve_industry_label
                     inferred = data["industry"].strip()
-                    if not is_generic_industry(inferred):
+                    # Keep a short user-chosen industry; only fill when blank/generic.
+                    user_ind = (req.industry or "").strip()
+                    if user_ind and not is_generic_industry(user_ind) and len(user_ind.split()) <= 4:
+                        pass
+                    elif not is_generic_industry(inferred) and len(inferred.split()) <= 4:
                         req.industry = inferred
-                    elif not (req.industry or "").strip():
+                    elif not user_ind:
                         req.industry = resolve_industry_label(
                             "", req.business_type or "", list(req.target_keywords or [])
                         )
                 if isinstance(data.get("audience"), str) and data["audience"].strip():
-                    req.audience = data["audience"].strip()
+                    inferred_aud = data["audience"].strip()
+                    user_aud = (req.audience or "").strip()
+                    # Ignore long AI essays as audience labels.
+                    if (not user_aud or user_aud.lower() == "small business owners") and len(inferred_aud.split()) <= 5:
+                        req.audience = inferred_aud
     except Exception as e:
         print(f"[Generate] brief autofill AI failed, using template: {e}")
 
@@ -168,8 +181,42 @@ def _template_brief_fields(req: BriefSuggestRequest) -> dict:
     intent = pick_search_intent(
         city, 0, industry=industry, brief=req.extra_notes or req.topic_title or "", keywords=req.target_keywords or [],
     )
+    if (req.content_kind or "") == "post":
+        kw = ((req.target_keywords or ["this topic"])[0] or "this topic").strip()
+        title = req.topic_title or kw
+        problem = req.customer_problem or (
+            f'The reader searched “{kw}” and needs a practical, step-by-step answer — not a sales page.'
+        )
+        key_points = req.key_points or "\n".join([
+            f"- Direct answer to: {kw}",
+            "- What to do first, in order",
+            "- Common mistakes to avoid",
+            "- Tools or examples that make the steps concrete",
+            "- How to know it worked",
+        ])
+        faq_ideas = req.faq_ideas or "\n".join([
+            f"- What does “{kw}” actually mean?",
+            f"- How long does {kw} take?",
+            "- What should I prepare before I start?",
+        ])
+        cta = req.cta_direction or (
+            "End with a soft next step if they want help implementing this — never a hard sell."
+        )
+        tone = req.tone_notes or (
+            "Clear American English. Teach the query. No city stuffing, no fake reviews, no prices."
+        )
+        return {
+            "topic_title": title,
+            "search_intent": req.search_intent or "informational",
+            "customer_problem": problem,
+            "pricing": "",
+            "key_points": key_points,
+            "faq_ideas": faq_ideas,
+            "cta_direction": cta,
+            "tone_notes": tone,
+            "extra_notes": req.extra_notes or "",
+        }
     if req.search_intent:
-        # Keep user-chosen intent label if provided
         intent_label = req.search_intent
     else:
         intent_label = intent.label
@@ -182,7 +229,6 @@ def _template_brief_fields(req: BriefSuggestRequest) -> dict:
         f"- Relevant services: WordPress, Shopify, redesign, mobile-friendly sites, SEO-friendly structure",
         f"- Practical advice for choosing a website provider",
         f"- Experience: {ZEORBIT_FACTS['experience']}, {ZEORBIT_FACTS['reviews']}",
-        f"- Practical advice for choosing a website provider",
         f"- Clear next step / CTA",
     ])
     faqs = intent_faqs(intent, city, industry, 0)
@@ -332,6 +378,9 @@ async def _places_for_generate(req: GenerateRequest) -> List:
 @router.post("/generate", response_model=BulkGenerateResponse)
 async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(get_session)):
     """Generate location pages/posts. Regenerates any result below 90% until it passes."""
+    import os
+    if os.environ.get("SEO_BLOCK_BLOGS") == "1":
+        raise HTTPException(status_code=404, detail="404")
     from services.zeorbit_local_seo import MIN_PUBLISH_SCORE, MIN_KEYWORD_USE_SCORE, scores_meet_floor
 
     req = await ensure_brief_for_generate(req)
@@ -369,35 +418,30 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
         if body0:
             existing_bodies.append(body0)
 
-    batch_slugs: set[str] = set()
+    by_city: dict = {}
+    for row in existing_rows:
+        by_city.setdefault((row.city or "").strip().lower(), []).append(row)
 
-    for keyword_index, city_info in enumerate(cities):
-        exclude = list(used_featured)
+    batch_slugs: set[str] = set()
+    lock = asyncio.Lock()
+    sem = asyncio.Semaphore(20)
+
+    async def _gen_one(keyword_index: int, city_info):
+        nonlocal retried_n
+        async with sem:
+            async with lock:
+                exclude = list(used_featured)
+                bodies_snapshot = list(existing_bodies[-4:])
         from services.slug_utils import article_slug
         from services.content_service import pick_primary_keyword, article_topic
-        focus = (
-            article_topic(req.custom_requirements, req.target_keywords, req.business_type)
-            if req.content_kind == "post"
-            else pick_primary_keyword(
-                req.target_keywords,
-                req.business_type,
-                city_info.name,
-                keyword_index,
-                industry=req.industry or "",
-            )
-        )
-        preview_slug = article_slug(
-            [focus] + list(req.target_keywords or []),
-            city_info.name,
-            focus,
-        )
+        raw_topic = next((str(k).strip() for k in (req.target_keywords or []) if str(k).strip()), req.business_type or "")
+        preview_slug = article_slug([raw_topic], city_info.name, raw_topic)
         # Free images from the row we are about to overwrite (preview OR any city match).
         candidates = []
         if preview_slug in by_slug:
             candidates.append(by_slug[preview_slug])
-        for row in existing_rows:
-            if (row.city or "").strip().lower() == (city_info.name or "").strip().lower():
-                candidates.append(row)
+        for row in by_city.get((city_info.name or "").strip().lower(), []):
+            candidates.append(row)
         free_urls = []
         for cand in candidates:
             prev = cand.seo_block if isinstance(cand.seo_block, dict) else {}
@@ -425,7 +469,7 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
             content_kind=req.content_kind,
             audience=req.audience,
             keyword_index=keyword_index,
-            existing_bodies=existing_bodies,
+            existing_bodies=bodies_snapshot,
             zip=getattr(city_info, "zip", "") or "",
             image_keyword=getattr(req, "image_keyword", "") or "",
             blog_format=(getattr(req, "blog_format", None) or "") if (req.content_kind == "post") else "",
@@ -433,121 +477,111 @@ async def generate_bulk(req: GenerateRequest, session: AsyncSession = Depends(ge
         except HTTPException:
             raise
         except Exception as e:
-            print(f"[Generate] {city_info.name} failed ({e}); writing a fallback page so none are skipped")
-            block = await generate_seo_block(
-                req.business_type,
-                city_info.name,
-                city_info.state,
-                req.target_keywords,
-                req.industry,
-                use_ai=False,
-                llm_provider=None,
-                exclude_image_urls=exclude,
-                custom_requirements=req.custom_requirements,
-                content_kind=req.content_kind,
-                audience=req.audience,
-                keyword_index=keyword_index,
-                zip=getattr(city_info, "zip", "") or "",
-                image_keyword=getattr(req, "image_keyword", "") or "",
-            blog_format=(getattr(req, "blog_format", None) or "") if (req.content_kind == "post") else "",
-            )
-            extra_attempts = 0
-        if extra_attempts:
-            retried_n += 1
-            print(
-                f"[Quality] {city_info.name} first scored below 90% — "
-                f"generated again ({extra_attempts} extra pass(es))"
-            )
-        # Final uniqueness guard (same as async jobs path)
-        if block.featured_image_url:
-            taken = {normalize_image_key(u) for u in used_featured}
-            key = normalize_image_key(block.featured_image_url)
-            if key in taken:
-                try:
-                    images = await generate_article_images(
-                    focus,
-                    f"{city_info.name}, {city_info.state} {getattr(city_info, 'zip', '') or ''}".strip(),
-                    "ZeOrbit",
-                    count=3,
-                    exclude_urls=used_featured,
-                    industry="" if req.content_kind == "post" else (req.industry or ""),
-                    niche=focus if req.content_kind == "post" else (req.business_type or ""),
-                    search_intent=getattr(block, "search_intent", "") or "",
-                    image_concept_text=getattr(block, "image_concept", "") or "",
-                    keyword_index=keyword_index,
-                    content_type="blog" if req.content_kind == "post" else "service",
-                match_query=(getattr(req, "image_keyword", "") or "").strip() or (focus if req.content_kind == "post" else (focus or req.business_type or "")),
-                    audience=req.audience or "",
-                    image_keyword=(getattr(req, "image_keyword", "") or "").strip(),
-                    )
-                    if images:
-                        from services.image_service import assign_canonical_images
-                        feat, foot, cleaned = assign_canonical_images(images)
-                        if feat and normalize_image_key(feat) not in taken:
-                            block.in_content_images = cleaned
-                            block.featured_image_url = feat
-                            block.footer_image_url = foot
-                    if normalize_image_key(block.featured_image_url or "") in taken:
+            print(f"[Generate] {city_info.name} AI failed: {e}")
+            raise HTTPException(
+                status_code=502,
+                detail=f"AI generation failed for {city_info.name}. Template fallback is disabled. ({e})",
+            ) from e
+        focus = (getattr(block, "focus_keyword", None) or raw_topic or "").strip()
+        async with lock:
+            if extra_attempts:
+                retried_n += 1
+                print(
+                    f"[Quality] {city_info.name} first scored below 90% — "
+                    f"generated again ({extra_attempts} extra pass(es))"
+                )
+            # Final uniqueness guard (same as async jobs path)
+            if block.featured_image_url:
+                taken = {normalize_image_key(u) for u in used_featured}
+                key = normalize_image_key(block.featured_image_url)
+                if key in taken:
+                    try:
+                        images = await generate_article_images(
+                        focus,
+                        f"{city_info.name}, {city_info.state} {getattr(city_info, 'zip', '') or ''}".strip(),
+                        "ZeOrbit",
+                        count=3,
+                        exclude_urls=used_featured,
+                        industry="" if req.content_kind == "post" else (req.industry or ""),
+                        niche=focus if req.content_kind == "post" else (req.business_type or ""),
+                        search_intent=getattr(block, "search_intent", "") or "",
+                        image_concept_text=getattr(block, "image_concept", "") or "",
+                        keyword_index=keyword_index,
+                        content_type="blog" if req.content_kind == "post" else "service",
+                    match_query=(getattr(req, "image_keyword", "") or "").strip() or (focus if req.content_kind == "post" else (focus or req.business_type or "")),
+                        audience=req.audience or "",
+                        image_keyword=(getattr(req, "image_keyword", "") or "").strip(),
+                        )
+                        if images:
+                            from services.image_service import assign_canonical_images
+                            feat, foot, cleaned = assign_canonical_images(images)
+                            if feat and normalize_image_key(feat) not in taken:
+                                block.in_content_images = cleaned
+                                block.featured_image_url = feat
+                                block.footer_image_url = foot
+                        if normalize_image_key(block.featured_image_url or "") in taken:
+                            from services.image_service import unused_featured_url
+                            alt = unused_featured_url(used_featured, seed=city_info.name)
+                            if alt:
+                                block.featured_image_url = alt
+                    except Exception as e:
+                        print(f"[Image] uniqueness regen skipped for {city_info.name}: {e}")
                         from services.image_service import unused_featured_url
                         alt = unused_featured_url(used_featured, seed=city_info.name)
                         if alt:
                             block.featured_image_url = alt
-                except Exception as e:
-                    print(f"[Image] uniqueness regen skipped for {city_info.name}: {e}")
-                    from services.image_service import unused_featured_url
-                    alt = unused_featured_url(used_featured, seed=city_info.name)
-                    if alt:
-                        block.featured_image_url = alt
-            # Prefer unique featured across pages; body images may reuse after pool stretch
-            if block.featured_image_url:
-                used_featured.append(block.featured_image_url)
+                # Prefer unique featured across pages; body images may reuse after pool stretch
+                if block.featured_image_url:
+                    used_featured.append(block.featured_image_url)
 
-        # Track bodies for in-batch duplicate detection
-        existing_bodies.append(f"{block.intro or ''}\n{block.content or ''}")
+            # Track bodies for in-batch duplicate detection
+            existing_bodies.append(f"{block.intro or ''}\n{block.content or ''}")
 
-        slug = (block.slug or preview_slug).strip()
-        from services.page_dedupe import row_matches_post
-        if req.content_kind == "post":
-            already = slug in batch_slugs or slug in by_slug
-            if not already:
+            slug = (block.slug or preview_slug).strip()
+            from services.page_dedupe import row_matches_post
+            if req.content_kind == "post":
+                already = slug in batch_slugs or slug in by_slug
+                if not already:
+                    for row in existing_rows:
+                        if row_matches_post(
+                            row,
+                            slug=slug,
+                            city=city_info.name or "",
+                            keyword=focus or "",
+                            title=block.title or "",
+                        ):
+                            already = True
+                            break
+                if already:
+                    return
+            elif slug in batch_slugs:
+                n = 2
+                while f"{slug}-{n}" in batch_slugs or f"{slug}-{n}" in by_slug:
+                    n += 1
+                slug = f"{slug}-{n}"
+            batch_slugs.add(slug)
+            block.slug = slug
+            pages.append(block)
+
+            # Upsert by FINAL slug — preview_slug often differs once industry is applied,
+            # which previously caused UNIQUE constraint failures on INSERT.
+            existing = by_slug.get(slug)
+            if existing is None and preview_slug and preview_slug != slug:
+                # Same city previously saved under an older slug form — update that row
+                # and retarget its slug instead of inserting a duplicate.
+                existing = by_slug.get(preview_slug)
+            if existing is None:
                 for row in existing_rows:
-                    if row_matches_post(
-                        row,
-                        slug=slug,
-                        city=city_info.name or "",
-                        keyword=focus or "",
-                        title=block.title or "",
+                    if (
+                        (row.city or "").strip().lower() == (city_info.name or "").strip().lower()
+                        and (row.business_type or "").strip().lower() == (req.business_type or "").strip().lower()
                     ):
-                        already = True
+                        existing = row
                         break
-            if already:
-                continue
-        elif slug in batch_slugs:
-            n = 2
-            while f"{slug}-{n}" in batch_slugs or f"{slug}-{n}" in by_slug:
-                n += 1
-            slug = f"{slug}-{n}"
-        batch_slugs.add(slug)
-        block.slug = slug
-        pages.append(block)
-
-        # Upsert by FINAL slug — preview_slug often differs once industry is applied,
-        # which previously caused UNIQUE constraint failures on INSERT.
-        existing = by_slug.get(slug)
-        if existing is None and preview_slug and preview_slug != slug:
-            # Same city previously saved under an older slug form — update that row
-            # and retarget its slug instead of inserting a duplicate.
-            existing = by_slug.get(preview_slug)
-        if existing is None:
-            for row in existing_rows:
-                if (
-                    (row.city or "").strip().lower() == (city_info.name or "").strip().lower()
-                    and (row.business_type or "").strip().lower() == (req.business_type or "").strip().lower()
-                ):
-                    existing = row
-                    break
 
         # Draft only — do not write PageRecord here. Live URLs / sitemap happen on Publish.
+
+    await asyncio.gather(*[_gen_one(i, c) for i, c in enumerate(cities)])
 
     if not pages:
         if req.content_kind == "post":
@@ -588,6 +622,9 @@ async def analyze_website_endpoint(req: WebsiteAnalysisRequest):
 @router.post("/generate-articles", response_model=BulkGenerateResponse)
 async def generate_articles_endpoint(req: ArticleRequest, session: AsyncSession = Depends(get_session)):
     """Generate N unique articles from a primary keyword + location, grounded in a website analysis."""
+    import os
+    if os.environ.get("SEO_BLOCK_BLOGS") == "1":
+        raise HTTPException(status_code=404, detail="404")
     profile = await analyze_website(req.website_url)
     try:
         pages = await generate_articles(req, profile)
@@ -599,7 +636,7 @@ async def generate_articles_endpoint(req: ArticleRequest, session: AsyncSession 
     city, _, _ = (req.location.partition(","))
     used_featured: List[str] = []
     from services.image_service import normalize_image_key
-    for row in (await session.execute(select(PageRecord))).scalars().all():
+    for row in (await session.execute(select(PageRecord).order_by(PageRecord.id.desc()).limit(30))).scalars().all():
         b0 = row.seo_block if isinstance(row.seo_block, dict) else {}
         u0 = (b0 or {}).get("featured_image_url") or ""
         if u0:
@@ -663,13 +700,111 @@ async def generate_single(
     use_ai: bool = False,
     llm_provider: str = None,
 ):
-    return await generate_seo_block(business_type, city, state, use_ai=use_ai, llm_provider=llm_provider)
+    return await generate_seo_block(business_type, city, state, use_ai=True, llm_provider=llm_provider)
+
+
+@router.post("/correct", response_model=SEOBlock)
+async def correct_block(payload: Dict[str, Any]):
+    """Rewrite one draft from its topic, industry, and city. No manual editing."""
+    from services.topic_intent import interpret_topic, topic_driven_article
+
+    data = dict(payload or {})
+    kw = data.get("keywords") if isinstance(data.get("keywords"), dict) else {}
+    primary = (kw.get("primary") or data.get("focus_keyword") or data.get("title") or "").strip()
+    industry = (data.get("industry") or data.get("business_type") or "").strip()
+    city = ", ".join(part for part in [data.get("city") or "", data.get("state") or ""] if part)
+    note = (data.get("correction") or "").strip()
+    topic = f"{primary}. {note}".strip(". ") if note else primary
+    packed = None
+    try:
+        from services.llm_service import chat_json, llm_available
+        from services.topic_research import research_prompt_block, research_topic
+        if llm_available() and (topic or industry):
+            notes = await research_topic(topic or industry)
+            research_block = research_prompt_block(notes)
+            prompt = f"""Write one accurate article that answers this request exactly, the way a careful assistant would.
+Request: {topic or industry}
+Industry, if any: {industry or "not specified"}
+Place, if any: {city or "not specified"}
+{research_block}
+
+Rules:
+- Answer the request itself. A keyword, a question, and a how-to each need a matching article.
+- Use only facts from the research notes. If a fact is not in the notes, do not invent it. No made-up statistics, prices, awards, or quotes.
+- American English. Short paragraphs. 700+ words in content.
+- Five H2 sections. The first section is a direct answer in plain language.
+- One section is a numbered list of steps or a short checklist.
+- End content with References only when the notes include sources.
+- Close with one sentence: ZeOrbit can build the website or the iOS and Android app. Call (619) 724-9517 or visit www.zeorbit.com.
+Return JSON only with keys title, meta_description, h1, h2s, intro, content, faqs, cta.
+title under 60 characters. meta_description under 155 characters. faqs is a list of 4 objects with question and answer.
+"""
+            data_ai = await chat_json(prompt, temperature=0.4, max_tokens=3500)
+            if data_ai and data_ai.get("content"):
+                packed = {
+                    "title": data_ai.get("title") or topic,
+                    "h1": data_ai.get("h1") or data_ai.get("title") or topic,
+                    "meta_description": data_ai.get("meta_description") or "",
+                    "h2s": data_ai.get("h2s") or [],
+                    "intro": data_ai.get("intro") or "",
+                    "content": data_ai.get("content") or "",
+                    "faqs": data_ai.get("faqs") or [],
+                    "cta": data_ai.get("cta") or "Call (619) 724-9517 or visit www.zeorbit.com.",
+                }
+    except Exception as exc:
+        print(f"[correct] model article failed: {exc}")
+    if not packed:
+        packed = topic_driven_article(
+            interpret_topic(topic or industry or "website"),
+            city=city,
+            industry=industry,
+        )
+    data["keywords"] = {
+        "primary": primary or industry or "website",
+        "secondary": kw.get("secondary") or [],
+        "long_tail": kw.get("long_tail") or [],
+        "near_me": kw.get("near_me") or [],
+        "user_questions": kw.get("user_questions") or [],
+    }
+    for key in ("title", "h1", "meta_description", "h2s", "intro", "content", "industry_fit", "faqs", "cta"):
+        if packed.get(key):
+            data[key] = packed[key]
+    data.setdefault("h3s", data.get("h3s") or [])
+    data.setdefault("schema_markup", data.get("schema_markup") or {})
+    data.setdefault("city", data.get("city") or "")
+    data.setdefault("state", data.get("state") or "")
+    data.setdefault("business_type", data.get("business_type") or industry or primary)
+    from services.content_service import ensure_content_accuracy
+    return ensure_content_accuracy(SEOBlock.model_validate(data))
 
 
 @router.post("/boost-scores", response_model=SEOBlock)
-async def boost_scores(block: SEOBlock):
+async def boost_scores(payload: Dict[str, Any]):
     """Raise Keyword use (and refresh Quality) toward the 90% floor — preview AI fix."""
     from services.content_service import boost_block_to_floor
+    data = dict(payload or {})
+    kw = data.get("keywords") if isinstance(data.get("keywords"), dict) else {}
+    data["keywords"] = {
+        "primary": kw.get("primary") or data.get("focus_keyword") or data.get("business_type") or "",
+        "secondary": kw.get("secondary") or [],
+        "long_tail": kw.get("long_tail") or [],
+        "near_me": kw.get("near_me") or [],
+        "user_questions": kw.get("user_questions") or [],
+    }
+    data.setdefault("h2s", [])
+    data.setdefault("h3s", [])
+    data.setdefault("faqs", [])
+    data.setdefault("cta", "")
+    data.setdefault("schema_markup", {})
+    data.setdefault("title", "")
+    data.setdefault("h1", data.get("title") or "")
+    data.setdefault("meta_description", "")
+    data.setdefault("intro", "")
+    data.setdefault("content", "")
+    data.setdefault("city", "")
+    data.setdefault("state", "")
+    data.setdefault("business_type", "")
+    block = SEOBlock.model_validate(data)
     return boost_block_to_floor(block)
 
 
@@ -738,7 +873,12 @@ async def refresh_images(
             kw = (block.get("keywords") or {}).get("primary") or ""
         except Exception:
             kw = ""
-        focus = kw or f"{business} {city}".strip()
+        # Prefer dedicated image_keyword / niche over long H1 titles (those
+        # collapse into useless Openverse queries and Flickr noise).
+        image_kw = (block.get("image_keyword") or "").strip()
+        focus = image_kw or kw or business or "website design"
+        if len(focus.split()) > 6 or focus.lower().startswith(("starting", "grow your", "how to")):
+            focus = business or "website design"
         location = f"{city}, {state}".strip(", ")
         ctype = (block.get("content_type") or "").lower()
         is_blog = ctype in ("blog", "post") or not (city or "").strip()
@@ -746,14 +886,15 @@ async def refresh_images(
             f"{business} {focus} {block.get('title') or ''} {block.get('industry') or ''}"
         )
         images = await generate_article_images(
-            focus or (block.get("title") or ""), location, "", count=3,
+            focus or "website design", location, "", count=3,
             angle_title=block.get("title") or "",
             exclude_urls=used_by_family[family],
             industry=block.get("industry") or "",
-            niche=business,
+            niche=business or "Website Design",
             content_type="blog" if is_blog else "service",
-            match_query=(block.get("title") or focus or ""),
+            match_query=focus or "website design",
             image_concept_text=block.get("image_concept") or "",
+            image_keyword=image_kw or focus,
         )
         if not images:
             skipped.append(row.slug)
@@ -801,20 +942,17 @@ async def refresh_images(
 
 @router.post("/repair-images")
 async def repair_block_images(block: dict):
-    """Replace dead/placeholder Unsplash URLs on a draft block without rewriting copy."""
+    """Replace dead/placeholder/off-brand stock URLs on a draft without rewriting copy.
+
+    Always regenerates when the client asks — Openverse/Wikimedia/business-card
+    photos are treated as needing replace, and the button is an explicit refresh.
+    """
     from services.image_service import (
         generate_article_images,
-        stock_url_needs_replace,
-        collect_image_urls_from_seo_block,
         assign_canonical_images,
     )
 
     payload = dict(block or {})
-    urls = collect_image_urls_from_seo_block(payload)
-    needs = (not urls) or any(stock_url_needs_replace(u) for u in urls)
-    if not needs:
-        return block
-
     business = payload.get("business_type") or ""
     city = payload.get("city") or ""
     state = payload.get("state") or ""
@@ -834,7 +972,8 @@ async def repair_block_images(block: dict):
         niche=business,
         content_type="blog" if is_blog else "service",
         match_query=focus if is_blog else "",
-        image_concept_text=payload.get("image_concept") or "",
+        image_concept_text=payload.get("image_concept") or "website design laptop mockup",
+        image_keyword=payload.get("image_keyword") or focus,
     )
     if not images:
         return block

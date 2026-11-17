@@ -36,20 +36,31 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     GOOGLE_PLACES_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
+    # Free-credit Claude: Haiku 3 is cheapest ($0.25/$1.25) so the $5 Console trial lasts longest.
+    # Claim free credits: https://console.anthropic.com/ — then set LLM_PROVIDER=anthropic.
+    ANTHROPIC_MODEL: str = "claude-3-haiku-20240307"
     COHERE_API_KEY: str = ""
-    # ── Free-tier LLM providers (preferred for zero-cost content) ─
+    # ── LLM providers for page/blog copy ─
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_MODEL: str = "qwen/qwen3.8-27b"
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-1.5-flash"
-    # Which provider to prefer: auto | groq | gemini | openai
-    LLM_PROVIDER: str = "gemini"
+    GEMINI_MODEL: str = "gemini-3.6-flash"
+    # auto | groq | gemini | openai | anthropic | ollama
+    LLM_PROVIDER: str = "auto"
+    # Free local LLM (no cloud key). Used when Groq/Gemini keys are empty.
+    OLLAMA_BASE_URL: str = "http://127.0.0.1:11434/v1"
+    OLLAMA_MODEL: str = "llama3.2:3b"
+    OLLAMA_ENABLED: bool = True
     
     # ── WordPress integration ────────────────────────────────────
     WP_URL: str = ""
     WP_USERNAME: str = ""
     WP_APP_PASSWORD: str = ""
     WP_SEO_PLUGIN: str = "rankmath"
+    # Shopify Admin API. Store is the *.myshopify.com host. Blog id is optional.
+    SHOPIFY_STORE: str = ""
+    SHOPIFY_ACCESS_TOKEN: str = ""
+    SHOPIFY_BLOG_ID: str = ""
     FRONTEND_URL: str = ""
     # Base URL used to build public "Publish to Web" links. If empty, it is
     # derived from the incoming request. e.g. https://seo.159.198.79.219.nip.io

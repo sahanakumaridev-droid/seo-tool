@@ -8,3 +8,4 @@ oauth_*.txt
 
 # Google service-account keys
 secrets/
+data/publish_targets.json

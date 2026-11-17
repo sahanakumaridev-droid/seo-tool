@@ -4,23 +4,66 @@ Replaces the in-memory _users dict from the original auth.py.
 """
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from db import get_session
 from db_marketplace import UserRecord
-from models.marketplace import UserCreate, UserLogin, UserPublic, TokenOut, UserUpdate
+from models.marketplace import UserCreate, UserLogin, UserPublic, UserRole, TokenOut, UserUpdate
 from auth import hash_password, verify_password, create_access_token, create_refresh_token
 import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+LOCAL_ADMIN_USER = "admin"
+LOCAL_ADMIN_PASS = "admin"
+
+
+async def ensure_local_admin() -> None:
+    """Guarantee username/password admin / admin exist and work."""
+    from db import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(UserRecord).where(
+                func.lower(UserRecord.email).in_([LOCAL_ADMIN_USER, "admin@zeorbit.com"])
+            )
+        )
+        users = list(result.scalars().all())
+        user = next((u for u in users if (u.email or "").lower() == LOCAL_ADMIN_USER), None)
+        if user is None and users:
+            user = users[0]
+        if user:
+            user.email = LOCAL_ADMIN_USER
+            user.password_hash = hash_password(LOCAL_ADMIN_PASS)
+            user.role = "admin"
+            user.is_active = True
+            if not user.name:
+                user.name = "Admin"
+            for extra in users:
+                if extra.id != user.id:
+                    extra.email = f"admin-legacy-{extra.id}@local"
+        else:
+            session.add(
+                UserRecord(
+                    email=LOCAL_ADMIN_USER,
+                    password_hash=hash_password(LOCAL_ADMIN_PASS),
+                    name="Admin",
+                    role="admin",
+                    is_verified=True,
+                    is_active=True,
+                )
+            )
+        await session.commit()
+        logger.info("Local admin login ready: admin / admin")
+
 
 def _user_to_public(u: UserRecord) -> UserPublic:
+    role = u.role if u.role in {item.value for item in UserRole} else UserRole.professional.value
     return UserPublic(
         id=u.id,
         email=u.email,
         name=u.name,
-        role=u.role,
+        role=role,
         bio=u.bio,
         skills=u.skills or [],
         hourly_rate=u.hourly_rate,
@@ -66,11 +109,40 @@ async def register(req: UserCreate, session: AsyncSession = Depends(get_session)
 
 @router.post("/login", response_model=TokenOut)
 async def login(req: UserLogin, session: AsyncSession = Depends(get_session)):
-    """Login with email + password."""
-    result = await session.execute(select(UserRecord).where(UserRecord.email == req.email))
-    user = result.scalar_one_or_none()
-    if not user or not verify_password(req.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+    """Login with username + password. Local default is admin / admin."""
+    ident = (req.email or "").strip()
+    if ident.lower() == LOCAL_ADMIN_USER:
+        ident = LOCAL_ADMIN_USER
+        if req.password != LOCAL_ADMIN_PASS:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        result = await session.execute(
+            select(UserRecord).where(func.lower(UserRecord.email) == LOCAL_ADMIN_USER)
+        )
+        user = result.scalar_one_or_none()
+        if not user:
+            user = UserRecord(
+                email=LOCAL_ADMIN_USER,
+                password_hash=hash_password(LOCAL_ADMIN_PASS),
+                name="Admin",
+                role="admin",
+                is_verified=True,
+                is_active=True,
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+        elif not verify_password(LOCAL_ADMIN_PASS, user.password_hash):
+            user.password_hash = hash_password(LOCAL_ADMIN_PASS)
+            user.role = "admin"
+            user.is_active = True
+            await session.commit()
+    else:
+        result = await session.execute(
+            select(UserRecord).where(func.lower(UserRecord.email) == ident.lower())
+        )
+        user = result.scalar_one_or_none()
+        if not user or not verify_password(req.password, user.password_hash):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is inactive")
 

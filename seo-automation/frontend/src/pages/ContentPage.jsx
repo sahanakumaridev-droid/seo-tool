@@ -4,10 +4,12 @@ import { Zap, MapPin, Globe, Eye, X, RefreshCw, Save, CheckCircle, AlertTriangle
          FileJson, Tag, Plus, Megaphone, Trash2, FileText, Newspaper, Sparkles, Wand2, Layers, ChevronDown, Check,
          ArrowRight, Search, TrendingUp } from 'lucide-react'
 import { generateBulk, exportJson, generateSingle,
-         saveEditedBlock, publishToWeb, startBulkGenerateJob, getJob, publishAllToWeb, zeorbitBlogUrl, zeorbitArticleUrl,
-         getNearbyCities, getSanDiegoCounty, searchCities, getCounties, getPlaceCatalog, deletePage, listPages, suggestContentBrief } from '../api'
+         saveEditedBlock, publishToWeb, publishToWordPress, publishToShopify, publishBulkToWordPress, publishBulkToShopify, startBulkGenerateJob, getJob, publishAllToWeb, zeorbitBlogUrl, zeorbitArticleUrl,
+         getNearbyCities, getSanDiegoCounty, searchCities, getCounties, getPlaceCatalog, deletePage, listPages, suggestContentBrief,
+         getGeoStates, getGeoCounties, getGeoCities, getGeoAreas, correctBlock } from '../api'
 import axios from 'axios'
 import LocationMap from '../components/LocationMap'
+import { rateContent } from '../utils/contentRating'
 
 const BUSINESS_TYPES = [
   'Web Design', 'Website Redesign', 'Small Business Web Design', 'Small Business WordPress Web Design',
@@ -121,6 +123,123 @@ function briefHasSubstance(briefFields, extraNotes) {
   return composed.length >= 8
 }
 
+function metaLenTone(n, goodMin, goodMax) {
+  if (!n) return { cls: 'is-empty', label: 'Missing' }
+  if (n < goodMin) return { cls: 'is-short', label: `${n} — add more` }
+  if (n > goodMax) return { cls: 'is-long', label: `${n} — trim` }
+  return { cls: 'is-ok', label: `${n} — Google-ready` }
+}
+
+const PUBLISH_TARGETS = [
+  { id: 'custom', label: 'ZeOrbit' },
+  { id: 'wordpress', label: 'WordPress' },
+  { id: 'shopify', label: 'Shopify' },
+]
+
+function publishTargetLabel(id) {
+  return PUBLISH_TARGETS.find((item) => item.id === id)?.label || 'ZeOrbit'
+}
+
+function PublishTargetSelect({ value, onChange }) {
+  return (
+    <label className="text-[11px] flex items-center gap-1.5" style={{ color: 'var(--text-2)' }}>
+      Publish to
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded-lg px-2 py-1.5 text-xs"
+        style={{ border: '1px solid var(--border)', background: '#fff', color: '#0f172a' }}
+      >
+        {PUBLISH_TARGETS.map((item) => (
+          <option key={item.id} value={item.id}>{item.label}</option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+function PostStudio({ pages, onPatch, onView, onPublish, publishResults, studioRef, publishLabel = 'ZeOrbit' }) {
+  return (
+    <div className="post-studio" ref={studioRef}>
+      {pages.map((block, i) => {
+        const title = block.title || ''
+        const meta = block.meta_description || ''
+        const slug = block.slug || ''
+        const titleTone = metaLenTone(title.length, 45, 60)
+        const metaTone = metaLenTone(meta.length, 140, 160)
+        const pr = publishResults[i]
+        const body = block.content || ''
+        return (
+          <article key={`${slug || i}-${i}`} className="post-studio-card">
+            <header className="post-studio-head">
+              <span className="post-studio-kicker">Blog post · post-sitemap.xml</span>
+              <h2>{block.h1 || title || 'Untitled post'}</h2>
+              <p className="post-studio-kw">{block.keywords?.primary || block.focus_keyword || '—'}</p>
+            </header>
+
+            <div className="serp-preview" aria-label="Google search preview">
+              <div className="serp-crumb">zeorbit.com › {slug || 'slug'}</div>
+              <div className="serp-title">{title || 'SEO title appears here'}</div>
+              <div className="serp-desc">{meta || 'Meta description appears here as the snippet under the title.'}</div>
+            </div>
+
+            <div className="post-meta-grid">
+              <label>
+                <span>SEO title <em className={titleTone.cls}>{titleTone.label}</em></span>
+                <input
+                  value={title}
+                  maxLength={80}
+                  onChange={(e) => onPatch(i, { title: e.target.value, h1: block.h1 || e.target.value })}
+                />
+              </label>
+              <label>
+                <span>URL slug</span>
+                <input
+                  value={slug}
+                  onChange={(e) => onPatch(i, {
+                    slug: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''),
+                  })}
+                />
+              </label>
+              <label className="span-2">
+                <span>Meta description <em className={metaTone.cls}>{metaTone.label}</em></span>
+                <textarea
+                  rows={3}
+                  value={meta}
+                  onChange={(e) => onPatch(i, { meta_description: e.target.value })}
+                />
+              </label>
+              <label className="span-2">
+                <span>Intro</span>
+                <textarea
+                  rows={3}
+                  value={block.intro || ''}
+                  onChange={(e) => onPatch(i, { intro: e.target.value })}
+                />
+              </label>
+              <label className="span-2">
+                <span>Body <em>{body.split(/\s+/).filter(Boolean).length} words</em></span>
+                <textarea
+                  rows={14}
+                  value={body}
+                  onChange={(e) => onPatch(i, { content: e.target.value })}
+                />
+              </label>
+            </div>
+
+            <div className="post-studio-actions">
+              <button type="button" className="content-btn" onClick={() => onPublish(block, i)} disabled={pr === 'loading'}>
+                <Globe size={14} />
+                {pr === 'loading' ? 'Publishing…' : pr?.success ? 'Live' : `Publish to ${publishLabel}`}
+              </button>
+            </div>
+          </article>
+        )
+      })}
+    </div>
+  )
+}
+
 const US_CITY_OPTIONS = [
   'San Diego, CA', 'Carlsbad, CA', 'Chula Vista, CA', 'Coronado, CA', 'Del Mar, CA',
   'El Cajon, CA', 'Encinitas, CA', 'Escondido, CA', 'Imperial Beach, CA', 'La Mesa, CA',
@@ -148,6 +267,18 @@ function oneWordFromKeyword(raw) {
     if (words.includes(p)) return p
   }
   return words[0] || 'website'
+}
+
+function formatGeoLabel({ area, city, county, state, country }) {
+  const st = (state || '').trim()
+  const short = st.length > 2 ? (st === 'California' ? 'CA' : st) : st
+  const bits = []
+  if (area) bits.push(area)
+  if (city) bits.push(city)
+  else if (county) bits.push(county)
+  if (short) bits.push(short)
+  else if (country && country !== 'United States') bits.push(country)
+  return bits.join(', ')
 }
 
 function locKey(value) {
@@ -283,12 +414,13 @@ function BriefField({ label, hint, value, onChange, onAi, aiBusy, rows = 3, plac
 }
 
 function SearchSelect({
-  label, required, value, onChange, options, placeholder, maxResults = 40, remoteSearch = null,
+  label, required, value, onChange, options, placeholder, maxResults = 800, remoteSearch = null,
   multi = false, selected = [], onToggle, hint, hidePicked = false, inputClassName = '',
 }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const [remoteOpts, setRemoteOpts] = useState([])
+  const boxRef = useRef(null)
   const query = (q || '').trim().toLowerCase()
   const picked = multi ? (selected || []) : []
   const localFiltered = (options || [])
@@ -307,10 +439,10 @@ function SearchSelect({
     return [...localFiltered, ...extra].slice(0, maxResults)
   })()
   const typed = (multi ? q : value) || ''
-  const exact = (options || []).some((o) => locKey(o) === locKey(typed))
+  const exactHit = (options || []).some((o) => locKey(o) === locKey(typed))
     || remoteOpts.some((o) => locKey(o) === locKey(typed))
     || picked.some((o) => locKey(o) === locKey(typed))
-  const showCustom = Boolean(typed.trim()) && !exact
+  const showCustom = Boolean(typed.trim()) && !exactHit
 
   useEffect(() => {
     if (!remoteSearch || !open) return
@@ -339,11 +471,12 @@ function SearchSelect({
   }
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div ref={boxRef} style={{ position: 'relative' }}>
       {label ? (
       <label className="loc-lbl">
         {label}
         {required ? <span className="loc-req">Required</span> : null}
+        {multi ? <span className="loc-req" style={{ color: 'var(--brand)', fontWeight: 650 }}>Multi-select</span> : null}
       </label>
       ) : null}
       {multi && picked.length > 0 && !hidePicked && (
@@ -366,7 +499,9 @@ function SearchSelect({
           if (!multi) onChange(next)
         }}
         onFocus={() => { if (!multi) setQ(value || ''); setOpen(true) }}
-        onBlur={() => setTimeout(() => setOpen(false), 160)}
+        onBlur={() => setTimeout(() => {
+          if (!boxRef.current?.contains(document.activeElement)) setOpen(false)
+        }, 180)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.preventDefault()
@@ -376,11 +511,11 @@ function SearchSelect({
           }
         }}
         placeholder={placeholder}
-        className="w-full rounded-lg px-3 py-2 text-sm"
+        className={`w-full rounded-lg px-3 py-2 text-sm ${inputClassName || ''}`}
         style={{ background: '#fff', border: '1px solid var(--border-bright)', color: 'var(--text-1)' }}
       />
       {open && (filtered.length > 0 || showCustom) && (
-        <div className="absolute left-0 right-0 z-20 mt-1 rounded-lg overflow-hidden" style={{ background: '#fff', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)', maxHeight: 280, overflowY: 'auto' }}>
+        <div className="absolute left-0 right-0 z-20 mt-1 rounded-lg overflow-hidden" style={{ background: '#fff', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)', maxHeight: 320, overflowY: 'auto' }}>
           {showCustom && (
             <button
               type="button"
@@ -400,10 +535,19 @@ function SearchSelect({
                 key={opt}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => pick(opt)}
-                className="w-full text-left px-3 py-2 text-sm"
+                className="w-full text-left px-3 py-2 text-sm flex items-center gap-2"
                 style={{ background: on || locKey(opt) === locKey(value) ? 'var(--brand-soft)' : 'transparent', color: 'var(--text-1)' }}
               >
-                {multi ? (on ? `✓ ${opt}` : `+ ${opt}`) : opt}
+                {multi ? (
+                  <span aria-hidden style={{
+                    width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                    border: on ? '1px solid #4f46e5' : '1px solid #c4c4cc',
+                    background: on ? '#4f46e5' : '#fff',
+                    color: '#fff', fontSize: 11, fontWeight: 800,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  }}>{on ? '✓' : ''}</span>
+                ) : null}
+                {opt}
               </button>
             )
           })}
@@ -412,7 +556,7 @@ function SearchSelect({
       <p className="mt-1 text-[10px]" style={{ color: 'var(--text-4)' }}>
         {hint
           || (multi
-            ? 'Select as many cities as you want. Each selected place becomes its own page or blog.'
+            ? 'Select as many places as you want. Each selected place becomes its own page or blog.'
             : remoteSearch
               ? 'Type to search 30,000+ US cities, or enter a custom place — both are saved.'
               : 'Search the list or type a custom value — both are saved.')}
@@ -509,23 +653,26 @@ function analyzeCategoryAlignment(niche, industry, keywords = []) {
 }
 
 // ── Preview Modal ──────────────────────────────────────────────
-function PreviewModal({ block, businessType, targetKeywords = [], onClose, onRegenerate }) {
+function PreviewModal({ block: initialBlock, businessType, targetKeywords = [], onClose, onRegenerate }) {
   const [tab, setTab] = useState('content')
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [publishResult, setPublishResult] = useState(null)
+  const [block, setBlock] = useState(initialBlock)
 
   const handleRegen = async () => {
     setLoading(true)
     try {
       const res = await generateSingle(businessType, block.city, block.state)
+      setBlock(res.data)
       onRegenerate(res.data)
     } finally { setLoading(false) }
   }
 
   const handleSave = async () => {
     await saveEditedBlock(block, { businessType, applyGlobally: true })
+    onRegenerate(block)
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
   }
@@ -534,7 +681,7 @@ function PreviewModal({ block, businessType, targetKeywords = [], onClose, onReg
     setPublishing(true)
     setPublishResult(null)
     try {
-      const res = await publishToWeb(publishPayload(block))
+      const res = await publishToWeb(block)
       const url = zeorbitArticleUrl(res.data.public_url || res.data.slug)
       setPublishResult({ success: true, post_url: url })
     } catch (e) {
@@ -591,10 +738,10 @@ function PreviewModal({ block, businessType, targetKeywords = [], onClose, onReg
         <div className="overflow-y-auto flex-1 p-6 space-y-4">
           {tab === 'content' && (
             <>
-              <MetaRow label="SEO Title" value={block.title} />
-              <MetaRow label="Meta Description" value={block.meta_description} />
-              <MetaRow label="URL Slug" value={block.slug || `${block.business_type?.toLowerCase().replace(/ /g,'-')}-${block.city?.toLowerCase().replace(/ /g,'-')}`} />
-              <MetaRow label="H1" value={block.h1} />
+              <MetaRow label="SEO Title" value={block.title} onChange={(v) => setBlock((p) => ({ ...p, title: v }))} />
+              <MetaRow label="Meta Description" value={block.meta_description} multiline onChange={(v) => setBlock((p) => ({ ...p, meta_description: v }))} />
+              <MetaRow label="URL Slug" value={block.slug || `${block.business_type?.toLowerCase().replace(/ /g,'-')}-${block.city?.toLowerCase().replace(/ /g,'-')}`} onChange={(v) => setBlock((p) => ({ ...p, slug: v }))} />
+              <MetaRow label="H1" value={block.h1} onChange={(v) => setBlock((p) => ({ ...p, h1: v }))} />
               <div className="rounded-lg bg-white/3 border border-white/6 p-4">
                 <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">H2 Headings (Question-based)</div>
                 <ul className="space-y-2">
@@ -615,8 +762,8 @@ function PreviewModal({ block, businessType, targetKeywords = [], onClose, onReg
                   ))}
                 </ul>
               </div>
-              <MetaRow label="Body Content" value={block.content} multiline />
-              <MetaRow label="Call to Action" value={block.cta} />
+              <MetaRow label="Body Content" value={block.content} multiline onChange={(v) => setBlock((p) => ({ ...p, content: v }))} />
+              <MetaRow label="Call to Action" value={block.cta} multiline onChange={(v) => setBlock((p) => ({ ...p, cta: v }))} />
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <ScoreBar label="Quality (need 90+)" value={Math.round(block.quality_score ?? block.readability_score ?? 0)} color="#1D4ED8" />
                 <ScoreBar label="Keyword use (need 90+)" value={Math.min(100, Math.round(block.keyword_density || 0))} color="#2563EB" />
@@ -630,7 +777,8 @@ function PreviewModal({ block, businessType, targetKeywords = [], onClose, onReg
                 <p className="text-xs text-indigo-300 mb-1 font-semibold">AI Overview Optimized Intro</p>
                 <p className="text-xs text-slate-400">First 2–3 lines answer directly, include location + keyword — optimized for Google AI Overviews, Bing Copilot, and ChatGPT retrieval.</p>
               </div>
-              <MetaRow label="Intro Paragraph" value={block.intro || block.content?.split('\n\n')[0]} multiline />
+              <MetaRow label="Intro Paragraph" value={block.intro || ''} multiline
+                onChange={(v) => setBlock((prev) => ({ ...prev, intro: v }))} />
             </>
           )}
           {tab === 'keywords' && (
@@ -675,8 +823,23 @@ function PreviewModal({ block, businessType, targetKeywords = [], onClose, onReg
               <div className="text-xs text-slate-500 mb-2">{block.faqs?.length || 0} FAQs — structured for AI extraction (schema.org/FAQPage)</div>
               {block.faqs?.map((faq, i) => (
                 <div key={i} className="rounded-xl bg-white/3 border border-white/6 p-4">
-                  <p className="text-sm font-semibold text-indigo-300 mb-2">{faq.question}</p>
-                  <p className="text-sm text-slate-400 leading-relaxed">{faq.answer}</p>
+                  <input
+                    className="w-full text-sm font-semibold text-indigo-300 mb-2 bg-transparent outline-none"
+                    value={faq.question}
+                    onChange={(e) => setBlock((prev) => ({
+                      ...prev,
+                      faqs: prev.faqs.map((f, idx) => idx === i ? { ...f, question: e.target.value } : f),
+                    }))}
+                  />
+                  <textarea
+                    rows={3}
+                    className="w-full text-sm text-slate-400 leading-relaxed bg-transparent outline-none resize-y"
+                    value={faq.answer}
+                    onChange={(e) => setBlock((prev) => ({
+                      ...prev,
+                      faqs: prev.faqs.map((f, idx) => idx === i ? { ...f, answer: e.target.value } : f),
+                    }))}
+                  />
                 </div>
               ))}
             </div>
@@ -701,11 +864,31 @@ function PreviewModal({ block, businessType, targetKeywords = [], onClose, onReg
   )
 }
 
-function MetaRow({ label, value, multiline }) {
+function MetaRow({ label, value, multiline, onChange }) {
   return (
     <div className="rounded-lg bg-white/3 border border-white/6 p-4">
       <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">{label}</div>
-      <p className={`text-sm text-slate-200 leading-relaxed ${multiline ? 'whitespace-pre-line' : ''}`}>{value}</p>
+      {onChange ? (
+        multiline ? (
+          <textarea
+            rows={label.toLowerCase().includes('intro') ? 6 : 8}
+            value={value || ''}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full text-sm text-slate-200 leading-relaxed bg-transparent outline-none resize-y"
+            style={{ fontFamily: 'inherit', minHeight: 96 }}
+          />
+        ) : (
+          <input
+            type="text"
+            value={value || ''}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full text-sm text-slate-200 bg-transparent outline-none"
+            style={{ fontFamily: 'inherit' }}
+          />
+        )
+      ) : (
+        <p className={`text-sm text-slate-200 leading-relaxed ${multiline ? 'whitespace-pre-line' : ''}`}>{value}</p>
+      )}
     </div>
   )
 }
@@ -764,6 +947,7 @@ export default function ContentPage() {
     })
   }
   const [loading, setLoading] = useState(false)
+  const [copiedAll, setCopiedAll] = useState(false)
   const [error, setError] = useState('')
   // Persist generated results across View → back (drafts are not in the DB until Publish).
   const [pages, setPages] = useState(() => {
@@ -781,10 +965,9 @@ export default function ContentPage() {
     try { return JSON.parse(sessionStorage.getItem('seo_keywords') || '[]') } catch { return [] }
   })
   const [useAi, setUseAi] = useState(true)
-  const [llmProvider, setLlmProvider] = useState('')
-  const [llmAvailability, setLlmAvailability] = useState({})
   const [savedPages, setSavedPages] = useState([])
   const [deletingSlug, setDeletingSlug] = useState('')
+  const [correctingKey, setCorrectingKey] = useState('')
   const [useAsync, setUseAsync] = useState(false)
   const [asyncJobId, setAsyncJobId] = useState('')
   const [jobProgress, setJobProgress] = useState(null)
@@ -798,6 +981,19 @@ export default function ContentPage() {
   const [extraLocDraft, setExtraLocDraft] = useState('')
   const [fieldErrors, setFieldErrors] = useState({ kind: '', niche: '', keyword: '', location: '' })
   const [locHint, setLocHint] = useState('')
+  const [locGenMode, setLocGenMode] = useState('multi')
+  const [locCountry] = useState('United States')
+  const [locState, setLocState] = useState('California')
+  const [locCounty, setLocCounty] = useState('San Diego County')
+  const [locCity, setLocCity] = useState('')
+  const [locArea, setLocArea] = useState('')
+  const [locAreaQuery, setLocAreaQuery] = useState('')
+  const [geoStateGroups, setGeoStateGroups] = useState([])
+  const [geoCountyGroups, setGeoCountyGroups] = useState([])
+  const [geoCities, setGeoCities] = useState([])
+  const [geoAreas, setGeoAreas] = useState([])
+  const [geoAreaGroups, setGeoAreaGroups] = useState([])
+  const [geoBusy, setGeoBusy] = useState('')
   const [contentKind, setContentKind] = useState(() => {
     try {
       const saved = sessionStorage.getItem('seo_content_kind') || ''
@@ -810,6 +1006,8 @@ export default function ContentPage() {
   const [customRequirements, setCustomRequirements] = useState('')
   const [briefFields, setBriefFields] = useState(() => ({ ...EMPTY_BRIEF }))
   const [scheduleAt, setScheduleAt] = useState('')
+  const [publishTarget, setPublishTarget] = useState('custom')
+  const publishLabel = publishTargetLabel(publishTarget)
   const [briefAiBusy, setBriefAiBusy] = useState('') // '' | 'all' | field key
   const [showAdvancedBrief, setShowAdvancedBrief] = useState(true)
   const [sdCounty, setSdCounty] = useState(null)
@@ -820,6 +1018,7 @@ export default function ContentPage() {
   const [sdPick, setSdPick] = useState('Chula Vista')
   const [sdLayer, setSdLayer] = useState('areas')
   const [sdFilter, setSdFilter] = useState('')
+  const [placePick, setPlacePick] = useState('')
   const [countyOptions, setCountyOptions] = useState([])
 
   const showToast = (msg, type = 'success') => {
@@ -883,6 +1082,70 @@ export default function ContentPage() {
       .then((res) => setCountyOptions(res.data?.counties || []))
       .catch(() => setCountyOptions([]))
   }, [])
+  useEffect(() => {
+    getGeoStates('United States')
+      .then((res) => setGeoStateGroups(res.data?.groups || []))
+      .catch(() => setGeoStateGroups([]))
+  }, [])
+  useEffect(() => {
+    if (!locState) return
+    let cancelled = false
+    setGeoBusy('counties')
+    getGeoCounties('United States', locState)
+      .then((res) => {
+        if (cancelled) return
+        const groups = res.data?.groups || []
+        setGeoCountyGroups(groups)
+        const all = groups.flatMap((g) => g.counties || [])
+        if (locCounty && !all.some((c) => locKey(c) === locKey(locCounty))) {
+          const sd = all.find((c) => locKey(c).includes('san diego')) || all[0] || ''
+          setLocCounty(sd)
+        }
+      })
+      .catch(() => { if (!cancelled) setGeoCountyGroups([]) })
+      .finally(() => { if (!cancelled) setGeoBusy('') })
+    return () => { cancelled = true }
+  }, [locState])
+  useEffect(() => {
+    if (!locState) return
+    if (!locCounty) { setGeoCities([]); return }
+    let cancelled = false
+    setGeoBusy('cities')
+    getGeoCities('United States', locState, locCounty)
+      .then((res) => {
+        if (cancelled) return
+        const cities = res.data?.cities || []
+        setGeoCities(cities)
+        if (locCity && !cities.some((c) => locKey(c) === locKey(locCity))) setLocCity('')
+      })
+      .catch(() => { if (!cancelled) setGeoCities([]) })
+      .finally(() => { if (!cancelled) setGeoBusy('') })
+    return () => { cancelled = true }
+  }, [locState, locCounty])
+  useEffect(() => {
+    if (!locCounty) { setGeoAreas([]); setGeoAreaGroups([]); setLocArea(''); return }
+    let cancelled = false
+    getGeoAreas('United States', locState, '', locCounty)
+      .then((res) => {
+        if (cancelled) return
+        setGeoAreaGroups(res.data?.groups || [])
+        setGeoAreas(res.data?.items || (res.data?.areas || []).map((n) => ({ name: n, city: locCity })))
+        if (locArea && !(res.data?.areas || []).some((a) => locKey(a) === locKey(locArea))) setLocArea('')
+      })
+      .catch(() => { if (!cancelled) { setGeoAreas([]); setGeoAreaGroups([]) } })
+    return () => { cancelled = true }
+  }, [locState, locCounty])
+  useEffect(() => {
+    if (locGenMode !== 'single') return
+    const label = formatGeoLabel({
+      area: locArea, city: locCity, county: locCounty, state: locState, country: locCountry,
+    })
+    if (label && extraLocations.length <= 1) {
+      setExtraLocations([label])
+      setFieldErrors((e) => ({ ...e, location: '' }))
+      setLocHint('')
+    }
+  }, [locGenMode, locArea, locCity, locCounty, locState, locCountry])
   useEffect(() => {
     const onDoc = (e) => {
       if (countyMenuRef.current && !countyMenuRef.current.contains(e.target)) {
@@ -951,9 +1214,8 @@ export default function ContentPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // AI model availability + saved location pages (for trash / restart)
+  // Saved location pages (for trash / restart)
   useEffect(() => {
-    axios.get('/api/content/llm-providers').then(r => setLlmAvailability(r.data || {})).catch(() => {})
     listPages(0, 250).then(r => setSavedPages(Array.isArray(r.data) ? r.data : [])).catch(() => {})
   }, [pages])
 
@@ -973,14 +1235,18 @@ export default function ContentPage() {
   }
 
   const handleClearResults = () => {
-    if (!pages.length) return
-    if (!confirm('Clear generated results from this session? Saved/published pages stay until you trash them below.')) return
+    if (!confirm('Clear this session? Topic, industry, image keyword, locations, and generated results on this screen are removed. Published pages stay.')) return
     setPages([])
+    setTargetKeywords([])
+    setKwInput('')
+    setExtraLocations([])
+    updateForm((f) => ({ ...f, industry: '', image_keyword: '' }))
     sessionStorage.removeItem('seo_generated_pages')
     sessionStorage.removeItem('seo_pages')
     sessionStorage.removeItem('seo_page_slugs')
     sessionStorage.removeItem('seo_generate_requested')
-    showToast('Session results cleared — ready to regenerate')
+    sessionStorage.removeItem('seo_keywords')
+    showToast('Session cleared')
   }
 
   // Location Expansion preview — nearby cities / counties / streets (Page + Blog)
@@ -1017,7 +1283,14 @@ export default function ContentPage() {
       try {
         const { data } = await getJob(asyncJobId)
         if (stop) return
-        setJobProgress({ completed: data.completed, failed: data.failed, total: data.total, status: data.status })
+        if (data?.status === 'expired') {
+          setAsyncJobId('')
+          setLoading(false)
+          setJobProgress(null)
+          setError('Generation was interrupted. Click Generate again.')
+          return
+        }
+        setJobProgress({ completed: data.completed, failed: data.failed, total: data.total, status: data.status, error: data.error || '' })
         const finished = ['done', 'completed', 'partial', 'failed'].includes(data.status)
           || (data.completed + data.failed) >= data.total
         if (finished) {
@@ -1029,8 +1302,11 @@ export default function ContentPage() {
           setAsyncJobId('')
           setJobProgress(null)
           if (!raw.length) {
-            setError('Generation finished with no results. Try again.')
-            showToast('Nothing generated — try again', 'warning')
+            const failDetail = (data.results || []).map((r) => r?.error).find(Boolean)
+              || data.error
+              || 'Generation finished with no results. Try again.'
+            setError(String(failDetail).replace(/^HTTPException:\s*/i, '').slice(0, 400))
+            showToast('Nothing generated — see the error on the form', 'warning')
           } else if (raw.length < requested || failN > 0) {
             setError(`${raw.length} of ${requested} generated. ${failN || (requested - raw.length)} did not complete.`)
             showToast(`${raw.length} of ${requested} pages generated`, 'warning')
@@ -1054,16 +1330,21 @@ export default function ContentPage() {
     const k = (kw || kwInput).trim()
     if (!k) return
     setTargetKeywords((prev) => (prev.some((x) => locKey(x) === locKey(k)) ? prev : [...prev, k]))
-    if (!kw) setKwInput('')
+    setKwInput('')
   }
   const removeKeyword = (kw) => {
-    const k = (kw || '').trim().toLowerCase()
-    setTargetKeywords((prev) => prev.filter((x) => x !== k))
+    const k = locKey(kw)
+    if (!k) return
+    setTargetKeywords((prev) => prev.filter((x) => locKey(x) !== k))
   }
   const toggleKeyword = (kw) => {
-    const k = (kw || '').trim().toLowerCase()
+    const k = (kw || '').trim()
     if (!k) return
-    setTargetKeywords((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]))
+    setTargetKeywords((prev) => (
+      prev.some((x) => locKey(x) === locKey(k))
+        ? prev.filter((x) => locKey(x) !== locKey(k))
+        : [...prev, k]
+    ))
   }
   const keywordSuggestions = useMemo(
     () => buildKeywordSuggestions({
@@ -1082,6 +1363,26 @@ export default function ContentPage() {
     ? (countyPicks[0] || 'San Diego County')
     : `${countyPicks.length} counties`
   const sdCatalog = useMemo(() => collectSdCatalog(sdCounty), [sdCounty])
+  const localAreaRows = useMemo(() => {
+    const rows = []
+    const seen = new Set()
+    const push = (name, city) => {
+      const n = String(name || '').trim()
+      if (!n) return
+      const k = locKey(n)
+      if (!k || seen.has(k)) return
+      seen.add(k)
+      rows.push({ name: n, city: city || locCity || '' })
+    }
+    for (const a of geoAreas) push(a.name || a, a.city || locCity)
+    const cityK = locKey(locCity)
+    for (const r of sdCatalog.areas || []) {
+      if (cityK && locKey(r.city) !== cityK && locKey(r.name) !== cityK) continue
+      push(r.name, r.city)
+    }
+    return rows
+  }, [geoAreas, sdCatalog.areas, locCity])
+  const localAreaNames = useMemo(() => localAreaRows.map((r) => r.name), [localAreaRows])
   const baseCityOptions = useMemo(() => {
     const sd = (sdCityNames || []).map((n) => (n.includes(',') ? n : `${n}, CA`))
     // Also surface major SD communities as base-city choices
@@ -1228,7 +1529,7 @@ export default function ContentPage() {
         ...briefIn,
         extra_notes: customRequirements,
         field: field === 'ready90' ? 'all' : field,
-        llm_provider: llmProvider || null,
+        llm_provider: null,
       })
       const data = res.data || {}
       setBriefFields((prev) => {
@@ -1302,16 +1603,13 @@ export default function ContentPage() {
     if (contentKind !== 'page' && contentKind !== 'post') {
       missing.push('Select Page or Post / Blog')
     }
+    if (contentKind === 'page' || contentKind === 'post') {
+      if (!targetKeywords.length) missing.push('What the content should be about')
+    }
     if (contentKind === 'page') {
-      if (!(form.business_type || '').trim()) missing.push('Business Niche')
-      if (!targetKeywords.length) missing.push('At least one Target Keyword')
-      if (!extraLocations.length) {
+      if (!extraLocations.length && !locCity && !locArea) {
         missing.push('Add at least one city')
       }
-    }
-    if (contentKind === 'post') {
-      if (!targetKeywords.length) missing.push('At least one Target Keyword')
-      // Niche and location are optional for blog — keyword is the article subject
     }
     return missing
   }
@@ -1322,9 +1620,9 @@ export default function ContentPage() {
     if (blockers.length) {
       const nextErr = {
         kind: contentKind !== 'page' && contentKind !== 'post' ? 'Choose Page or Post / Blog' : '',
-        niche: contentKind === 'page' && !(form.business_type || '').trim() ? 'Enter a business niche' : '',
-        keyword: !targetKeywords.length ? 'Add at least one keyword' : '',
-        location: contentKind === 'page' && !extraLocations.length ? 'Add at least one city' : '',
+        niche: '',
+        keyword: !targetKeywords.length ? 'Add a topic, question, or sentence to write about' : '',
+        location: contentKind === 'page' && !extraLocations.length && !locCity && !locArea ? 'Pick a city or add one' : '',
       }
       setFieldErrors(nextErr)
       if (nextErr.location) setLocHint('Add a city here, then generate.')
@@ -1333,8 +1631,7 @@ export default function ContentPage() {
       showToast(msg, 'warning')
       const scrollId = nextErr.kind ? 'content-kind-section'
         : nextErr.keyword ? 'target-keywords-section'
-          : nextErr.niche ? 'business-niche-section'
-            : 'target-locations-panel'
+          : 'target-locations-panel'
       document.getElementById(scrollId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
@@ -1345,13 +1642,18 @@ export default function ContentPage() {
     setError('')
     setUseAi(true)
 
-    const niche = (form.business_type || '').trim()
+    // Niche field removed — derive from the target keyword for API compatibility.
+    const niche = (targetKeywords[0] || form.business_type || '').trim()
     const customLocs = extraLocations.map((s) => String(s || '').trim()).filter(Boolean)
-    const useLocations = customLocs.length > 0
-    const pageCount = useLocations ? customLocs.length : 1
+    const formPlace = formatGeoLabel({
+      area: locArea, city: locCity, county: locCounty, state: locState, country: locCountry,
+    })
+    const pickedLocs = customLocs.length ? customLocs : (formPlace ? [formPlace] : [])
+    const pageCount = Math.max(1, locGenMode === 'single' ? Math.min(1, pickedLocs.length || 1) : (pickedLocs.length || 1))
+    const extraForApi = locGenMode === 'single' ? pickedLocs.slice(0, 1) : pickedLocs
     setGenerateRequested(pageCount)
     // Auto async for large batches
-    const runAsync = useAsync || pageCount >= 20
+    const runAsync = true
     setPublishResults({})
     setAsyncJobId('')
     try {
@@ -1366,9 +1668,9 @@ export default function ContentPage() {
           return raw
         })(),
         audience: (form.audience || '').trim(),
-        num_cities: pageCount,
-        base_location: useLocations ? customLocs[0] : '',
-        extra_locations: useLocations ? [...customLocs] : [],
+        num_cities: extraForApi.length || pageCount,
+        base_location: extraForApi[0] || '',
+        extra_locations: extraForApi,
         target_keywords: targetKeywords.length
           ? [...targetKeywords]
           : ['website design'],
@@ -1382,10 +1684,8 @@ export default function ContentPage() {
           return ''
         })(),
         use_ai: true,
-        llm_provider: llmProvider || null,
-        image_keyword: oneWordFromKeyword(
-          (form.image_keyword || '').trim() || targetKeywords[0] || form.business_type || 'website'
-        ),
+        llm_provider: null,
+        image_keyword: (form.image_keyword || '').trim() || (targetKeywords[0] || form.business_type || '').trim(),
         blog_format: contentKind === 'post' ? (blogFormat || 'auto') : 'auto',
       }
       if (runAsync) {
@@ -1421,7 +1721,9 @@ export default function ContentPage() {
       const detailText = Array.isArray(detail)
         ? detail.map((d) => d.msg || d).join(' ')
         : (typeof detail === 'string' ? detail : '')
-      setError(
+      if (err.response?.status === 404) {
+        setError('404')
+      } else setError(
         detailText
         || (err.code === 'ERR_NETWORK'
             ? 'Cannot reach the backend. Start it with: uvicorn main:app --port 8000'
@@ -1450,18 +1752,62 @@ export default function ContentPage() {
     scheduled_at: scheduleAt ? new Date(scheduleAt).toISOString() : null,
   })
 
+  const handleCorrect = async (block, index) => {
+    const key = block.slug || String(index)
+    setCorrectingKey(key)
+    try {
+      const res = await correctBlock(block)
+      setPages((prev) => prev.map((p) => (
+        (block.slug && p.slug === block.slug) || (p.city === block.city && p.title === block.title)
+          ? { ...p, ...res.data, city: p.city, state: p.state }
+          : p
+      )))
+      showToast('Corrected. Read the new preview.')
+    } catch (e) {
+      const d = e.response?.data?.detail
+      showToast(typeof d === 'string' ? d : 'Correct failed', 'warning')
+    } finally {
+      setCorrectingKey('')
+    }
+  }
+
+  const destinationUrl = (raw) => {
+    if (/^https?:\/\//i.test(raw || '') && !/zeorbit\.com/i.test(raw)) return raw
+    return zeorbitArticleUrl(raw)
+  }
+
+  const publishOne = async (block) => {
+    const payload = publishPayload(block)
+    if (publishTarget === 'wordpress') {
+      const res = await publishToWordPress(payload, { status: 'publish' })
+      if (!res.data?.success) throw new Error(res.data?.error || 'WordPress publish failed.')
+      return { url: res.data.post_url, scheduled: false, social: null }
+    }
+    if (publishTarget === 'shopify') {
+      const res = await publishToShopify(payload)
+      if (!res.data?.success) throw new Error(res.data?.error || 'Shopify publish failed.')
+      return { url: res.data.post_url, scheduled: false, social: null }
+    }
+    const res = await publishToWeb(payload)
+    return {
+      url: zeorbitArticleUrl(res.data.public_url || res.data.slug),
+      scheduled: res.data?.scheduled,
+      social: res.data?.indexing?.social,
+    }
+  }
+
   const handlePublishSingle = async (block, index) => {
     setPublishResults(r => ({ ...r, [index]: 'loading' }))
     try {
-      const res = await publishToWeb(publishPayload(block))
-      const scheduled = res.data?.scheduled
-      const social = res.data?.indexing?.social
+      const sent = await publishOne(block)
+      const scheduled = sent.scheduled
+      const social = sent.social
       setPublishResults(r => ({
         ...r,
         [index]: {
           success: true,
           scheduled,
-          post_url: zeorbitArticleUrl(res.data.public_url || res.data.slug),
+          post_url: destinationUrl(sent.url),
         },
       }))
       if (!scheduled && social?.skipped) {
@@ -1479,16 +1825,48 @@ export default function ContentPage() {
     if (!pages.length) return
     setWebAll({ loading: true })
     try {
-      const res = await publishAllToWeb(pages.map(publishPayload))
-      setWebAll({ links: res.data.published })
-      showToast(scheduleAt ? `Scheduled ${res.data.count || pages.length} pages` : `${res.data.count} pages published to ZeOrbit!`)
-      if (!scheduleAt) window.open(zeorbitBlogUrl(), '_blank', 'noopener')
+      let links = []
+      let count = 0
+      if (publishTarget === 'wordpress') {
+        const res = await publishBulkToWordPress(pages.map(publishPayload), { status: 'publish' })
+        links = (res.data || []).filter((item) => item.success).map((item) => ({ city: item.city, public_url: item.post_url }))
+        count = links.length
+      } else if (publishTarget === 'shopify') {
+        const res = await publishBulkToShopify(pages.map(publishPayload))
+        links = (res.data.published || []).filter((item) => item.success).map((item) => ({ city: item.city, public_url: item.post_url }))
+        count = res.data.count || links.length
+      } else {
+        const res = await publishAllToWeb(pages.map(publishPayload))
+        links = res.data.published
+        count = res.data.count
+      }
+      setWebAll({ links })
+      showToast(scheduleAt && publishTarget === 'custom' ? `Scheduled ${count || pages.length} pages` : `${count} pages published to ${publishLabel}!`)
+      if (!scheduleAt && publishTarget === 'custom') window.open(zeorbitBlogUrl(), '_blank', 'noopener')
     } catch (e) {
       setWebAll({ error: e.response?.data?.detail || 'Publish failed. Please try again.' })
     }
   }
 
   const filtered = pages.filter(p => p.city.toLowerCase().includes(filter.toLowerCase()))
+
+  const welcomeStats = useMemo(() => {
+    const rows = Array.isArray(savedPages) ? savedPages : []
+    const month = new Date().getMonth()
+    const year = new Date().getFullYear()
+    let articles = 0
+    let images = 0
+    let thisMonth = 0
+    for (const row of rows) {
+      const block = row?.seo_block && typeof row.seo_block === 'object' ? row.seo_block : {}
+      const kind = String(block.content_type || '').toLowerCase()
+      if (kind === 'blog' || kind === 'post') articles += 1
+      if (block.featured_image_url) images += 1
+      const created = row?.created_at ? new Date(row.created_at) : null
+      if (created && created.getMonth() === month && created.getFullYear() === year) thisMonth += 1
+    }
+    return { articles, images, thisMonth }
+  }, [savedPages])
 
   return (
     <div className="space-y-5 fade-in">
@@ -1503,6 +1881,73 @@ export default function ContentPage() {
           <button onClick={() => setToast(null)} className="ml-2 opacity-70 hover:opacity-100 flex-shrink-0"><X size={14} /></button>
         </div>
       )}
+      {(loading || asyncJobId) && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 2000,
+            background: 'rgba(8, 12, 24, 0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <div style={{
+            width: 'min(420px, 100%)',
+            background: '#fff',
+            borderRadius: 20,
+            padding: '28px 28px 24px',
+            boxShadow: '0 24px 60px rgba(0,0,0,.25)',
+            textAlign: 'center',
+          }}>
+            <style>{`
+              @keyframes zo-bounce { 0%,80%,100% { transform: translateY(0); opacity:.35 } 40% { transform: translateY(-8px); opacity:1 } }
+              @keyframes zo-slide { 0% { transform: translateX(-120%) } 100% { transform: translateX(320%) } }
+              .gen-orbit { display:flex; justify-content:center; gap:8px; height:18px; }
+              .gen-orbit span { width:12px; height:12px; border-radius:99px; background:#5b5ce6; display:block; animation: zo-bounce .7s ease-in-out infinite; }
+              .gen-orbit span:nth-child(2) { animation-delay:.12s; background:#ff5a4e; }
+              .gen-orbit span:nth-child(3) { animation-delay:.24s; }
+              .gen-track { margin:18px auto 0; height:6px; border-radius:99px; background:#eef0f4; overflow:hidden; }
+              .gen-track i { display:block; height:100%; width:40%; border-radius:99px; background:linear-gradient(90deg,#5b5ce6,#ff5a4e); animation: zo-slide 1s ease-in-out infinite; }
+            `}</style>
+            <div className="gen-orbit" aria-hidden="true"><span /><span /><span /></div>
+            <strong style={{ display: 'block', marginTop: 16, fontSize: 18, color: '#111' }}>
+              Generating {contentKind === 'post' ? 'posts' : 'pages'}
+            </strong>
+            <p style={{ margin: '8px 0 0', fontSize: 14, color: '#475569' }}>
+              {(() => {
+                const total = jobProgress?.total || generateRequested || 1
+                const done = (jobProgress?.completed || 0) + (jobProgress?.failed || 0)
+                return done > 0 ? `${done} of ${total} finished` : `Starting ${total}. Keep this tab open.`
+              })()}
+            </p>
+            <div className="gen-track" aria-hidden="true"><i /></div>
+          </div>
+        </div>
+      )}
+      <div style={{ background: '#0f1728', color: '#dbe4f0', borderRadius: 12, padding: '10px 14px', fontSize: 13, lineHeight: 1.45 }}>
+        Research runs before the draft: public sources, headings, and a direct answer, then the writer builds the article. About 8 full articles each hour. When the hour ends, you get another 8, all day.
+      </div>
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          ['Generated Articles', String(welcomeStats.articles)],
+          ['Images Created', String(welcomeStats.images)],
+          ['Free API', '8 / hour'],
+          ['This Month', String(welcomeStats.thisMonth)],
+        ].map(([label, value]) => (
+          <div key={label} style={{ background: '#151b2b', color: '#fff', borderRadius: 16, padding: '16px 18px' }}>
+            <div style={{ fontSize: 13, color: '#94a3b8' }}>{label}</div>
+            <div style={{ fontSize: 28, fontWeight: 800, marginTop: 8 }}>{value}</div>
+            {label === 'Free API' ? <div style={{ fontSize: 12, color: '#cbd5e1', marginTop: 4 }}>Starts over each hour, all day</div> : null}
+          </div>
+        ))}
+      </div>
+
       <div className="scale-hero">
         <div>
           <div className="scale-kicker"><Sparkles size={12} /> AI powered</div>
@@ -1511,22 +1956,25 @@ export default function ContentPage() {
           </h1>
           <p>
             {contentKind === 'post'
-              ? 'Generate keyword-led posts for every city you pin. More visibility. More traffic.'
+              ? 'Generate keyword-led posts for every city you pin. Title, meta, and body stay on the query — then you edit and publish.'
               : 'Generate SEO-optimized location pages for every city you target. More visibility. More traffic. More business.'}
           </p>
-          <div id="content-kind-section" className="flex gap-2 mt-4">
+          <div id="content-kind-section" className="kind-pick">
+            <div className="kind-pick-label">Main option — choose what to generate</div>
+            <div className="kind-pick-row">
             <button type="button" aria-pressed={contentKind === 'page'} onClick={() => setContentKind('page')}
-              className="kind-card text-left flex-1" data-active={contentKind === 'page' ? 'true' : 'false'}>
-              <div className="flex items-center gap-2 mb-1"><FileText size={15} /><span className="text-sm font-semibold">Page</span></div>
-              <p className="text-xs" style={{ color: 'var(--text-3)' }}>Service and location pages → page-sitemap.xml</p>
+              className="kind-card kind-main text-left flex-1" data-active={contentKind === 'page' ? 'true' : 'false'}>
+              <div className="flex items-center gap-2 mb-1"><FileText size={16} /><span className="text-sm font-semibold">Page</span></div>
+              <p className="text-xs">Service and location pages → page-sitemap.xml</p>
             </button>
             <button type="button" aria-pressed={contentKind === 'post'} onClick={() => {
               setContentKind('post')
               if (!(form.num_cities >= 1)) updateForm((f) => ({ ...f, num_cities: 1 }))
-            }} className="kind-card text-left flex-1" data-active={contentKind === 'post' ? 'true' : 'false'}>
-              <div className="flex items-center gap-2 mb-1"><Newspaper size={15} /><span className="text-sm font-semibold">Post / Blog</span></div>
-              <p className="text-xs" style={{ color: 'var(--text-3)' }}>How-to articles → post-sitemap.xml</p>
+            }} className="kind-card kind-main text-left flex-1" data-active={contentKind === 'post' ? 'true' : 'false'}>
+              <div className="flex items-center gap-2 mb-1"><Newspaper size={16} /><span className="text-sm font-semibold">Post / Blog</span></div>
+              <p className="text-xs">How-to articles → post-sitemap.xml</p>
             </button>
+            </div>
           </div>
           {fieldErrors.kind ? <p className="field-err mt-2">{fieldErrors.kind}</p> : null}
         </div>
@@ -1549,7 +1997,7 @@ export default function ContentPage() {
 
       <div className="scale-steps" aria-label="Generation steps">
         {[
-          ['1', 'Business & Keywords', 'Tell us about your business', !!(form.business_type || '').trim() && targetKeywords.length > 0],
+          ['1', 'Topic', 'What should the content be about?', targetKeywords.length > 0],
           ['2', 'Select Locations', 'Choose cities or areas', extraLocations.length > 0 || contentKind === 'post'],
           ['3', 'Review & Generate', 'Create and publish', pages.length > 0],
         ].map(([n, label, hint, on]) => (
@@ -1621,7 +2069,7 @@ export default function ContentPage() {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2 flex-wrap">
             <Tag size={15} style={{ color: 'var(--brand)' }} />
-            <span className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>Target Keywords</span>
+            <span className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>Topic</span>
             <span
               className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
               style={{ background: 'var(--amber-soft)', color: 'var(--amber)', border: '1px solid rgba(180,83,9,0.35)' }}
@@ -1651,7 +2099,7 @@ export default function ContentPage() {
               border: '1px solid rgba(180, 83, 9, 0.35)',
             }}
           >
-            Add at least one keyword (type and press Enter, or pick a suggestion) before generating.
+            Add a topic, keyword, question, or anything you want to write about before generating.
           </div>
         )}
         <div className="flex gap-2 mb-3">
@@ -1660,7 +2108,7 @@ export default function ContentPage() {
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword() } }}
             required={targetKeywords.length === 0}
             aria-required="true"
-            placeholder="e.g. web design san diego — press Enter to add"
+            placeholder="Ask anything or describe the topic… e.g. restaurant vs cafe"
             className="flex-1 rounded-lg px-4 py-2.5 text-sm"
             style={{
               background: '#fff',
@@ -1683,7 +2131,7 @@ export default function ContentPage() {
                 style={{ background: 'var(--brand-soft)', color: 'var(--brand-dark)', border: '1px solid rgba(91,92,230,0.25)' }}
               >
                 {kw}
-                <button onClick={() => removeKeyword(kw)} style={{ color: 'inherit' }}><X size={10} /></button>
+                <button type="button" onClick={() => removeKeyword(kw)} style={{ color: 'inherit' }}><X size={10} /></button>
               </span>
             ))}
           </div>
@@ -1752,7 +2200,7 @@ export default function ContentPage() {
         <div id="legacy-post-keywords" className="hidden">
           <div className="flex items-center gap-2 mb-3 flex-wrap">
             <Tag size={15} style={{ color: 'var(--brand)' }} />
-            <span className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>Target Keywords</span>
+            <span className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>Topic</span>
             <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: 'var(--amber-soft)', color: 'var(--amber)' }}>Required</span>
             <span className="text-xs" style={{ color: 'var(--text-4)' }}>— body is written from this query only</span>
           </div>
@@ -1765,7 +2213,7 @@ export default function ContentPage() {
             <input type="text" value={kwInput}
               onChange={e => setKwInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword() } }}
-              placeholder="e.g. how to fix a website — press Enter to add"
+              placeholder="Ask anything or describe the topic… press Enter to add"
               className="flex-1 rounded-lg px-4 py-2.5 text-sm"
               style={{ background: '#fff', border: `1px solid ${targetKeywords.length ? 'var(--border-bright)' : 'var(--amber)'}`, color: 'var(--text-1)' }} />
             <button type="button" onClick={() => addKeyword()}
@@ -1810,19 +2258,74 @@ export default function ContentPage() {
       {contentKind && (
       <div className="scale-grid">
         <div className="scale-card">
-          <h3 className="text-base font-semibold mb-1" style={{ color: 'var(--text-1)' }}>Business Details</h3>
+          <h3 className="text-base font-semibold mb-1 flex items-center justify-between gap-2" style={{ color: 'var(--text-1)' }}>
+            <span>{contentKind === 'post' ? 'Post brief' : 'Business Details'}</span>
+            <span className="flex items-center gap-1.5">
+              <button
+                type="button"
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg"
+                style={{ background: '#fff', color: '#b91c1c', border: '1px solid #fecaca' }}
+                onClick={handleClearResults}
+              >
+                Clear session
+              </button>
+              <button
+                type="button"
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg"
+                style={copiedAll
+                  ? { background: '#047857', color: '#fff' }
+                  : { background: 'var(--brand-soft)', color: 'var(--brand-dark)' }}
+                onClick={async () => {
+                  const topics = targetKeywords.map((k) => String(k || '').trim()).filter(Boolean)
+                  const lines = [
+                    `Kind: ${contentKind === 'post' ? 'Post' : 'Page'}`,
+                    `Topic: ${topics.join(', ') || '—'}`,
+                    `Industry: ${(form.industry || '').trim() || '—'}`,
+                    `Image keyword: ${(form.image_keyword || '').trim() || '—'}`,
+                    `Audience: ${(form.audience || '').trim() || '—'}`,
+                    `Blog format: ${contentKind === 'post' ? (blogFormat || 'auto') : '—'}`,
+                    `Locations: ${extraLocations.map((s) => String(s || '').trim()).filter(Boolean).join('; ') || '—'}`,
+                  ]
+                  pages.forEach((block, i) => {
+                    lines.push('')
+                    lines.push(`--- ${i + 1}. ${block.title || block.city || 'Result'} ---`)
+                    lines.push(`Slug: ${block.slug || '—'}`)
+                    lines.push(`Meta: ${block.meta_description || '—'}`)
+                    lines.push(block.intro || '')
+                    lines.push(block.content || '')
+                  })
+                  const text = lines.join('\n')
+                  try {
+                    await navigator.clipboard.writeText(text)
+                    setCopiedAll(true)
+                    setToast({ type: 'success', msg: 'Copied the full brief and every result' })
+                    setTimeout(() => setCopiedAll(false), 2000)
+                  } catch {
+                    setToast({ type: 'warning', msg: 'Could not copy. Select the fields and copy manually.' })
+                  }
+                }}
+              >
+                {copiedAll ? 'Copied' : 'Copy all'}
+              </button>
+            </span>
+          </h3>
           <p className="text-[12px] mb-4" style={{ color: 'var(--text-4)' }}>
-            Set up your business niche and target keywords
+            {contentKind === 'post'
+              ? 'Enter a keyword, question, topic, or sentence — we understand it, then write the article.'
+              : 'Enter a keyword, question, topic, or sentence. Title, meta, and body follow that meaning.'}
           </p>
           <form onSubmit={handleGenerate} className="space-y-4">
             <div id="business-niche-section" className="space-y-3">
               <div id="target-keywords-section">
-                <label className="loc-lbl">Target keyword <span className="loc-req">Required</span></label>
+                <label className="loc-lbl">What should the content be about? <span className="loc-req">Required</span></label>
+                <p className="text-[11px] mb-1.5" style={{ color: 'var(--text-4)' }}>
+                  Add a topic, keyword, question, or anything you want to write about.
+                </p>
                 <div className="flex gap-2">
                   <input type="text" value={kwInput}
                     onChange={e => setKwInput(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword() } }}
-                    placeholder="e.g. web design san diego"
+                    placeholder="Ask anything or describe the topic you want to write about…"
                     className="flex-1 rounded-lg px-3 py-2.5 text-sm"
                     style={{ background: '#fff', border: '1px solid var(--border-bright)' }} />
                   <button type="button" onClick={() => addKeyword()} className="px-3 rounded-lg text-sm font-semibold"
@@ -1830,31 +2333,13 @@ export default function ContentPage() {
                 </div>
                 {targetKeywords.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
-                    {targetKeywords.map(kw => (
-                      <span key={kw} className="scale-chip">{kw}<button type="button" onClick={() => removeKeyword(kw)}><X size={10} /></button></span>
+                    {targetKeywords.map((kw, i) => (
+                      <span key={`${i}-${kw}`} className="scale-chip">{kw}<button type="button" onClick={() => removeKeyword(kw)} aria-label={`Remove ${kw}`}><X size={10} /></button></span>
                     ))}
                   </div>
                 )}
                 {fieldErrors.keyword ? <p className="field-err">{fieldErrors.keyword}</p> : null}
               </div>
-              <SearchSelect
-                label="Business Niche / Category"
-                required
-                value={form.business_type}
-                onChange={(v) => updateForm((f) => {
-                  const next = { ...f, business_type: v }
-                  // Soft-fill Industry from niche when empty or still the old catch-all
-                  const curInd = (f.industry || '').trim()
-                  if (!curInd || curInd.toLowerCase() === 'professional services') {
-                    const suggested = suggestIndustryFromNiche(v)
-                    if (suggested) next.industry = suggested
-                  }
-                  return next
-                })}
-                options={BUSINESS_TYPES}
-                placeholder="e.g. Web Design, WordPress, Mobile Apps…"
-              />
-              {fieldErrors.niche ? <p className="field-err">{fieldErrors.niche}</p> : null}
               <SearchSelect
                 label="Industry"
                 required={false}
@@ -1867,7 +2352,7 @@ export default function ContentPage() {
                 placeholder="Pick from list or type — e.g. Contractors, Healthcare…"
               />
               <p className="text-[10px] -mt-1" style={{ color: 'var(--text-4)' }}>
-                Who the content is for (buyer vertical). Used in titles/examples — not forced into the slug as “Professional Services”.
+                Optional. Buyer vertical only — never overrides what you typed above.
               </p>
               <label className="block">
                 <span className="loc-lbl">Image keyword</span>
@@ -1880,10 +2365,11 @@ export default function ContentPage() {
                   style={{ background: '#fff', border: '1px solid #94a3b8', color: '#0f172a' }}
                 />
                 <span className="mt-1 block text-[10px]" style={{ color: 'var(--text-4)' }}>
-                  Photos follow one word from the target keyword (e.g. website design near me → website). Unrelated words like Cafe are ignored.
+                  Photos follow the topic you typed and the industry. Contractors stay contractors. A website topic does not replace the industry.
                 </span>
               </label>
             </div>
+            {contentKind === 'page' && (
             <div className="scale-tips">
               <p className="text-xs font-bold mb-1" style={{ color: '#5b21b6' }}>Tips for better results</p>
               <ul>
@@ -1894,59 +2380,7 @@ export default function ContentPage() {
               </ul>
               <div className="scale-quote">“Local pages can increase organic traffic by up to 300%.” <span style={{ color: '#7c3aed', fontWeight: 700 }}>— SEO Best Practice</span></div>
             </div>
-            {error && (
-              <div
-                className="rounded-xl p-3 flex gap-2"
-                style={{ background: '#FEF2F2', border: '1px solid #FECACA' }}
-              >
-                <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" style={{ color: '#B91C1C' }} />
-                <p className="text-[13px] font-medium" style={{ color: '#7F1D1D' }}>{error}</p>
-              </div>
             )}
-
-            {asyncJobId && (() => {
-              const total = jobProgress?.total || form.num_cities
-              const done = (jobProgress?.completed || 0) + (jobProgress?.failed || 0)
-              const pct = total ? Math.round((done / total) * 100) : 0
-              const R = 26, C = 2 * Math.PI * R
-              return (
-                <div className="flex flex-col items-center gap-2 py-3 rounded-xl" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
-                  <svg width="70" height="70" viewBox="0 0 70 70" style={{ transform: 'rotate(-90deg)' }}>
-                    <circle cx="35" cy="35" r={R} fill="none" stroke="var(--border-bright)" strokeWidth="6" />
-                    <circle cx="35" cy="35" r={R} fill="none" stroke="var(--brand)" strokeWidth="6" strokeLinecap="round"
-                      strokeDasharray={C} strokeDashoffset={C - (pct / 100) * C}
-                      style={{ transition: 'stroke-dashoffset .4s ease' }} />
-                  </svg>
-                  <div style={{ marginTop: -52, fontSize: 15, fontWeight: 800, color: 'var(--text-1)' }}>{pct}%</div>
-                  <div style={{ marginTop: 34, fontSize: 12.5, fontWeight: 600, color: 'var(--text-2)' }}>
-                    Generating… {done} / {total}
-                  </div>
-                  <p className="text-[11px] text-center px-3" style={{ color: 'var(--text-3)' }}>
-                    If a location scores below 90%, it is generated again immediately.
-                  </p>
-                </div>
-              )
-            })()}
-
-            <button
-              type="submit"
-              disabled={loading || !!asyncJobId}
-              className="scale-gen"
-            >
-              {loading || asyncJobId
-                ? <>Generating…</>
-                : <>
-                  {contentKind === 'post'
-                    ? (extraLocations.length ? `Generate ${extraLocations.length} posts` : 'Generate Blog Posts')
-                    : 'Generate Location Pages'}
-                  <ArrowRight size={16} />
-                </>}
-            </button>
-            <p className="text-[10px] text-center mt-2" style={{ color: 'var(--text-3)' }}>
-              {contentKind === 'post'
-                ? 'Keyword is required. Cities are optional for blogs.'
-                : 'Add at least one city on the right, then generate.'}
-            </p>
           </form>
         </div>
 
@@ -1955,13 +2389,105 @@ export default function ContentPage() {
             <span>Locations</span>
             <span className="text-[11px] font-medium" style={{ color: 'var(--brand)' }}>View on map</span>
           </h4>
-          <p className="text-[12px] mb-4" style={{ color: 'var(--text-4)' }}>
-            {contentKind === 'post'
-              ? 'Optional for blogs. Type a city and click Add, or skip and generate from the keyword.'
-              : 'Type a city and click Add. That list is what gets generated.'}
+          <p className="text-[12px] mb-3" style={{ color: 'var(--text-4)' }}>
+            United States only. Pick a region → state → county → city. County narrows the city list.
           </p>
+          <div className="crm-seg mb-2" role="tablist" aria-label="How many locations to generate">
+            <button type="button" aria-pressed={locGenMode === 'single'} onClick={() => {
+              setLocGenMode('single')
+              setExtraLocations((xs) => xs.slice(0, 1))
+            }}>One location</button>
+            <button type="button" aria-pressed={locGenMode === 'multi'} onClick={() => setLocGenMode('multi')}>Many locations</button>
+          </div>
+          <p className="text-[12px] mb-4" style={{ color: 'var(--text-3)' }}>
+            {locGenMode === 'single'
+              ? 'Creates 1 page or post for the place you pick.'
+              : 'Creates one page or post for every place you pin. 12 cities = 12 results.'}
+          </p>
+          <div className="loc-toolbar mb-3">
+            <div className="loc-field">
+              <span className="loc-lbl">Country</span>
+              <div className="w-full rounded-lg px-3 text-sm flex items-center" style={{ height: 42, border: '1px solid var(--border)', background: '#F5F5F7', color: 'var(--text-2)', fontWeight: 650 }}>
+                United States
+              </div>
+            </div>
+            <div className="loc-field">
+              <span className="loc-lbl">State {geoBusy === 'counties' ? <span className="text-[10px]">Loading…</span> : null}</span>
+              <select value={locState} onChange={(e) => { setLocState(e.target.value); setLocCounty(''); setLocCity(''); setLocArea('') }}
+                className="w-full bg-white border rounded-lg px-3 text-sm" style={{ height: 42, borderColor: 'var(--border)' }}>
+                {geoStateGroups.map((g) => (
+                  <optgroup key={g.region} label={g.region}>
+                    {(g.states || []).map((s) => <option key={s} value={s}>{s}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+            <div className="loc-field">
+              <span className="loc-lbl">County</span>
+              <select value={locCounty} onChange={(e) => { setLocCounty(e.target.value); setLocCity(''); setLocArea(''); setLocAreaQuery('') }}
+                className="w-full bg-white border rounded-lg px-3 text-sm" style={{ height: 42, borderColor: 'var(--border)' }}>
+                <option value="">All counties in state</option>
+                {geoCountyGroups.map((g) => (
+                  <optgroup key={g.region} label={g.region}>
+                    {(g.counties || []).map((s) => <option key={s} value={s}>{s}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+            <div className="loc-field loc-field-wide">
+              <SearchSelect
+                label={`City${geoCities.length ? ` (${geoCities.length})` : ''}`}
+                required={contentKind === 'page'}
+                multi
+                value={locCity}
+                onChange={(name) => { setLocCity(name); setLocArea('') }}
+                selected={geoCities.filter((name) => extraLocations.some((x) => locKey(String(x).split(',')[0]) === locKey(name)))}
+                onToggle={(name) => {
+                  setLocGenMode('multi')
+                  setLocCity(name)
+                  setLocArea('')
+                  const label = formatGeoLabel({ city: name, county: locCounty, state: locState, country: locCountry })
+                  if (label) toggleExtraLocation(label)
+                  setFieldErrors((err) => ({ ...err, location: '' }))
+                }}
+                options={geoCities}
+                maxResults={Math.max(geoCities.length, 400)}
+                placeholder={geoBusy === 'cities' ? 'Loading cities…' : (locCounty ? 'Search and select cities' : 'Select a county, then choose cities')}
+                hint="Check every city you want. Each city is added on its own."
+              />
+            </div>
+            <div className="loc-field loc-field-wide">
+              <SearchSelect
+                label={`Local area${localAreaNames.length ? ` (${localAreaNames.length})` : ''}`}
+                required={false}
+                multi
+                value={locArea}
+                onChange={setLocArea}
+                selected={localAreaNames.filter((name) => extraLocations.some((x) => {
+                  const head = String(x).split(',')[0].trim()
+                  return locKey(head) === locKey(name)
+                }))}
+                onToggle={(name) => {
+                  setLocGenMode('multi')
+                  const row = localAreaRows.find((a) => locKey(a.name) === locKey(name))
+                  const city = row?.city || locCity
+                  if (city) setLocCity(city)
+                  setLocArea(name)
+                  const label = formatGeoLabel({ area: name, city, county: locCounty, state: locState, country: locCountry })
+                  if (label) toggleExtraLocation(label)
+                  setFieldErrors((err) => ({ ...err, location: '' }))
+                }}
+                options={localAreaNames}
+                maxResults={Math.max(localAreaNames.length, 800)}
+                placeholder="Search and select local areas"
+                hint="Check each place you want. Only that place is added."
+              />
+            </div>
+          </div>
+          {fieldErrors.location ? <p className="field-err mb-3">{fieldErrors.location}</p> : null}
+          {locHint ? <p className="field-err mb-3">{locHint}</p> : null}
           <div className="loc-field mb-4">
-            <span className="loc-lbl">Search location {contentKind === 'page' ? <span className="loc-req">Required</span> : <span className="text-[10px] font-medium" style={{ color: 'var(--text-4)' }}>Optional</span>}</span>
+            <span className="loc-lbl">Or type a place</span>
             <div className="loc-row">
               <div className="relative flex-1">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-4)' }} />
@@ -1982,7 +2508,7 @@ export default function ContentPage() {
             {fieldErrors.location && !locHint ? <p className="field-err">{fieldErrors.location}</p> : null}
           </div>
           <div className="scale-map mb-3">
-            <LocationMap places={extraLocations} city={extraLocations[0] || form.base_location || 'San Diego, CA'} />
+            <LocationMap places={extraLocations} city={extraLocations[0] || locCity || form.base_location || 'San Diego, CA'} />
             {extraLocations.length > 0 && (
               <div className="scale-map-pop">
                 {(extraLocations[0] || '').split(',')[0]}
@@ -1990,8 +2516,40 @@ export default function ContentPage() {
               </div>
             )}
           </div>
-          <details className="mb-4 text-[12px]" style={{ color: 'var(--text-3)' }}>
-            <summary className="cursor-pointer font-medium py-1">Browse city catalog</summary>
+          <div className="loc-field mb-3">
+            <span className="loc-lbl">Quick add</span>
+            <div className="loc-picks">
+              {['San Diego, CA', 'Chula Vista, CA', 'Carlsbad, CA', 'Oceanside, CA', 'Escondido, CA', 'La Jolla, CA', 'El Cajon, CA', 'Vista, CA'].map((c) => (
+                <button
+                  key={`quick-${c}`}
+                  type="button"
+                  onClick={() => toggleExtraLocation(c)}
+                  className={extraLocations.some((x) => locKey(x) === locKey(c)) ? 'is-on' : ''}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+          {extraLocations.length > 0 && (
+            <div className="mb-3">
+              <div className="loc-lbl" style={{ justifyContent: 'space-between' }}>
+                Selected locations ({extraLocations.length})
+                <button type="button" className="text-[12px] font-semibold" style={{ color: 'var(--brand)' }}
+                  onClick={() => setExtraLocations([])}>Clear all</button>
+              </div>
+              <div className="loc-picks">
+                {extraLocations.map(loc => (
+                  <span key={`extra-${loc}`} className="scale-chip">
+                    {loc}
+                    <button type="button" onClick={() => removeExtraLocation(loc)} aria-label={`Remove ${loc}`}>×</button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          <details className="mb-3 text-[12px]" style={{ color: 'var(--text-3)' }}>
+            <summary className="cursor-pointer font-medium py-2">More places (counties, catalog, streets)</summary>
             <SearchSelect
             label="City catalog"
             hidePicked
@@ -2007,12 +2565,9 @@ export default function ContentPage() {
             placeholder="Type a city name"
             hint=""
           />
-          </details>
           {nearbyError && (
             <div className="mb-3 text-[12px]" style={{ color: 'var(--red)' }}>{nearbyError}</div>
           )}
-          <details className="mb-3 text-[12px]" style={{ color: 'var(--text-3)' }}>
-            <summary className="cursor-pointer font-medium py-2">Browse counties, cities, and streets</summary>
           <div className="loc-toolbar mb-3 mt-2">
             <div className="loc-field" ref={countyMenuRef}>
               <span className="loc-lbl">County</span>
@@ -2134,114 +2689,127 @@ export default function ContentPage() {
                 <button type="button" aria-pressed={sdLayer === 'streets'} onClick={() => { setSdLayer('streets'); setSdFilter('') }}>Streets</button>
               </div>
             </div>
-            <div className="loc-field" style={{ gridColumn: '1 / 2' }}>
-              <span className="loc-lbl">Filter {sdLayer === 'streets' ? 'streets' : sdLayer === 'cities' ? 'cities' : 'local areas'}</span>
-              <input
-                type="search"
-                value={sdFilter}
-                onChange={(e) => setSdFilter(e.target.value)}
-                placeholder={
-                  sdLayer === 'streets' ? 'Search streets' : sdLayer === 'cities' ? 'Search cities' : 'Search local areas'
-                }
-                className="w-full bg-white border rounded-lg px-3 text-sm"
-                style={{ borderColor: 'var(--border)', color: 'var(--text-1)', height: 42 }}
+            <div className="loc-field loc-field-wide">
+              <SearchSelect
+                label={`${sdLayer === 'streets' ? 'Streets' : sdLayer === 'cities' ? 'Cities' : 'Local areas'} in ${countySummary}${sdPick && sdPick !== 'All cities' ? ` · ${sdPick}` : ''}`}
+                required={false}
+                multi
+                value=""
+                onChange={() => {}}
+                selected={extraLocations}
+                onToggle={(name) => { setLocGenMode('multi'); toggleExtraLocation(name) }}
+                options={sdItems}
+                maxResults={500}
+                placeholder="Search and select multiple places"
+                hint="Check each place you want. Only an exact match is selected."
               />
             </div>
-            <div className="loc-field" style={{ justifyContent: 'flex-end' }}>
-              <span className="loc-lbl">Bulk add</span>
-              <div className="loc-row">
-                <button
-                  type="button"
-                  disabled={!sdItems.length}
-                  onClick={() => addSdItems(sdItems)}
-                  className="flex-1 px-3 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
-                  style={{ background: 'var(--brand, #4f46e5)', height: 42 }}
-                >
-                  Add all {sdItems.length}
-                </button>
-                <button
-                  type="button"
-                  onClick={pinSelectedCounties}
-                  className="flex-1 px-3 rounded-lg text-xs font-semibold"
-                  style={{
-                    color: 'var(--brand)',
-                    background: 'var(--brand-soft, #eef2ff)',
-                    border: '1px solid var(--border)',
-                    height: 42,
-                  }}
-                >
-                  Add {countyPicks.length} count{countyPicks.length === 1 ? 'y' : 'ies'}
-                </button>
-              </div>
             </div>
-          </div>
-          <p className="text-[11px] mb-3" style={{ color: 'var(--text-4)' }}>
-            Showing {sdLayer === 'streets' ? 'streets' : sdLayer === 'cities' ? 'cities' : 'local areas'} in {countySummary}
-            {sdPick && sdPick !== 'All cities' ? <> · {sdPick}</> : null}
-          </p>
-          <div className="loc-field mb-3">
-            <span className="loc-lbl">Available {sdLayer === 'streets' ? 'streets' : sdLayer === 'cities' ? 'cities' : 'local areas'}</span>
-            <div className="loc-picks" key={`${countyPicks.join('|')}-${sdPick}-${sdLayer}`}>
-              {sdItems.slice(0, 80).map((name, i) => (
-                <button
-                  key={`${sdLayer}-${name}-${i}`}
-                  type="button"
-                  onClick={() => toggleExtraLocation(name)}
-                  className={extraLocations.some((x) => locKey(x) === locKey(name)) ? 'is-on' : ''}
-                >
-                  {name}
-                </button>
-              ))}
-              {sdItems.length > 80 && (
-                <span className="text-[11px] self-center" style={{ color: 'var(--text-4)' }}>+{sdItems.length - 80} more</span>
-              )}
-            </div>
-          </div>
           </details>
-          {extraLocations.length > 0 && (
-            <div>
-              <div className="loc-lbl" style={{ justifyContent: 'space-between' }}>
-                Selected locations ({extraLocations.length})
-                <button type="button" className="text-[12px] font-semibold" style={{ color: 'var(--brand)' }}
-                  onClick={() => setExtraLocations([])}>Clear all</button>
-              </div>
-              <div className="loc-picks">
-                {extraLocations.map(loc => (
-                  <span key={`extra-${loc}`} className="scale-chip">
-                    {loc}
-                    <button type="button" onClick={() => removeExtraLocation(loc)} aria-label={`Remove ${loc}`}>×</button>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {extraLocations.length === 0 && nearbyCities.length > 0 && (
-          <div className="loc-field">
-            <span className="loc-lbl">Nearby suggestions</span>
-          <div className="loc-picks">
-            {nearbyCities.slice(0, 40).map((c) => {
-              const kind = c.kind || 'city'
-              const label = `${c.name}${c.state ? `, ${c.state}` : ''}`
-              return (
-                <button
-                  key={`near-${c.name}-${c.state}-${kind}`}
-                  type="button"
-                  onClick={() => toggleExtraLocation(label)}
-                  title="Click to pin"
+        </div>
+
+        <div className="scale-card">
+          {error && (
+            error === '404'
+              ? <p className="text-[11px] mb-2" style={{ color: '#b91c1c' }}>404</p>
+              : <div
+                  className="rounded-xl p-3 flex gap-2 mb-3"
+                  style={{ background: '#FEF2F2', border: '1px solid #FECACA' }}
                 >
-                  {kind !== 'city' ? `${kind}: ${label}` : label}
-                </button>
-              )
-            })}
-          </div>
-          </div>
+                  <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" style={{ color: '#B91C1C' }} />
+                  <p className="text-[13px] font-medium" style={{ color: '#7F1D1D' }}>{error}</p>
+                </div>
           )}
+          {asyncJobId && (() => {
+            const total = jobProgress?.total || form.num_cities
+            const done = (jobProgress?.completed || 0) + (jobProgress?.failed || 0)
+            const pct = total ? Math.round((done / total) * 100) : 0
+            const R = 26, C = 2 * Math.PI * R
+            return (
+              <div className="flex flex-col items-center gap-2 py-3 rounded-xl mb-3" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
+                <svg width="70" height="70" viewBox="0 0 70 70" style={{ transform: 'rotate(-90deg)' }}>
+                  <circle cx="35" cy="35" r={R} fill="none" stroke="var(--border-bright)" strokeWidth="6" />
+                  <circle cx="35" cy="35" r={R} fill="none" stroke="var(--brand)" strokeWidth="6" strokeLinecap="round"
+                    strokeDasharray={C} strokeDashoffset={C - (pct / 100) * C}
+                    style={{ transition: 'stroke-dashoffset .4s ease' }} />
+                </svg>
+                <div style={{ marginTop: -52, fontSize: 15, fontWeight: 800, color: 'var(--text-1)' }}>{pct}%</div>
+                <div style={{ marginTop: 34, fontSize: 12.5, fontWeight: 600, color: 'var(--text-2)' }}>
+                  Generating… {done} / {total}
+                </div>
+                <p className="text-[11px] text-center px-3" style={{ color: 'var(--text-3)' }}>
+                  {jobProgress?.error || (done === 0
+                    ? 'Writing the first page — usually under a minute. Keep this tab open.'
+                    : 'Keep this tab open until every location finishes.')}
+                </p>
+              </div>
+            )
+          })()}
+          <button
+            type="button"
+            disabled={loading || !!asyncJobId}
+            className="scale-gen"
+            style={{ marginTop: 0 }}
+            onClick={handleGenerate}
+          >
+            {loading || asyncJobId
+              ? <>Generating…</>
+              : <>
+                {contentKind === 'post'
+                  ? (extraLocations.length ? `Generate ${extraLocations.length} posts` : 'Generate Blog Posts')
+                  : 'Generate Location Pages'}
+                <ArrowRight size={16} />
+              </>}
+          </button>
+          <p className="text-[10px] text-center mt-2" style={{ color: 'var(--text-3)' }}>
+            {contentKind === 'post'
+              ? 'Keyword is required. Pin cities above, then generate.'
+              : 'Add at least one city above, then generate.'}
+          </p>
         </div>
       </div>
       )}
 
+      {pages.length > 0 && contentKind === 'post' && (
+        <>
+          <div className="content-action-bar rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <p className="font-semibold text-sm" style={{ color: '#0f172a' }}>
+                {pages.length} {pages.length === 1 ? 'post' : 'posts'} generated
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: '#334155' }}>
+                Preview title, meta, and body before you publish.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <PublishTargetSelect value={publishTarget} onChange={setPublishTarget} />
+              <button
+                type="button"
+                className="content-btn-primary flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm"
+                onClick={() => navigate('/page-preview', {
+                  state: { block: pages[0], index: 0, businessType: form.business_type, contentKind: 'post', allBlocks: pages },
+                })}
+              >
+                <Eye size={14} /> Preview
+              </button>
+            </div>
+          </div>
+        <PostStudio
+          studioRef={resultsRef}
+          pages={pages}
+          publishResults={publishResults}
+          onPatch={(i, patch) => setPages((prev) => prev.map((p, j) => (j === i ? { ...p, ...patch } : p)))}
+          onView={(block, i) => navigate('/page-preview', {
+            state: { block, index: i, businessType: form.business_type, contentKind: 'post', allBlocks: pages },
+          })}
+          onPublish={handlePublishSingle}
+          publishLabel={publishLabel}
+        />
+        </>
+      )}
+
       {/* ── SUCCESS BANNER — appears immediately after generation ── */}
-      {pages.length > 0 && (
+      {pages.length > 0 && contentKind !== 'post' && (
         <div ref={resultsRef} className="content-action-bar rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{
@@ -2266,6 +2834,7 @@ export default function ContentPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <PublishTargetSelect value={publishTarget} onChange={setPublishTarget} />
             <label className="text-[11px] flex items-center gap-1.5" style={{ color: 'var(--text-2)' }}>
               Schedule
               <input
@@ -2284,7 +2853,7 @@ export default function ContentPage() {
               className="content-btn-primary flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm disabled:opacity-60">
               {webAll?.loading
                 ? <><svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" strokeWidth="3" strokeLinecap="round"/></svg>Publishing all…</>
-                : <><Globe size={14} /> Publish All {pages.length} to ZeOrbit</>}
+                : <><Globe size={14} /> Publish All {pages.length} to {publishLabel}</>}
             </button>
           </div>
         </div>
@@ -2296,7 +2865,7 @@ export default function ContentPage() {
         <div className="card p-5">
           <div className="flex items-center gap-2 mb-3">
             <CheckCircle size={16} style={{ color: 'var(--green)' }} />
-            <h3 className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{webAll.links.length} pages live on ZeOrbit</h3>
+            <h3 className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{webAll.links.length} pages sent to {publishLabel}</h3>
             <a href={zeorbitBlogUrl()} target="_blank" rel="noreferrer" className="text-xs ml-auto" style={{ color: 'var(--brand-violet)' }}>Open blog →</a>
           </div>
           <div className="space-y-2">
@@ -2304,7 +2873,7 @@ export default function ContentPage() {
               <div key={i} className="flex items-center justify-between gap-3 rounded-lg px-3 py-2" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
                 <div className="min-w-0">
                   <div className="text-xs font-semibold truncate" style={{ color: 'var(--text-1)' }}>{l.city}{l.state ? `, ${l.state}` : ''}</div>
-                  <a href={zeorbitArticleUrl(l.public_url || l.slug)} target="_blank" rel="noreferrer" className="text-xs truncate block" style={{ color: 'var(--brand-violet)' }}>{zeorbitArticleUrl(l.public_url || l.slug)}</a>
+                  <a href={destinationUrl(l.public_url || l.slug)} target="_blank" rel="noreferrer" className="text-xs truncate block" style={{ color: 'var(--brand-violet)' }}>{destinationUrl(l.public_url || l.slug)}</a>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <button onClick={() => navigator.clipboard?.writeText(zeorbitArticleUrl(l.public_url || l.slug))}
@@ -2335,7 +2904,6 @@ export default function ContentPage() {
         </div>
       )}
 
-      {/* Results Table */}
       {pages.length > 0 && (
         <div className="card" ref={resultsRef}>
           <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
@@ -2378,12 +2946,13 @@ export default function ContentPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>#</th><th>City</th><th>SEO Title</th><th>Score</th><th>Primary Keyword</th><th>Actions</th>
+                <th>#</th><th>City</th><th>SEO Title</th><th>Score</th><th>Accuracy</th><th>Primary Keyword</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((block, i) => {
                 const score = Math.round(block.quality_score ?? block.readability_score ?? 0)
+                const accuracy = rateContent(block).score
                 const pr = publishResults[i]
                 return (
                   <tr key={`${block.city}-${i}`}>
@@ -2405,13 +2974,16 @@ export default function ContentPage() {
                         <span className="text-xs font-bold" style={{ color: score >= 90 ? '#047857' : score >= 75 ? '#b45309' : '#b91c1c' }}>{score}</span>
                       </div>
                     </td>
+                    <td>
+                      <span className="text-xs font-bold" style={{ color: accuracy >= 8 ? '#047857' : accuracy >= 5 ? '#b45309' : '#b91c1c' }}>{accuracy}/10</span>
+                    </td>
                     <td className="text-xs font-medium max-w-[140px]" style={{ color: 'var(--text-2)' }}>{block.keywords?.primary}</td>
                     <td>
                       <div className="flex items-center gap-1.5">
-                        <button onClick={() => navigate('/page-preview', { state: { block, index: i, businessType: form.business_type, contentKind: block.content_type === 'blog' ? 'post' : 'page' } })}
+                        <button onClick={() => navigate('/page-preview', { state: { block, index: i, businessType: form.business_type, contentKind, allBlocks: pages } })}
                           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold"
                           style={{ background: '#fff', border: '1px solid var(--brand)', color: 'var(--brand-dark)' }}>
-                          <Eye size={11} /> View
+                          <Eye size={11} /> Preview
                         </button>
                         {block.slug && (
                           <button onClick={() => handleDeleteSaved(block.slug)} disabled={deletingSlug === block.slug}
@@ -2443,7 +3015,40 @@ export default function ContentPage() {
         </div>
       )}
 
-      {pages.length > 0 && (
+      {filtered.length > 0 && (
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>Full preview of every result</h3>
+          {filtered.map((block, i) => {
+            const rating = rateContent(block)
+            const tone = rating.score >= 8 ? '#047857' : rating.score >= 5 ? '#b45309' : '#b91c1c'
+            const body = (block.content || '').split('<!--zo-fit-->')[0]
+            return (
+              <article key={`full-${block.slug || i}`} className="card p-5" style={{ background: '#fff' }}>
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div>
+                    <div className="text-xs font-semibold" style={{ color: tone }}>{rating.score}/10 accuracy</div>
+                    <h4 className="text-lg font-bold mt-1" style={{ color: '#0f172a' }}>{block.h1 || block.title}</h4>
+                    <p className="text-sm mt-1" style={{ color: '#475569' }}>{block.meta_description}</p>
+                  </div>
+                  <button type="button" disabled={correctingKey === (block.slug || String(i))} onClick={() => handleCorrect(block, i)}
+                    className="px-3 py-2 rounded-lg text-xs font-semibold btn-primary disabled:opacity-50" style={{ color: '#fff' }}>
+                    {correctingKey === (block.slug || String(i)) ? 'Correcting…' : 'Correct this'}
+                  </button>
+                </div>
+                {rating.notes.length ? (
+                  <ul className="mt-3 text-sm space-y-1" style={{ color: '#0f172a' }}>
+                    {rating.notes.map((n) => <li key={n}>{n}</li>)}
+                  </ul>
+                ) : null}
+                {block.intro ? <p className="mt-4 text-sm leading-6 whitespace-pre-wrap" style={{ color: '#0f172a' }}>{block.intro}</p> : null}
+                <div className="mt-3 text-sm leading-6 whitespace-pre-wrap" style={{ color: '#0f172a' }}>{body}</div>
+              </article>
+            )
+          })}
+        </div>
+      )}
+
+      {pages.length > 0 && contentKind !== 'post' && (
         <div className="scale-stats">
           <div className="scale-stat"><strong>{pages.length}</strong><span>Pages Generated</span></div>
           <div className="scale-stat"><strong>{(pages.length * 0.7).toFixed(1)}K</strong><span>Estimated Monthly Traffic</span></div>

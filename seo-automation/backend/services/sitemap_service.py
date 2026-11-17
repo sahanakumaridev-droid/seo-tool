@@ -25,13 +25,58 @@ SITE_MENU_PATHS = (
     "/custom-software",
     "/portfolio",
     "/contact",
-    "/blog",
+    "/blogs",
     "/areas",
+    "/wordpress-website-design",
+    "/microsoft-365",
+    "/master-care",
+    "/industries",
+    "/industries/food-and-beverage",
+    "/industries/manufacturing",
+    "/industries/law",
+    "/industries/automotive",
+    "/industries/local-commercial",
+    "/industries/real-estate",
+    "/industries/gym-and-fitness",
+    "/industries/cbd",
+    "/industries/saas-and-tech",
+    "/industries/beauty",
+    "/industries/consultants",
+    "/industries/event-management",
+    "/industries/artists",
+    "/industries/it",
+    "/industries/tour-and-travel",
+    "/industries/insurance",
+    "/industries/medical",
+    "/industries/construction",
+    "/industries/education",
+    "/industries/dental",
+    "/industries/non-profit",
+    "/industries/hospitality",
+    "/website-design-san-diego",
+    "/wordpress-development-san-diego",
+    "/mobile-app-development-san-diego",
+    "/shopify-website-development",
+    "/custom-software-development",
+    "/seo-services-san-diego",
     "/web-designer-near-me",
     "/privacy-policy",
 )
 
 _MENU = {p.rstrip("/") or "/" for p in SITE_MENU_PATHS} | {"", "/"}
+
+
+def keyword_landing_paths() -> list[str]:
+    """Marketing alias URLs (WebDesignAgency, MobileAppDevelopment, SEO, …)."""
+    path = Path(__file__).resolve().parent.parent / "data" / "keyword_landing_slugs.txt"
+    if not path.is_file():
+        return []
+    out = []
+    for line in path.read_text().splitlines():
+        slug = line.strip().strip("/")
+        if slug and not slug.startswith("#"):
+            out.append(f"/{slug}")
+    return out
 
 
 def _xml_esc(url: str) -> str:
@@ -101,6 +146,9 @@ async def editorial_page_urls(session, *, site_base: str, limit: int = 4000) -> 
         loc = base if path == "/" else f"{base}{path}"
         add(loc, today)
 
+    for path in keyword_landing_paths():
+        add(f"{base}{path}", today)
+
     rows = (await session.execute(select(PageRecord).order_by(PageRecord.updated_at.desc()))).scalars().all()
     for r in rows:
         if len(out) >= limit:
@@ -146,6 +194,8 @@ async def editorial_post_urls(session, *, site_base: str, limit: int = 2000) -> 
             continue
         block = r.seo_block if isinstance(r.seo_block, dict) else {}
         if not _is_blog_block(block):
+            continue
+        if str(block.get("publish_status") or "").lower() == "draft":
             continue
         add(f"{base}/{slug}", _row_lastmod(r, today))
     return out

@@ -16,6 +16,8 @@ ZEORBIT_FACTS = {
     "pricing_range": "",
     "experience": "20+ years",
     "reviews": "1,000+ client reviews",
+    "phone": "619-724-9517",
+    "website": "www.zeorbit.com",
     "services": [
         "Custom WordPress website development",
         "Shopify website development",
@@ -300,10 +302,10 @@ SEARCH_INTENTS: Tuple[SearchIntent, ...] = (
         service_emphasis="general",
         platform_hint="WordPress",
         title_templates=(
-            "Starting a Business in {city}? Build Your First Website",
-            "Website Design for New Businesses in {city}",
-            "What to Put on a New Business Website in {city}",
-            "First Website for Your {city} Startup",
+            "Starting a New Business and Planning a New Website? ZeOrbit Can Help in {city}",
+            "New Business Website Help in {city} — ZeOrbit",
+            "Planning a New Website for Your {city} Business? ZeOrbit Is Here",
+            "First Website for Your New {city} Business with ZeOrbit",
         ),
         faq_seeds=(
             "What should a new business put on its website?",
@@ -576,12 +578,12 @@ def intent_h2_set(
             "Improve lead flow with ZeOrbit",
         ],
         "new_business": [
-            f"What a first website should cover in {city_l}",
-            "Pages every new business needs",
-            "WordPress for a flexible first site",
-            "When to add Shopify or a mobile app later",
-            "Starting with a practical first site",
-            "Launch your first site with ZeOrbit",
+            "Why a new business needs a strong online presence",
+            "What ZeOrbit offers for your first website",
+            "Professional websites, mobile apps, and custom solutions",
+            "Ready to grow with ZeOrbit",
+            f"Next step for your {city_l} launch",
+            "Talk with ZeOrbit today",
         ],
         "mobile_app": [
             f"Website first or app first for {city_l} businesses?",
@@ -796,7 +798,7 @@ VOICE (helpful small-business English, ZeOrbit local SEO):
 - Prefer concrete lines like: "If your website is difficult to use on a phone, customers may leave before contacting you."
 - FORBIDDEN fluff: {", ".join(AI_FLUFF)}.
 - NEVER claim #1, cheapest, best in [city], fake reviews, fake clients, fake offices, fake awards, or fake case studies.
-- FACTS YOU MAY USE (only these): experience {ZEORBIT_FACTS['experience']}; {ZEORBIT_FACTS['reviews']}; services: {", ".join(ZEORBIT_FACTS['services'])}.
+- FACTS YOU MAY USE (only these): experience {ZEORBIT_FACTS['experience']}; {ZEORBIT_FACTS['reviews']}; phone {ZEORBIT_FACTS['phone']}; site {ZEORBIT_FACTS['website']}; services: {", ".join(ZEORBIT_FACTS['services'])}.
 - NEVER mention prices, dollar amounts, retainers, packages, or project cost ranges.
 - Punctuation: avoid em dashes (—) and en dashes (–). Prefer commas, periods, or short sentences. Do not stack dashes in body copy.
 - Make entity relationships explicit: ZeOrbit → website design → WordPress/Shopify/mobile apps → small businesses → this location → industry → customer problem.
@@ -1091,11 +1093,13 @@ def _meta_is_junk(text: str, keyword: str = "") -> bool:
     kw_compact = re.sub(r"[^a-z0-9]+", "", kw)
     if not kw_compact:
         return False
-    head = re.sub(r"[^a-z0-9]+", "", raw.lower()[:90])
-    # "Answer: Is Restaurant a Cafe? …" is the keyword, not a description.
-    return head.startswith(kw_compact) or (
-        "answer" in head[:12] and kw_compact in head
-    )
+    body_compact = re.sub(r"[^a-z0-9]+", "", raw.lower())
+    # Only junk if the description IS the keyword (or "Answer: {keyword}"), not if it starts with it.
+    if body_compact == kw_compact:
+        return True
+    if body_compact.startswith("answer" + kw_compact) and len(body_compact) <= len(kw_compact) + 18:
+        return True
+    return False
 
 
 def meta_needs_rewrite(meta: str, keyword: str = "") -> bool:
@@ -1177,7 +1181,15 @@ def compose_serp_meta(
             return fitted
 
     if kind in ("service", "page", "location") or (not q and business_type):
-        return _canned_meta(business_type or "web design", place or "your area")
+        topic = kw.rstrip("?") or (business_type or "website")
+        body = (
+            f"{topic}{loc}: what the page covers, who it is for, and how to get in touch. "
+            f"ZeOrbit builds the site around that search, not a generic WordPress blurb."
+        )
+        fitted = _fit(body)
+        if fitted:
+            return fitted
+        return _canned_meta(topic, place or "your area")
 
     topic = kw.rstrip("?") or (business_type or "this topic")
     body = (
@@ -1189,18 +1201,23 @@ def compose_serp_meta(
 
 def _canned_meta(service: str, place: str, limit: int = 160) -> str:
     loc = re.sub(r"\s+", " ", (place or "your area").strip()) or "your area"
+    svc = re.sub(r"\s+", " ", (service or "website").strip()) or "website"
     variants = [
         f"ZeOrbit builds a clear, mobile-friendly WordPress or Shopify site in {loc} so visitors can see what you offer and call.",
-        f"Local businesses in {loc} get a fast, easy-to-use website from ZeOrbit with an obvious next step for customers.",
-        f"Get a site in {loc} that works on phones, names your offer, and makes contact simple. ZeOrbit builds WordPress and Shopify.",
-        f"ZeOrbit designs practical websites in {loc}: readable on mobile, easy to contact, ready for search.",
+        f"{loc} {svc} searches should land on pages that name the offer and make contact easy. ZeOrbit designs those sites.",
+        f"Get a site in {loc} that works on phones, names your {svc} offer, and makes contact simple. ZeOrbit builds WordPress and Shopify.",
+        f"People in {loc} decide fast. ZeOrbit designs practical {svc} websites: readable on mobile, easy to contact, ready for search.",
+        f"A {svc} website for {loc} should explain services on the first screen. ZeOrbit maps WordPress pages around that.",
+        f"If your {svc} site could live in any city, it is not helping {loc} searches. ZeOrbit builds location-specific pages that convert.",
     ]
-    for v in variants:
+    h = int(hashlib.md5(loc.lower().encode()).hexdigest(), 16)
+    ordered = variants[h % len(variants):] + variants[: h % len(variants)]
+    for v in ordered:
         v = re.sub(r"\s+", " ", v).strip()
         fitted = fit_meta_description(v, limit)
         if fitted:
             return fitted
-    return "ZeOrbit builds a clear website so customers know what you do."
+    return f"ZeOrbit builds a clear {svc} website so customers in {loc} know what you do."
 
 
 def polish_quick_answer(
@@ -1214,7 +1231,7 @@ def polish_quick_answer(
     """Complete meta under 160 chars. Real description — never a copy of the keyword."""
     place = (city or "").strip()
     dull = re.compile(
-        r"^(looking for|need a trusted|need [a-z].{0,80} that actually|trusted |get your free)\b",
+        r"^(looking for|need a better website|need a trusted|need [a-z].{0,80} that actually|trusted |get your free)\b",
         re.I,
     )
 
@@ -1226,6 +1243,7 @@ def polish_quick_answer(
         content_kind=content_kind,
     )
 
+    # Prefer original meta/intro when they already discuss the keyword.
     for blob in ((meta or "").strip(), (intro or "").strip()):
         blob = collapse_repeated_place(blob, city)
         if _meta_is_junk(blob, keyword):
@@ -1236,7 +1254,7 @@ def polish_quick_answer(
         city_hits = text.lower().count(place.lower()) if place else 0
         if dull.match(text) or city_hits >= 2:
             continue
-        if place and place.lower() not in text.lower():
+        if place and place.lower() not in text.lower() and (content_kind or "").lower() not in ("blog", "post"):
             extra = f" For {place} searches."
             if len(text.rstrip(" .") + "." + extra) <= 160:
                 text = fit_meta_description(text.rstrip(" .") + "." + extra) or text
@@ -1376,21 +1394,33 @@ def _restore_markdown_links(text: str, held: list[str]) -> str:
 
 def highlight_zeorbit_internal(content: str) -> str:
     """Wrap natural service phrases with ZeOrbit URLs inside existing paragraphs."""
-    text, held = _protect_markdown_links(content or "")
+    raw = content or ""
+    lines = raw.split("\n")
+    out_lines: list[str] = []
     used_urls: set[str] = set()
-    blob = content or ""
-    for pattern, url in ZEO_INLINE_LINKS:
-        if url in used_urls or re.search(rf"\]\({re.escape(url)}\)", blob, re.I):
+    blob = raw
+    for line in lines:
+        if line.lstrip().startswith("#"):
+            out_lines.append(line)
             continue
+        text, held = _protect_markdown_links(line)
+        for pattern, url in ZEO_INLINE_LINKS:
+            if url in used_urls or re.search(rf"\]\({re.escape(url)}\)", blob, re.I):
+                continue
 
-        def repl(m: re.Match, href: str = url) -> str:
-            return f"[{m.group(1)}]({href})"
+            def repl(m: re.Match, href: str = url) -> str:
+                return f"[{m.group(1)}]({href})"
 
-        text, n = pattern.subn(repl, text, count=1)
-        if n:
-            used_urls.add(url)
-            blob = text
-    return _restore_markdown_links(text, held)
+            text, n = pattern.subn(repl, text, count=1)
+            if n:
+                used_urls.add(url)
+                text = _restore_markdown_links(text, held)
+                blob = "\n".join(out_lines + [text] + lines[len(out_lines) + 1 :])
+                break
+        else:
+            text = _restore_markdown_links(text, held)
+        out_lines.append(text)
+    return "\n".join(out_lines)
 
 
 def highlight_citation_keywords(content: str) -> str:
@@ -1409,7 +1439,7 @@ def highlight_citation_keywords(content: str) -> str:
     return _restore_markdown_links(text, held)
 
 
-def ensure_body_hyperlinks(content: str) -> str:
+def ensure_body_hyperlinks(content: str, directory: bool = True) -> str:
     """ZeOrbit links stay inside paragraphs. Directory mention is a last-sentence, not a link band."""
     text = (content or "").strip()
     text = _INTERNAL_LINE_RE.sub("", text)
@@ -1417,7 +1447,7 @@ def ensure_body_hyperlinks(content: str) -> str:
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
     text = highlight_zeorbit_internal(text)
     text = highlight_citation_keywords(text)
-    if not re.search(r"DesignRush|GoodFirms|Yelp", text, re.I):
+    if directory and not re.search(r"DesignRush|GoodFirms|Yelp", text, re.I):
         text = f"{text.rstrip()}\n\n{EXTERNAL_LINK_LINE}" if text else EXTERNAL_LINK_LINE
     return text
 
@@ -1578,40 +1608,13 @@ def ensure_location_body(
         (r"\byour area\b", place),
         (r"\byour local area\b", place),
         (r"\bnearby customers\b", f"customers in {city}"),
-        (r"\blocal businesses\b", f"businesses in {city}"),
         (r"\blocal customers\b", f"customers in {city}"),
     )
     for pattern, repl in generics:
         intro_out = re.sub(pattern, repl, intro_out, flags=re.I)
         content_out = re.sub(pattern, repl, content_out, flags=re.I)
     body = f"{intro_out}\n{content_out}"
-    mentions = _body_mentions_city(body, city)
-    if mentions < 3:
-        inject = (
-            f"\n\n## Why location matters in {city}\n\n"
-            f"Businesses in {place} compete for attention from people who search on phones between errands. "
-            f"A website for a {ind} owner here should name real services, make contact easy, and answer "
-            f"questions {city} customers ask before they call.\n\n"
-            f"ZeOrbit builds WordPress and Shopify sites, redesigns, and mobile-friendly layouts. "
-            f"With {ZEORBIT_FACTS['experience']} and {ZEORBIT_FACTS['reviews']}, the focus stays on a clear site "
-            f"for {city}, not a thin page that only swaps the city name."
-        )
-        # Vary inject slightly by index so 33 locations are not identical add-ons.
-        if index % 2:
-            inject = (
-                f"\n\n## Serving {ind} owners in {city}\n\n"
-                f"If you run a {ind} in {place}, customers decide quickly whether your site looks trustworthy. "
-                f"Pages should explain what you do in {city}, show how to reach you, and work on mobile.\n\n"
-                f"ZeOrbit provides custom WordPress website development, Shopify builds when you sell online, "
-                f"and redesigns when the current site is losing people."
-            )
-        elif index % 3 == 0:
-            inject = (
-                f"\n\n## A different starting point in {city}\n\n"
-                f"{ind.title()} owners in {place} often need service pages, a simple contact path, and layouts that work on a phone. "
-                f"ZeOrbit maps those pages before design so the site matches how people actually search in {city}."
-            )
-        content_out = (content_out or "").rstrip() + inject
+    # Do not append canned location paragraphs — AI copy must stand on its own.
     intro_out = strip_pricing_from_text(intro_out)
     content_out = strip_pricing_from_text(content_out)
     return intro_out, content_out
@@ -1852,10 +1855,9 @@ def build_template_page_copy(
     place = place_label(city, state, zip) or (f"{city}, {state}".strip(", ") if state else (city or "your area"))
     pk = (pretty_keyword or "").lower()
     web_topic = bool(re.search(r"website|web design|wordpress|shopify", pk))
-    if web_topic and (not industry or (industry or "").lower() not in pk):
-        ind = "local businesses"
-    else:
-        ind = industry or "local businesses"
+    ind = (industry or "").strip() or "local businesses"
+    one = ind[:-1] if ind.lower().endswith("s") and not ind.lower().endswith("ss") else ind
+    one_l = one[:1].lower() + one[1:]
     if web_topic and intent.id == "mobile_app":
         intent = next(i for i in SEARCH_INTENTS if i.id == "wordpress")
     facts = facts_blurb(index)
@@ -1868,45 +1870,45 @@ def build_template_page_copy(
     example_a = ind
     example_b = ind
 
+    kw_phrase = pretty_keyword.strip() or "website"
     intros = {
         "affordable": (
-            f"If you're a small business in {place} looking for a reasonably priced website designer, "
-            f"the right solution depends on what your business needs — not on stuffing “{city} website design” onto a thin page.\n\n"
-            f"A {example_a} owner may need a lead-generation website, while {example_b} may need Shopify e-commerce. "
+            f"If you need {kw_phrase} in {place} without a bloated build, start from what customers must do on the site — not a thin “{city} website design” page.\n\n"
+            f"A {one_l} owner may need a lead-generation site around {kw_phrase}, while another {one_l} company may need Shopify. "
             f"{facts}"
         ),
         "shopify": (
-            f"If your {ind} in {place} needs to sell online, a brochure site is not enough — you need a store that works on phones and makes checkout clear.\n\n"
-            f"ZeOrbit provides Shopify website development along with WordPress builds when you need a broader marketing site. {facts}"
+            f"If your {ind} in {place} searched {kw_phrase} because they need to sell online, a brochure site is not enough — you need a store that works on phones.\n\n"
+            f"ZeOrbit builds Shopify (and WordPress marketing pages) around that {kw_phrase} search. {facts}"
         ),
         "wordpress": (
-            f"Many {ind} owners in {place} want a website they can update without calling a developer for every text change. WordPress is often the practical answer.\n\n"
-            f"ZeOrbit builds custom WordPress websites with mobile-friendly layouts and SEO-friendly structure. {facts}"
+            f"People looking for {kw_phrase} in {place} usually want pages they can update without a developer for every text change. WordPress is often the practical answer.\n\n"
+            f"ZeOrbit structures custom WordPress around {kw_phrase}: mobile-friendly layouts and headings that match the search. {facts}"
         ),
         "redesign": (
-            f"If your website is difficult to use on a phone, customers in {place} may leave before contacting you. That is a redesign problem, not a “post more on social” problem.\n\n"
-            f"ZeOrbit provides website redesign and rebuild services so your services, contact paths, and mobile experience match what people expect. {facts}"
+            f"If your current site does not match {kw_phrase} searches in {place}, people leave on their phones before they contact you. That is a redesign problem.\n\n"
+            f"ZeOrbit rebuilds around {kw_phrase} so services, contact paths, and mobile layout match the query. {facts}"
         ),
         "leads": (
-            f"A website should help your {ind} in {place} get more leads — calls, forms, and booked conversations — not just look busy.\n\n"
-            f"ZeOrbit focuses on conversion-focused website development: clear offers, service pages, and mobile-friendly paths to contact. {facts}"
+            f"A {kw_phrase} page for {ind} in {place} should create calls and form fills, not look busy.\n\n"
+            f"ZeOrbit maps conversion paths around {kw_phrase}: clear offer, service pages, mobile contact. {facts}"
         ),
         "mobile_app": (
-            f"Do you need a website or a mobile app for your {ind} in {place}? For most businesses, a strong mobile-friendly website comes first; an app makes sense when customers need frequent, logged-in actions.\n\n"
-            f"ZeOrbit provides website development and mobile application development so you can choose based on the real workflow. {facts}"
+            f"Do you need {kw_phrase} as a website, or a mobile app, for {ind} in {place}? Most teams need a strong mobile-friendly site first.\n\n"
+            f"ZeOrbit maps website vs app against the {kw_phrase} workflow. {facts}"
         ),
         "new_business": (
-            f"If you are starting a business in {place}, you do not need a giant website on day one — you need a clear site that explains what you do and how to reach you.\n\n"
-            f"ZeOrbit builds first websites for new businesses with room to grow into WordPress blogs, Shopify stores, or apps later. {facts}"
+            f"If you are launching in {place} and need {kw_phrase}, you do not need a giant site on day one — you need pages that explain the offer and how to reach you.\n\n"
+            f"ZeOrbit builds that first {kw_phrase} site with room to grow. {facts}"
         ),
         "industry_local": (
-            f"If you run a {ind} business in {place} and need a website that speaks to your customers, generic templates rarely explain your services well enough.\n\n"
-            f"ZeOrbit builds websites for {ind} with clear service pages, local relevance, and practical next steps. {facts}"
+            f"If you run {ind} in {place} and people search {kw_phrase}, a generic template rarely names your services well enough.\n\n"
+            f"ZeOrbit builds {kw_phrase} pages with local relevance and a practical next step. {facts}"
         ),
         "discovery": (
-            f"If you're looking for who can build a website for a small business in {place}, start with your real need: leads, online sales, a redesign, or a first site.\n\n"
-            f"For example, {example_a} often need service pages that generate calls, while {example_b} may need product pages or booking flows. "
-            f"ZeOrbit is a website design and development provider for WordPress, Shopify, redesigns, and mobile apps. {facts}"
+            f"If you are looking for {kw_phrase} in {place}, start with the real job: leads, sales, a redesign, or a first site — then pick the stack.\n\n"
+            f"{example_a} often need service pages that generate calls; {example_b} may need product or booking flows. "
+            f"ZeOrbit builds around {kw_phrase} on WordPress, Shopify, or a redesign. {facts}"
         ),
     }
     intro = intros.get(intent.id, intros["discovery"])
@@ -1919,7 +1921,7 @@ def build_template_page_copy(
             f"Your site should answer what you do, who you help, and how to contact you within a few seconds."
         ),
         (
-            f"Owners of {ind} in {place} usually do not need buzzwords — they need a site that looks trustworthy and makes calling easy. "
+            f"A {one_l} company in {place} usually does not need buzzwords. It needs a site that looks trustworthy and makes calling easy. "
             f"That means readable service pages, real photos when you have them, and forms that work on mobile."
         ),
         (
@@ -1973,27 +1975,38 @@ def build_template_page_copy(
 
     content = (
         f"## {h2s[0]}\n\n"
-        f"A business that {problem} usually needs more than a one-paragraph homepage. "
-        f"In {place}, people compare options quickly — especially on phones — so your site should explain services, show how to contact you, and answer obvious questions.\n\n"
+        f"A {one_l} company searching for {kw_phrase} needs more than a logo online. "
+        f"A clear online presence helps you attract clients, show your work, and stay competitive in {place}.\n\n"
+        f"ZeOrbit builds digital solutions around that search: a professional website that names your offer, "
+        f"and when it fits, a mobile app that keeps your team and clients in sync. "
+        f"This page is for {kw_phrase} — not a generic web-design filler article.\n\n"
         f"{angle_paras[angle]}\n\n"
         f"## {h2s[1]}\n\n"
+        f"**Why choose ZeOrbit for {kw_phrase}?** A well-designed site builds credibility and makes it easy "
+        f"for potential clients to find you. A practical mobile-friendly layout (or app when needed) keeps "
+        f"communication clear. ZeOrbit combines proven platforms with industry-aware structure so the tools "
+        f"actually fit a {ind} workflow in {city}.\n\n"
         f"{platform_para}"
         f"## {h2s[2]}\n\n"
-        f"Technology should follow the job: WordPress for flexible marketing sites, Shopify for stores, redesign when the current site is losing people. "
-        f"ZeOrbit maps that choice for {ind} in {city} before building.\n\n"
+        f"Your competitors are already online. A professional digital presence for {kw_phrase} is essential "
+        f"for growth, not a luxury. Pick the stack from the job: WordPress for marketing pages, Shopify for "
+        f"stores, redesign when the current site loses mobile visitors. ZeOrbit maps that choice for {ind} "
+        f"in {city} before building.\n\n"
+        f"**Ready to boost your digital presence?** Visit {ZEORBIT_FACTS['website']} or call "
+        f"{ZEORBIT_FACTS['phone']} to speak with a specialist who understands {ind}.\n\n"
     )
 
     meta = (
-        f"ZeOrbit builds WordPress and Shopify websites for {ind} in {place}. "
-        f"Practical, mobile-friendly sites — talk with us."
+        f"{kw_phrase} for {ind} in {place}: clear offer pages, mobile-friendly builds, and a path to contact. "
+        f"ZeOrbit — call {ZEORBIT_FACTS['phone']}."
     )
     meta = ensure_zip_in_meta(meta, city, state, zip)
 
     cta_options = (
-        f"If your {ind} in {city} needs a website that matches a real business problem, ZeOrbit can help with WordPress, Shopify, redesign, or mobile apps. Not sure where to start? We're here to help.",
-        f"Ready to talk through a practical website for your {city} business? Reach out and we'll map a plan.",
-        f"Need a clearer website for customers in {place}? ZeOrbit builds conversion-focused, mobile-friendly sites with SEO-friendly structure. Contact ZeOrbit to get started.",
-        f"Building or rebuilding a site for {ind} in {city}? ZeOrbit can recommend WordPress, Shopify, or a redesign based on what customers need to do next.",
+        f"Ready to grow with {kw_phrase}? Visit {ZEORBIT_FACTS['website']} or call {ZEORBIT_FACTS['phone']} — ZeOrbit helps {ind} in {city}.",
+        f"Talk through a practical plan for your {city} {ind} business. Call {ZEORBIT_FACTS['phone']} or visit {ZEORBIT_FACTS['website']}.",
+        f"Need a clearer site for customers searching {kw_phrase} in {place}? Contact ZeOrbit at {ZEORBIT_FACTS['phone']}.",
+        f"Building or rebuilding around {kw_phrase}? ZeOrbit can recommend WordPress, Shopify, or a redesign. Call {ZEORBIT_FACTS['phone']}.",
     )
     cta = cta_options[index % len(cta_options)]
 

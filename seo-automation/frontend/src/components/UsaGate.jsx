@@ -43,13 +43,12 @@ async function lookupCountry() {
 
 /**
  * Same visitor rule as zeorbit.com nginx GeoIP: United States only.
- * Local Vite has no GeoIP, so the browser checks the public IP.
+ * Applies to marketing site and seo.zeorbit.com. Local Vite skips the check.
  */
 export default function UsaGate({ children }) {
   const host = window.location.hostname
   const skip = import.meta.env.VITE_SKIP_US_GATE === 'true'
     || ['localhost', '127.0.0.1'].includes(host)
-    || host.startsWith('seo.')
   const [allowed, setAllowed] = useState(skip)
 
   useEffect(() => {

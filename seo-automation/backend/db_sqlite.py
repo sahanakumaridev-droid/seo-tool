@@ -4,7 +4,7 @@ Swap this in by setting DATABASE_URL=sqlite+aiosqlite:///./seo.db
 """
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import Column, Integer, String, DateTime, JSON, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, JSON, Boolean, Float, Text
 from sqlalchemy.sql import func
 from config import settings
 
@@ -22,6 +22,7 @@ class PageRecord(Base):
     city          = Column(String(80), nullable=False, index=True)
     state         = Column(String(10), nullable=False)
     slug          = Column(String(200), nullable=False, unique=True, index=True)
+    owner_email   = Column(String(200), nullable=True, index=True)
     seo_block     = Column(JSON, nullable=False)
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
     updated_at    = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
@@ -44,6 +45,58 @@ class LeadRecord(Base):
     status        = Column(String(20), default="new", index=True)
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
 
+class ProspectRecord(Base):
+    """Qualified outreach list. Email and phone are required before a row is campaign-ready."""
+    __tablename__ = "prospects"
+    id            = Column(Integer, primary_key=True, autoincrement=True)
+    place_id      = Column(String(200), default="", index=True)
+    business_name = Column(String(200), default="")
+    website       = Column(String(400), default="")
+    category      = Column(String(160), default="")
+    address       = Column(String(300), default="")
+    city          = Column(String(80), default="")
+    state         = Column(String(40), default="")
+    zip_code      = Column(String(20), default="")
+    phone         = Column(String(60), default="")
+    email         = Column(String(200), default="")
+    maps_url      = Column(String(500), default="")
+    rating        = Column(Float, nullable=True)
+    review_count  = Column(Integer, nullable=True)
+    socials       = Column(Text, default="")
+    query         = Column(String(200), default="")
+    created_at    = Column(DateTime(timezone=True), server_default=func.now())
+
+class NewsFeedRecord(Base):
+    """External software and design RSS sources for zeorbit.com/news."""
+    __tablename__ = "news_feeds"
+    id              = Column(Integer, primary_key=True, autoincrement=True)
+    name            = Column(String(160), nullable=False)
+    url             = Column(String(500), nullable=False, unique=True)
+    source_name     = Column(String(160), default="")
+    enabled         = Column(Boolean, nullable=False, default=True)
+    filter_software = Column(Boolean, nullable=False, default=True)
+    last_synced_at  = Column(DateTime(timezone=True), nullable=True)
+    last_status     = Column(String(40), default="")
+    last_error      = Column(String(400), default="")
+    last_added      = Column(Integer, default=0)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+
+class NewsArticleRecord(Base):
+    """A short RSS summary. The card links to the original article."""
+    __tablename__ = "news_articles"
+    id           = Column(Integer, primary_key=True, autoincrement=True)
+    feed_id      = Column(Integer, nullable=False, index=True)
+    guid         = Column(String(500), default="", index=True)
+    url          = Column(String(800), nullable=False, unique=True)
+    title        = Column(String(400), default="")
+    summary      = Column(String(600), default="")
+    image_url    = Column(String(800), default="")
+    author       = Column(String(160), default="")
+    source_name  = Column(String(160), default="")
+    published_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    hidden       = Column(Boolean, nullable=False, default=False)
+    created_at   = Column(DateTime(timezone=True), server_default=func.now())
+
 class PublishedUrlRecord(Base):
     __tablename__ = "published_urls"
     id                  = Column(Integer, primary_key=True, autoincrement=True)
@@ -64,8 +117,20 @@ class PublishedUrlRecord(Base):
     updated_at          = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
 
 async def init_db():
+    from sqlalchemy import text
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("ALTER TABLE pages ADD COLUMN owner_email VARCHAR(200)"))
+    except Exception:
+        pass
+    async with engine.begin() as conn:
+        await conn.execute(text(
+            "UPDATE pages SET owner_email = 'admin' "
+            "WHERE owner_email IS NULL OR owner_email = ''"
+        ))
     print("SQLite tables ready.")
 
 async def get_session() -> AsyncSession:

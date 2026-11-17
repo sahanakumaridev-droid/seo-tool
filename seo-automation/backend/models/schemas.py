@@ -1,5 +1,5 @@
 import re
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime
 
@@ -14,7 +14,7 @@ class GenerateRequest(BaseModel):
     target_keywords: List[str] = Field(
         default_factory=list,
         example=["web design san diego"],
-        description="Target keywords (required for pages; optional for posts if a brief is set)",
+        description="Target topic / keyword / question (required — natural language OK)",
     )
     industry: str = Field(default="", example="Contractors")
     audience: str = Field(default="", description="Who the copy speaks to")
@@ -23,11 +23,15 @@ class GenerateRequest(BaseModel):
         description="Stock-photo search phrase only (e.g. primary care doctor clinic). Does not change page copy.",
     )
     content_kind: Literal["page", "post"] = Field(..., description="Mandatory: website page vs blog post")
+    blog_format: Literal["", "auto", "guide", "briefing", "feature"] = Field(
+        default="auto",
+        description="Blog only: how-to guide, Q&A briefing, or feature story. auto rotates across a batch.",
+    )
     custom_requirements: str = Field(
         default="",
         description="Optional writing brief — auto-composed from keyword + niche + location when empty",
     )
-    use_ai: bool = Field(default=False, description="Use an LLM for content generation")
+    use_ai: bool = Field(default=True, description="Always use an LLM; templates are disabled")
     llm_provider: Optional[str] = Field(default=None, description="auto | groq | gemini | openai | anthropic — overrides server default for this request")
 
     @field_validator("custom_requirements")
@@ -45,10 +49,13 @@ class GenerateRequest(BaseModel):
         brief = (self.custom_requirements or "").strip()
         if kind == "page":
             missing = []
+            if not niche and kws:
+                self.business_type = kws[0]
+                niche = kws[0]
             if not niche:
-                missing.append("Business Niche")
+                missing.append("what the content should be about")
             if not kws:
-                missing.append("at least one Target Keyword")
+                missing.append("what the content should be about")
             if not (self.base_location or "").strip() and not (self.extra_locations or []):
                 missing.append("Base city")
             # Industry / Audience optional — never invent "Professional Services"
@@ -56,12 +63,10 @@ class GenerateRequest(BaseModel):
                 "professional services", "other", "services", "local services", "digital services",
             }:
                 self.industry = ""
-            if not (self.audience or "").strip():
-                self.audience = "Small business owners"
             if missing:
                 raise ValueError(
                     "Cannot generate — add: %s. Brief fields (intent, problem, pricing, FAQs) are filled by the agent."
-                    % "; ".join(missing)
+                    % "; ".join(sorted(set(missing)))
                 )
         if kind == "post" and not kws:
             # Derive a clean keyword from the brief — never the labeled "Working title / topic: …" blob.
@@ -87,7 +92,7 @@ class GenerateRequest(BaseModel):
                 topic = "website design"
             self.target_keywords = [topic] if topic else ["website design"]
         if kind == "post" and not niche:
-            self.business_type = "Digital Services"
+            self.business_type = (kws[0] if kws else "Digital Services")
         return self
 
 class KeywordSet(BaseModel):
@@ -113,6 +118,7 @@ class ImageAsset(BaseModel):
     is_featured: bool = False
 
 class SEOBlock(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     city: str
     state: str
     zip: str = ""
@@ -126,6 +132,7 @@ class SEOBlock(BaseModel):
     h3s: List[str]
     intro: str = ""
     content: str
+    industry_fit: str = ""
     faqs: List[FAQItem]
     cta: str
     keywords: KeywordSet
@@ -143,7 +150,16 @@ class SEOBlock(BaseModel):
     in_content_images: List[ImageAsset] = Field(default=[])
     source_url: str = ""               # the analyzed website this article was grounded on
     content_type: Literal["service", "blog"] = "service"  # pillar/service page vs. supporting blog post — drives WordPress category
-    layout_variant: str = Field(default="", description="Body layout: qa, steps, story, cards, split, timeline")
+    content_html: str = ""  # keyword blog HTML, published as the article body
+
+    @field_validator("content_type", mode="before")
+    @classmethod
+    def _content_type_alias(cls, v):
+        s = str(v or "service").strip().lower()
+        if s in ("blog", "post", "article"):
+            return "blog"
+        return "service"
+    layout_variant: str = Field(default="", description="Blog: guide | briefing | feature. Pages: qa, steps, story, …")
     # ── Local SEO master-rule fields (one source of truth for tool + website) ──
     search_intent: str = ""
     customer_problem: str = ""
@@ -227,7 +243,7 @@ class ArticleRequest(BaseModel):
     audience: str = Field(default="")
     content_kind: Literal["page", "post"] = Field(default="post")
     custom_requirements: str = Field(default="")
-    use_ai: bool = Field(default=True, description="Use an LLM when available; template fallback otherwise")
+    use_ai: bool = Field(default=True, description="Always use an LLM; templates are disabled")
     llm_provider: Optional[str] = Field(default=None, description="auto | groq | gemini | openai | anthropic — overrides server default for this request")
 
 class WebsiteAnalysisRequest(BaseModel):

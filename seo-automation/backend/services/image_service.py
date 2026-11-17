@@ -36,8 +36,10 @@ def unused_featured_url(exclude_urls: Optional[Iterable[str]] = None, seed: str 
 
 
 def assign_canonical_images(images: List["ImageAsset"]) -> tuple:
-    """One article → one image set. Featured = first; footer = first distinct non-featured.
+    """One article → one image set. Featured = first; footer = last distinct.
 
+    Mid-body slots use the images between featured and footer. With the usual
+    3-image set that yields hero / mid / footer without duplicates.
     Drops duplicate URLs within the set. Returns (featured_url, footer_url, cleaned_images).
     """
     if not images:
@@ -60,7 +62,8 @@ def assign_canonical_images(images: List["ImageAsset"]) -> tuple:
     featured = cleaned[0].url or ""
     feat_key = normalize_image_key(featured)
     footer = featured
-    for im in cleaned[1:]:
+    # Prefer the last distinct photo so mid-body can use the middle slot(s).
+    for im in reversed(cleaned[1:]):
         if im.url and normalize_image_key(im.url) != feat_key:
             footer = im.url
             break
@@ -82,15 +85,29 @@ def topic_image_family(text: str) -> str:
         return "electrician"
     if any(k in t for k in ("dental", "dentist")):
         return "dental"
-    # Verticals before "website" so "medical website" is not filed as generic web.
-    if any(k in t for k in ("health", "medical", "clinic", "hospital", "doctor", "patient", "primary care")):
-        return "healthcare"
-    if any(k in t for k in ("law", "legal", "attorney")):
-        return "legal"
-    if any(k in t for k in ("real estate", "realtor")):
+    # Buyer-vertical image keywords win even when the article is about a website.
+    if any(k in t for k in ("real estate", "realtor", "property listing", "home listing")):
         return "real_estate"
+    if any(k in t for k in ("law", "legal", "attorney", "law firm")):
+        return "legal"
     if any(k in t for k in ("restaurant", "chef", "cafe")):
         return "restaurant"
+    if any(k in t for k in ("biopharma", "biotech", "pharma", "life science", "health", "medical", "clinic", "hospital", "doctor", "patient", "primary care")):
+        return "healthcare"
+    if any(k in t for k in ("carpet", "flooring", "floor install", "hardwood", "tile install")):
+        return "contractors"
+    if any(k in t for k in ("contractor", "construction", "builder", "remodel")):
+        return "contractors"
+    if any(k in t for k in ("window tint", "tinting")):
+        return "automotive"
+    if any(k in t for k in ("fitness", "gym", "trainer")):
+        return "fitness"
+    if any(k in t for k in ("clean",)):
+        return "cleaning"
+    if any(k in t for k in ("roof",)):
+        return "roofing"
+    if any(k in t for k in ("landscap", "lawn")):
+        return "landscaping"
     if any(k in t for k in ("educat", "school", "learn", "tutor", "university", "college", "student")):
         return "education"
     if any(k in t for k in ("financ", "bank", "fintech", "invest", "account")):
@@ -106,14 +123,6 @@ def topic_image_family(text: str) -> str:
         return "software"
     if any(k in t for k in ("web", "website", "wordpress", "designer", "developer", "wix", "shopify", "squarespace", "webflow")):
         return "web"
-    if any(k in t for k in ("clean",)):
-        return "cleaning"
-    if any(k in t for k in ("roof",)):
-        return "roofing"
-    if any(k in t for k in ("landscap", "lawn")):
-        return "landscaping"
-    if any(k in t for k in ("fitness", "gym", "trainer")):
-        return "fitness"
     # Require photographer/photography — bare "photo" matches too many false positives.
     if any(k in t for k in ("photographer", "photography", "photo studio")):
         return "photography"
@@ -134,6 +143,18 @@ _BLOG_PLATFORM_VISUALS = (
         ],
         "concept": "Doctor and clinic website for a medical practice",
         "label": "Healthcare",
+    }),
+    (r"window tint|tinting|auto glass", {
+        "category": "window_tint",
+        "topic": "car window tinting shop",
+        "modifiers": [
+            "window tint installation",
+            "car window film",
+            "auto tint shop",
+            "tinted car glass",
+        ],
+        "concept": "Window tinting business and a website mockup",
+        "label": "Window tinting",
     }),
     (r"gym|fitness|personal train", {
         "category": "fitness",
@@ -315,6 +336,66 @@ _BLOG_PLATFORM_VISUALS = (
         "concept": "Mobile app UI on a phone next to a laptop",
         "label": "Mobile apps",
     }),
+    (r"\b(pharmacy|medication|prescription)\b.*\bapp\b|\bapp\b.*\b(pharmacy|medication|prescription)\b", {
+        "category": "pharmacy_app",
+        "topic": "pharmacy mobile app phone",
+        "modifiers": [
+            "smartphone health app",
+            "pharmacy app mockup",
+            "mobile prescription app",
+            "phone medicine app ui",
+        ],
+        "concept": "Pharmacy mobile app on a smartphone",
+        "label": "Pharmacy app",
+    }),
+    (r"\b(maintain|maintenance|care plan|website support)\b", {
+        "category": "maintenance",
+        "topic": "website maintenance laptop dashboard",
+        "modifiers": [
+            "cms admin dashboard",
+            "website updates laptop",
+            "developer fixing website",
+            "server monitoring screen",
+        ],
+        "concept": "Website maintenance and admin dashboard on a laptop",
+        "label": "Website maintenance",
+    }),
+    (r"\b(redesign|rebuild|refresh)\b", {
+        "category": "redesign",
+        "topic": "website redesign mockup laptop",
+        "modifiers": [
+            "before after website mockup",
+            "ui redesign laptop",
+            "designer reviewing website",
+            "wireframe to website",
+        ],
+        "concept": "Website redesign mockup on a laptop",
+        "label": "Website redesign",
+    }),
+    (r"\b(restaurant|cafe|café)\b", {
+        "category": "restaurant",
+        "topic": "restaurant cafe dining interior",
+        "modifiers": [
+            "restaurant dining room",
+            "cafe counter coffee",
+            "restaurant menu table",
+            "barista cafe interior",
+        ],
+        "concept": "Restaurant or cafe dining interior",
+        "label": "Restaurant & cafe",
+    }),
+    (r"\bapp\b", {
+        "category": "mobile_app",
+        "topic": "mobile app development phone",
+        "modifiers": [
+            "app ui on phone",
+            "developer phone laptop",
+            "mobile app mockup",
+            "smartphone app screen",
+        ],
+        "concept": "Mobile app UI on a smartphone",
+        "label": "Apps",
+    }),
 )
 
 
@@ -391,9 +472,11 @@ def blog_image_plan(query: str, niche: str = "") -> dict:
     mentioned in the query — not the order of the platform list.
     One- and two-word image keywords (dentist, used car) stay as the visual topic.
     """
-    blob = f"{query or ''} {niche or ''}".strip().lower()
+    blob = (query or "").strip().lower()
     kw = image_keyword_terms(query or "")
-    if kw["phrase"] and kw["is_short"] and topic_image_family(kw["phrase"]) not in ("web", "software", "general"):
+    fam = topic_image_family(kw["phrase"] or blob)
+    generic_words = {"web", "website", "design", "seo", "business", "service", "services", "page"}
+    if kw["phrase"] and kw["is_short"] and fam not in ("web", "software") and kw["phrase"] not in generic_words:
         phrase = kw["phrase"]
         return {
             "category": phrase.replace(" ", "_"),
@@ -437,9 +520,43 @@ def blog_image_plan(query: str, niche: str = "") -> dict:
     stop = {
         "how", "to", "a", "an", "the", "my", "your", "for", "and", "or", "of", "in", "on",
         "fix", "repair", "broken", "guide", "what", "is", "why", "when", "do", "i", "with",
-        "website", "site", "page", "pages",
+        "website", "site", "page", "pages", "difference", "between", "versus", "vs",
     }
     tokens = [t for t in re.findall(r"[a-z0-9]+", blob) if t not in stop and len(t) > 2]
+    fam = topic_image_family(blob)
+    # Only collapse plain website/software queries to the curated tech pool.
+    # Do NOT treat "general" topics (pharmacy app, etc.) as website stock.
+    if fam in ("web", "software") and not tokens:
+        return {
+            "category": "website",
+            "topic": "website design laptop",
+            "modifiers": [
+                "ui mockup",
+                "designer laptop",
+                "website wireframe",
+                "code on screen",
+            ],
+            "concept": "Website design on a laptop",
+            "label": "Website",
+            "focus": "website design",
+        }
+    if fam in ("web", "software") and tokens and all(
+        t in {"design", "designer", "development", "developer", "build", "building", "professional"}
+        for t in tokens
+    ):
+        return {
+            "category": "website",
+            "topic": "website design laptop",
+            "modifiers": [
+                "ui mockup",
+                "designer laptop",
+                "website wireframe",
+                "code on screen",
+            ],
+            "concept": "Website design on a laptop",
+            "label": "Website",
+            "focus": "website design",
+        }
     if not tokens:
         kw2 = image_keyword_terms(blob)
         tokens = kw2["words"] or (blob.split()[:2] if blob else ["website", "design"])
@@ -460,19 +577,34 @@ def blog_image_plan(query: str, niche: str = "") -> dict:
             "label": label,
             "focus": short_topic,
         }
-    topic = short_topic + " website laptop"
+    topic = short_topic
+    if fam in ("web", "software"):
+        topic = short_topic + " website laptop"
+        return {
+            "category": tokens[0] if tokens else "website",
+            "topic": topic,
+            "modifiers": [
+                f"{topic_bits[0]} website screen" if topic_bits else "website screen",
+                "designer laptop mockup",
+                "website on laptop",
+                "web design desk",
+            ],
+            "concept": f"{label} website topic on a laptop screen",
+            "label": label,
+            "focus": " ".join(topic_bits) if topic_bits else "website design",
+        }
     return {
-        "category": tokens[0] if tokens else "website",
-        "topic": topic,
+        "category": tokens[0] if tokens else "topic",
+        "topic": short_topic,
         "modifiers": [
-            f"{topic_bits[0]} website screen" if topic_bits else "website screen",
-            "designer laptop mockup",
-            "website on laptop",
-            "web design desk",
+            short_topic,
+            f"{short_topic} professional",
+            f"{topic_bits[0]} workplace" if topic_bits else short_topic,
+            f"{short_topic} business",
         ],
-        "concept": f"{label} website topic on a laptop screen",
+        "concept": f"{label} photography",
         "label": label,
-        "focus": " ".join(topic_bits) if topic_bits else "website design",
+        "focus": short_topic,
     }
 
 def _stable_index(seed: str, modulo: int) -> int:
@@ -837,10 +969,16 @@ def _is_banned_stock_key(key: str) -> bool:
 
 
 def _looks_like_camera_photo(url: str, alt: str = "") -> bool:
+    """Reject amateur / off-brand stock (business cards, QR codes, Flickr noise)."""
     blob = f"{url or ''} {alt or ''}".lower()
     return any(
         x in blob
-        for x in ("camera", "dslr", "eos rebel", "canon eos", "nikon d", "photo studio", "tripod")
+        for x in (
+            "camera", "dslr", "eos rebel", "canon eos", "nikon d", "photo studio", "tripod",
+            "business card", "name card", "visiting card", "qr code", "qrcode",
+            "linkedin.com", "facebook.com", "resume", "cv template", "name badge",
+            "id badge", "conference badge", "selfie", "mugshot",
+        )
     )
 
 
@@ -853,9 +991,14 @@ def stock_url_needs_replace(url: str) -> bool:
         return True
     if "live.staticflickr.com" in u or "flickr.com" in u:
         return True
+    # Openverse / Wikimedia commons often return random personal photos, not pro tech stock.
+    if "upload.wikimedia.org" in u or "cdn.openverse.org" in u or "openverse.org" in u:
+        return True
     if "placeholder" in u:
         return True
-    if any(x in u for x in ("camera", "dslr", "canon", "nikon", "tripod")):
+    if any(x in u for x in ("camera", "dslr", "canon", "nikon", "tripod", "business-card", "business_card", "qr-code")):
+        return True
+    if _looks_like_camera_photo(u, ""):
         return True
     return _is_banned_stock_key(normalize_image_key(url))
 
@@ -989,6 +1132,70 @@ _SOFTWARE_IMAGES = [
     "https://images.unsplash.com/photo-1551650975-87deedd944c3",
 ]
 
+# Phone / app UI — used for mobile app & pharmacy app topics (no Unsplash API required)
+_MOBILE_APP_IMAGES = [
+    "https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c",  # app on phone
+    "https://images.unsplash.com/photo-1551650975-87deedd944c3",  # smartphone coding
+    "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9",  # phone in hand
+    "https://images.unsplash.com/photo-1563986768609-322da13575f3",  # mobile banking / app
+    "https://images.unsplash.com/photo-1601972599720-36938d4ecd31",  # phone app ui
+    "https://images.unsplash.com/photo-1611224923853-80b023f02d71",  # smartphone screen
+    "https://images.unsplash.com/photo-1516321318423-f06f85e504b3",  # person with laptop/phone
+    "https://images.unsplash.com/photo-1556740738-b6a63e27c4df",  # mobile checkout / app
+]
+
+# Pharmacy / health-app visuals (phone + clinic — not generic office meetings)
+_PHARMACY_APP_IMAGES = [
+    "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae",  # medicine / pharmacy
+    "https://images.unsplash.com/photo-1471864190281-a93a3070b6de",  # pharmacy shelves
+    "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d",  # medical clinic
+    "https://images.unsplash.com/photo-1576091160550-2173dba999ef",  # doctor at computer
+    "https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c",  # health app on phone
+    "https://images.unsplash.com/photo-1551650975-87deedd944c3",  # smartphone
+    "https://images.unsplash.com/photo-1563986768609-322da13575f3",  # mobile app
+    "https://images.unsplash.com/photo-1601972599720-36938d4ecd31",  # phone ui
+]
+
+# Website maintenance / CMS admin / monitoring
+_MAINTENANCE_IMAGES = [
+    "https://images.unsplash.com/photo-1551288049-bebda4e38f71",  # monitoring dashboard
+    "https://images.unsplash.com/photo-1460925895917-afdab827c52f",  # analytics dashboard
+    "https://images.unsplash.com/photo-1555066931-4365d14bab8c",  # code editor
+    "https://images.unsplash.com/photo-1555949963-aa79dcee981c",  # developer screen
+    "https://images.unsplash.com/photo-1498050108023-c5249f4df085",  # developer at desk
+    "https://images.unsplash.com/photo-1461749280684-dccba630e2f6",  # coding
+    "https://images.unsplash.com/photo-1504639725590-34d0984388bd",  # laptop code
+    "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158",  # engineer laptop
+    "https://images.unsplash.com/photo-1531297484001-80022131f5a1",  # tech workspace
+    "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d",  # laptop work
+]
+
+# WordPress / CMS dashboard look
+_WORDPRESS_IMAGES = [
+    "https://images.unsplash.com/photo-1555066931-4365d14bab8c",  # code / cms feel
+    "https://images.unsplash.com/photo-1498050108023-c5249f4df085",  # developer
+    "https://images.unsplash.com/photo-1461749280684-dccba630e2f6",  # coding laptop
+    "https://images.unsplash.com/photo-1488590528505-98d2b5aba04b",  # laptop code
+    "https://images.unsplash.com/photo-1555949963-aa79dcee981c",  # screen coding
+    "https://images.unsplash.com/photo-1504639725590-34d0984388bd",  # laptop
+    "https://images.unsplash.com/photo-1517694712202-14dd9538aa97",  # coding hands
+    "https://images.unsplash.com/photo-1531297484001-80022131f5a1",  # tech
+    "https://images.unsplash.com/photo-1460925895917-afdab827c52f",  # dashboard
+    "https://images.unsplash.com/photo-1551288049-bebda4e38f71",  # charts screen
+]
+
+# Shopify / ecommerce storefront
+_SHOPIFY_IMAGES = [
+    "https://images.unsplash.com/photo-1556740749-887f6717d7e4",  # online shopping
+    "https://images.unsplash.com/photo-1441986300917-64674bd600d8",  # retail / products
+    "https://images.unsplash.com/photo-1472851294608-062f824d29cc",  # ecommerce cart
+    "https://images.unsplash.com/photo-1556742031-c6961e8560b0",  # shopping bags
+    "https://images.unsplash.com/photo-1556740738-b6a63e27c4df",  # mobile shop
+    "https://images.unsplash.com/photo-1460925895917-afdab827c52f",  # store analytics
+    "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d",  # card payment
+    "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d",  # laptop store admin
+]
+
 # Banking / investing / fintech — used when Industry = Finance (or finance keywords)
 _FINANCE_IMAGES = [
     "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3",  # stock charts
@@ -1025,9 +1232,12 @@ _CURATED_TOPIC_IMAGES = {
     "website design": list(_WEB_DESIGN_IMAGES),
     "website designer": list(_WEB_DESIGN_IMAGES),
     "web development": list(_WEB_DESIGN_IMAGES),
-    "wordpress": list(_WEB_DESIGN_IMAGES),
+    "wordpress": list(_WORDPRESS_IMAGES),
     "wix": list(_WEB_DESIGN_IMAGES),
-    "shopify": list(_WEB_DESIGN_IMAGES),
+    "shopify": list(_SHOPIFY_IMAGES),
+    "ecommerce": list(_SHOPIFY_IMAGES),
+    "e-commerce": list(_SHOPIFY_IMAGES),
+    "online store": list(_SHOPIFY_IMAGES),
     "squarespace": list(_WEB_DESIGN_IMAGES),
     "webflow": list(_WEB_DESIGN_IMAGES),
     "weebly": list(_WEB_DESIGN_IMAGES),
@@ -1035,8 +1245,16 @@ _CURATED_TOPIC_IMAGES = {
     "framer": list(_WEB_DESIGN_IMAGES),
     "redirect": list(_WEB_DESIGN_IMAGES),
     "seo": list(_WEB_DESIGN_IMAGES),
-    "mobile_app": list(_WEB_DESIGN_IMAGES),
-    "mobile app": list(_WEB_DESIGN_IMAGES),
+    "mobile_app": list(_MOBILE_APP_IMAGES),
+    "mobile app": list(_MOBILE_APP_IMAGES),
+    "pharmacy_app": list(_PHARMACY_APP_IMAGES),
+    "pharmacy app": list(_PHARMACY_APP_IMAGES),
+    "pharmacy": list(_PHARMACY_APP_IMAGES),
+    "maintenance": list(_MAINTENANCE_IMAGES),
+    "website maintenance": list(_MAINTENANCE_IMAGES),
+    "wordpress maintenance": list(_MAINTENANCE_IMAGES),
+    "redesign": list(_WORDPRESS_IMAGES),
+    "website redesign": list(_WORDPRESS_IMAGES),
     "software": list(_SOFTWARE_IMAGES),
     "finance": list(_FINANCE_IMAGES),
     "banking": list(_FINANCE_IMAGES),
@@ -1089,6 +1307,14 @@ _CURATED_TOPIC_IMAGES = {
         "https://images.unsplash.com/photo-1582407947304-fd86f028f716",
         "https://images.unsplash.com/photo-1560184897-ae75f418493e",
         "https://images.unsplash.com/photo-1564013799919-ab600027ffc6",
+        "https://images.unsplash.com/photo-1512917774080-9991f1c4c750",
+        "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9",
+        "https://images.unsplash.com/photo-1600585154340-be6161a56a0c",
+        "https://images.unsplash.com/photo-1600047509807-ba8f99d2cdbc",
+        "https://images.unsplash.com/photo-1605276374104-dee2a0ed3cd6",
+        "https://images.unsplash.com/photo-1570129477492-45c003edd2be",
+        "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab",
+        "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2",
     ],
     "legal": [
         "https://images.unsplash.com/photo-1589829545856-d10d557cf95f",
@@ -1180,6 +1406,28 @@ _CURATED_TOPIC_IMAGES = {
         "https://images.unsplash.com/photo-14565130808af520-2711bfdbc72a",  # reading / study
     ],
 }
+
+_CONTRACTOR_IMAGES = [
+    "https://images.unsplash.com/photo-1503387762-592deb58ef4e",
+    "https://images.unsplash.com/photo-1541888946425-d81bb19240f5",
+    "https://images.unsplash.com/photo-1504307651254-35680f356dfd",
+    "https://images.unsplash.com/photo-1581094794329-c8112a89af12",
+    "https://images.unsplash.com/photo-1504309092620-4d0ec726efa4",
+    "https://images.unsplash.com/photo-1531834685032-c34bf0d84c77",
+    "https://images.unsplash.com/photo-1517581177682-a085bb7ffb15",
+    "https://images.unsplash.com/photo-1581092160562-40aa08e78837",
+    "https://images.unsplash.com/photo-1581092918056-0c4c3acd3789",
+    "https://images.unsplash.com/photo-1589939705384-5185137a7f0f",
+    "https://images.unsplash.com/photo-1572981779307-38b8cabb2407",
+    "https://images.unsplash.com/photo-1508450859948-4e04fabaa4ea",
+    "https://images.unsplash.com/photo-1565008447742-97f6f38c985c",
+    "https://images.unsplash.com/photo-1429497419816-9ca5cfb4571a",
+    "https://images.unsplash.com/photo-1503387837-b154d5074bd2",
+    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c",
+    "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3",
+    "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c",
+    "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0",
+]
 
 _GENERIC_CURATED = [
     # Only used when niche is unknown — keep professional, not random
@@ -1365,6 +1613,24 @@ def _curated_pool_for_topic(text: str) -> List[str]:
     t = (text or "").lower().strip()
     if re.search(r"\b(301|302|redirect|htaccess|url redirect|canonical)\b", t):
         return list(_REDIRECT_IMAGES)
+
+    # Topic-specific pools BEFORE family buckets — otherwise "website maintenance"
+    # collapses into generic web design / meeting stock.
+    if re.search(r"\b(pharmacy|medication|prescription).{0,24}\bapp\b|\bapp\b.{0,24}\b(pharmacy|medication)\b|\bpharmacy_app\b", t):
+        return list(dict.fromkeys(_PHARMACY_APP_IMAGES))
+    if re.search(r"\b(maintain|maintenance|care\s*plan|website support)\b", t):
+        return list(dict.fromkeys(_MAINTENANCE_IMAGES + _WORDPRESS_IMAGES[:4]))
+    if re.search(r"\b(mobile\s*app|ios\s*app|android\s*app|mobile_app)\b", t) or (
+        re.search(r"\bapp\b", t) and not re.search(r"\b(apple|apply|application form)\b", t)
+    ):
+        return list(dict.fromkeys(_MOBILE_APP_IMAGES))
+    if re.search(r"\bshopify|ecommerce|e-commerce|online store\b", t):
+        return list(dict.fromkeys(_SHOPIFY_IMAGES))
+    if re.search(r"\bwordpress\b", t):
+        return list(dict.fromkeys(_WORDPRESS_IMAGES))
+    if re.search(r"\bredesign|rebuild|refresh\b", t):
+        return list(dict.fromkeys(_WORDPRESS_IMAGES + _MAINTENANCE_IMAGES[:3]))
+
     # Exact / prefix family first so "finance software engineer" never steals
     # the software pool when the chosen topic is finance (and vice versa).
     fam = topic_image_family(t)
@@ -1385,8 +1651,15 @@ def _curated_pool_for_topic(text: str) -> List[str]:
         "roofing": _CURATED_TOPIC_IMAGES.get("roofing", []),
         "landscaping": _CURATED_TOPIC_IMAGES.get("landscaping", []),
         "fitness": _CURATED_TOPIC_IMAGES.get("fitness", []),
+        "home_services": list(dict.fromkeys(
+            _CURATED_TOPIC_IMAGES.get("plumbing", [])
+            + _CURATED_TOPIC_IMAGES.get("hvac", [])
+            + _CURATED_TOPIC_IMAGES.get("electrician", [])
+        )),
         "photography": _CURATED_TOPIC_IMAGES.get("photography", []),
         "education": _CURATED_TOPIC_IMAGES.get("education", _GENERIC_CURATED),
+        "automotive": _CURATED_TOPIC_IMAGES.get("automotive", _CURATED_TOPIC_IMAGES.get("used car", [])),
+        "contractors": _CONTRACTOR_IMAGES,
     }
     if fam in family_pools and family_pools[fam]:
         return list(dict.fromkeys(family_pools[fam]))
@@ -1456,26 +1729,12 @@ def _related_stock_plan(
         mods = ["browser address bar", "developer laptop", "server configuration", "http code"]
         return topic, mods, topic
 
-    visual = _resolve_visual_industry(industry)
     niche_clean = _clean_image_query(niche, exclude=location_words)
     kw_clean = (
         _clean_image_query(focus_keyword, exclude=location_words)
         or niche_clean
         or "business"
     )
-    fam = topic_image_family(f"{niche} {focus_keyword} {kw_clean}")
-
-    if visual and fam in ("web", "software", "marketing", "general"):
-        mods = list(_WEB_VERTICAL_MODIFIERS.get(visual) or [visual, "professional", "laptop", "office"])
-        if fam == "web":
-            topic = f"{visual} website"
-        elif fam == "software":
-            topic = f"{visual} software"
-            mods = [f"{visual} app", "dashboard", "developer laptop", visual]
-        else:
-            topic = f"{visual} {kw_clean}".strip()
-        return topic, mods, visual
-
     topic = kw_clean
     modifiers = _IMAGE_QUERY_MODIFIERS
     search_blob = f"{topic} {industry} {focus_keyword} {niche}".lower()
@@ -1536,26 +1795,42 @@ def _curated_image_url(
             candidates.append(u)
         if not candidates:
             return ""
-        candidates.sort(
+        start = int(hashlib.md5(seed.encode("utf-8")).hexdigest(), 16) % len(candidates)
+        ordered = candidates[start:] + candidates[:start]
+        ordered.sort(
             key=lambda u: hashlib.md5(f"{seed}|{normalize_image_key(u)}".encode("utf-8")).hexdigest()
         )
-        return _with_unsplash_params(candidates[0])
+        return _with_unsplash_params(ordered[0])
 
     topic_pool = _curated_pool_for_topic(topic)
     fam = topic_image_family(topic)
-    if fam == "healthcare":
+    # Keep topic-specific pools (wordpress, shopify, maintenance, mobile app).
+    # Never overwrite them with the giant web-design meeting stock.
+    tl = (topic or "").lower()
+    if fam == "healthcare" and not re.search(r"\bapp\b", tl):
         topic_pool = list(_HEALTHCARE_IMAGES)
-    elif fam in ("dental", "legal", "fitness"):
-        pass
-    elif fam in ("web", "software", "general") and any(
-        w in (topic or "").lower() for w in ("website", "web design", "wordpress", "shopify", "wix", "squarespace", "webflow", "laptop")
+    elif fam in ("web", "software") and re.search(
+        r"\b(website design|web design|website designer)\b", tl
+    ) and not re.search(
+        r"\b(wordpress|shopify|wix|maintain|maintenance|redesign|mobile\s*app|\bapp\b)\b", tl
     ):
         topic_pool = list(_WEB_DESIGN_IMAGES)
     url = _pick(topic_pool)
     if url:
         return url
+    # A trade topic must not fall through to laptop or office stock.
+    if fam not in ("web", "software", "marketing", "general", ""):
+        return ""
     # Expand on-topic before giving up (still honor exclude — never silently reuse).
-    expanded = list(dict.fromkeys(list(topic_pool or []) + list(_WEB_DESIGN_IMAGES) + list(_SOFTWARE_IMAGES)))
+    # Prefer software/code stock over meeting photos when expanding web topics.
+    if re.search(r"\b(wordpress|maintain|maintenance|code|developer)\b", tl):
+        expanded = list(dict.fromkeys(list(topic_pool or []) + list(_WORDPRESS_IMAGES) + list(_SOFTWARE_IMAGES)))
+    elif re.search(r"\b(shopify|ecommerce|store)\b", tl):
+        expanded = list(dict.fromkeys(list(topic_pool or []) + list(_SHOPIFY_IMAGES) + list(_SOFTWARE_IMAGES)))
+    elif re.search(r"\b(app|mobile)\b", tl):
+        expanded = list(dict.fromkeys(list(topic_pool or []) + list(_MOBILE_APP_IMAGES) + list(_SOFTWARE_IMAGES)))
+    else:
+        expanded = list(dict.fromkeys(list(topic_pool or []) + list(_SOFTWARE_IMAGES) + list(_WEB_DESIGN_IMAGES)))
     url = _pick(expanded)
     if url:
         return url
@@ -1641,14 +1916,151 @@ def _openverse_relevance(result: dict, topic_words: List[str]) -> int:
     """Score how on-topic an Openverse hit is; 0 = reject."""
     if not topic_words:
         return 0
+    tags = result.get("tags") or []
+    if isinstance(tags, list):
+        tag_s = " ".join(
+            (t.get("name") or t.get("title") or "") if isinstance(t, dict) else str(t)
+            for t in tags
+        )
+    else:
+        tag_s = str(tags)
     blob = " ".join([
         str(result.get("title") or ""),
         str(result.get("description") or ""),
-        " ".join(result.get("tags") or []) if isinstance(result.get("tags"), list) else str(result.get("tags") or ""),
+        tag_s,
     ]).lower()
     hits = sum(1 for w in topic_words if w in blob)
     # Require at least one strong topic word; reject tourist/random Flickr noise.
     return hits
+
+
+_HOSTED_IMG_HEADERS = {
+    "User-Agent": "ZeOrbitSEO/2.1 (https://zeorbit.com; local SEO image search)",
+    "Accept": "application/json",
+}
+
+
+def _hosted_url_ok(url: str) -> bool:
+    """Only professional Unsplash/Pexels hosts — never Flickr, Openverse, or Wikimedia."""
+    u = (url or "").lower()
+    if not u.startswith("http"):
+        return False
+    if "picsum.photos" in u:
+        return False
+    if any(
+        h in u
+        for h in (
+            "live.staticflickr.com",
+            "flickr.com",
+            "cdn.openverse.org",
+            "openverse.org",
+            "upload.wikimedia.org",
+            "wikimedia.org",
+        )
+    ):
+        return False
+    good = ("images.unsplash.com", "images.pexels.com")
+    return any(h in u for h in good)
+
+
+async def _openverse_search_url(
+    query: str,
+    seed: str,
+    exclude_keys: set,
+) -> Tuple[str, str]:
+    q = (query or "").strip()
+    if not q:
+        return "", ""
+    page = (_stable_index(f"{seed}|ov", 8) % 5) + 1
+    try:
+        async with httpx.AsyncClient(timeout=12, headers=_HOSTED_IMG_HEADERS) as client:
+            resp = await client.get(
+                "https://api.openverse.org/v1/images/",
+                params={
+                    "q": q,
+                    "page": page,
+                    "page_size": 20,
+                    "license_type": "commercial",
+                    "mature": "false",
+                },
+            )
+            if resp.status_code != 200:
+                print(f"[Image] Openverse {resp.status_code}")
+                return "", ""
+            results = (resp.json() or {}).get("results") or []
+            topic_words = [w for w in re.findall(r"[a-zA-Z]+", q.lower()) if len(w) > 2]
+            ranked = []
+            for r in results:
+                url = r.get("url") or r.get("thumbnail") or ""
+                if not _hosted_url_ok(url):
+                    continue
+                key = normalize_image_key(url)
+                if not key or key in exclude_keys or _is_banned_stock_key(key):
+                    continue
+                rel = _openverse_relevance(r, topic_words)
+                if rel <= 0:
+                    continue
+                ranked.append((rel, url, r.get("title") or q))
+            ranked.sort(key=lambda x: (("flickr" in x[1].lower()), -x[0], x[1]))
+            if ranked:
+                return ranked[0][1], ranked[0][2]
+    except Exception as e:
+        print(f"[Image] Openverse error: {e}")
+    return "", ""
+
+
+async def _wikimedia_search_url(
+    query: str,
+    seed: str,
+    exclude_keys: set,
+) -> Tuple[str, str]:
+    q = (query or "").strip()
+    if not q:
+        return "", ""
+    offset = _stable_index(f"{seed}|wm", 12)
+    try:
+        async with httpx.AsyncClient(timeout=12, headers=_HOSTED_IMG_HEADERS) as client:
+            resp = await client.get(
+                "https://commons.wikimedia.org/w/api.php",
+                params={
+                    "action": "query",
+                    "format": "json",
+                    "origin": "*",
+                    "generator": "search",
+                    "gsrsearch": q,
+                    "gsrnamespace": 6,
+                    "gsrlimit": 20,
+                    "prop": "imageinfo",
+                    "iiprop": "url|mime",
+                    "iiurlwidth": 1400,
+                },
+            )
+            if resp.status_code != 200:
+                return "", ""
+            pages = ((resp.json() or {}).get("query") or {}).get("pages") or {}
+            items = list(pages.values())
+            if offset and items:
+                items = items[offset:] + items[:offset]
+            topic_words = [w for w in re.findall(r"[a-zA-Z]+", q.lower()) if len(w) > 2]
+            for p in items:
+                info = (p.get("imageinfo") or [{}])[0]
+                mime = (info.get("mime") or "").lower()
+                if mime and not mime.startswith("image/"):
+                    continue
+                url = info.get("thumburl") or info.get("url") or ""
+                if "upload.wikimedia.org" not in url.lower():
+                    continue
+                key = normalize_image_key(url)
+                if not key or key in exclude_keys or _is_banned_stock_key(key):
+                    continue
+                title = (p.get("title") or q).replace("File:", "")
+                title_l = title.lower()
+                if topic_words and sum(1 for w in topic_words if w in title_l) < 1:
+                    continue
+                return url, title
+    except Exception as e:
+        print(f"[Image] Wikimedia error: {e}")
+    return "", ""
 
 
 async def _hosted_image_url(
@@ -1739,6 +2151,8 @@ async def _hosted_image_url(
         except Exception as e:
             print(f"[Image] Pexels search error: {e}")
 
+    # Never fall through to Openverse/Wikimedia — those return business cards,
+    # personal Flickr shots, and other off-brand photos. Curated Unsplash only.
     return _curated_image_url(query, seed, exclude=exclude_keys), ""
 
 
@@ -1757,6 +2171,9 @@ _IMAGE_QUERY_STOPWORDS = {
     "options", "mistakes", "avoid", "how", "much", "does", "cost", "why",
     "chooses", "company", "1", "licensed", "experts", "trusted", "local",
     "businesses", "business", "results", "get", "today", "consultation",
+    # Title filler that collapses into useless queries like "starting new start"
+    "starting", "start", "started", "new", "owner", "small", "grow", "online",
+    "professional", "should", "with", "from", "into", "about", "ready",
 }
 
 
@@ -1810,20 +2227,49 @@ async def generate_article_images(
         w for w in re.findall(r"[a-zA-Z]+", (location or "").lower()) if len(w) > 2
     }
     is_blog = (content_type or "").lower() in ("blog", "post")
-    derived = one_word_image_topic(image_keyword or match_query or focus_keyword or niche or "")
     ik = (image_keyword or "").strip()
-    seed = f"{match_query or ''} {focus_keyword or ''}".lower()
-    if not ik or len(ik.split()) > 2 or (ik.lower() not in seed and derived not in ik.lower()):
-        ik = derived
+    generic = {"web", "website", "design", "site", "page", "post", "seo"}
+    keyword_seed = ik or (match_query or "").strip() or (focus_keyword or "").strip()
+    # Photos follow the typed keyword. The Industry field must not replace it.
+    if keyword_seed and keyword_seed.lower() not in generic:
+        seed_query = _clean_image_query(keyword_seed, max_words=6) or keyword_seed
     else:
-        ik = one_word_image_topic(ik) or derived
-    seed_query = ik
-    plan = blog_image_plan(seed_query, niche=f"{niche or ''} {industry or ''}")
-    topic = ik
-    modifiers = [ik, f"{ik} professional", f"{ik} workplace", f"{ik} close up", f"{ik} business"]
-    fallback_topic = ik
-    visual_fam = topic_image_family(f"{ik} {industry or ''} {niche or ''}")
-    if visual_fam == "healthcare" and ik not in {"website", "web", "design", "wordpress", "shopify"}:
+        seed_query = _clean_image_query(
+            " ".join(p for p in (ik or match_query or focus_keyword or niche or "website") if p),
+            max_words=6,
+        )
+    if not seed_query or seed_query.lower() in generic:
+        seed_query = _clean_image_query(match_query or focus_keyword or niche or "website design", max_words=4) or "website design"
+    topic = seed_query
+    visual_fam = topic_image_family(seed_query)
+    fallback_topic = seed_query
+    plan = blog_image_plan(seed_query, niche="")
+    plan_cat = str(plan.get("category") or "").lower()
+    # Prefer plan modifiers (tech/UI) over vague "workplace / close up" searches
+    # that pull random stock (business cards, desks, etc.).
+    plan_mods = [m for m in (plan.get("modifiers") or []) if isinstance(m, str) and m.strip()]
+    specific_plan = plan_cat not in ("", "website", "web", "general", "software")
+    if specific_plan and plan_mods:
+        # Topic matched a named visual plan (wordpress, maintenance, pharmacy app, etc.)
+        modifiers = plan_mods
+        topic = plan.get("topic") or seed_query
+        fallback_topic = plan_cat.replace("_", " ") or seed_query
+    elif visual_fam in ("web", "software"):
+        modifiers = plan_mods or list(_IMAGE_QUERY_MODIFIERS)
+        topic = plan.get("topic") or "website design laptop mockup"
+        fallback_topic = plan.get("category") or "website design"
+    elif plan_mods:
+        modifiers = plan_mods
+        topic = plan.get("topic") or seed_query
+        fallback_topic = plan.get("category") or seed_query
+    else:
+        modifiers = [
+            seed_query,
+            f"{seed_query} professional",
+            f"{seed_query} workplace",
+            f"{seed_query} close up",
+        ]
+    if visual_fam == "healthcare" and seed_query.lower() not in {"website", "web", "design", "wordpress", "shopify"}:
         topic = plan["topic"] if plan.get("category") == "healthcare" else "doctor clinic medical office"
         modifiers = [
             "doctor with patient",
@@ -1835,10 +2281,10 @@ async def generate_article_images(
     if image_concept_text and "working title" not in image_concept_text.lower():
         concept_for_meta = image_concept_text
     else:
-        concept_for_meta = plan["concept"]
-    clean_focus = plan.get("focus") or plan["category"] or focus_keyword or "website design"
+        concept_for_meta = plan.get("concept") or seed_query
+    clean_focus = plan.get("focus") or plan.get("category") or focus_keyword or "website design"
     print(
-        f"[Image] keyword-plan category={plan['category']} label={plan.get('label')} "
+        f"[Image] keyword-plan category={plan.get('category')} label={plan.get('label')} "
         f"query={seed_query[:80]!r} kind={content_type} family={visual_fam}"
     )
 
@@ -1847,20 +2293,80 @@ async def generate_article_images(
     # pages with a single image once the pool was exhausted.
     featured_taken: Set[str] = {normalize_image_key(u) for u in (exclude_urls or []) if u}
     used: Set[str] = set()
-    if visual_fam == "healthcare":
-        web_only_pool = list(dict.fromkeys(list(_HEALTHCARE_IMAGES) + list(_WEB_DESIGN_IMAGES)))
-        prefer_hosted = False
-    else:
+    topic_pool = _curated_pool_for_topic(fallback_topic) if fallback_topic else []
+    # Curated Unsplash CDN only — no live Unsplash/Pexels/Openverse API calls.
+    # (Prod often has no API keys; third-party search also caused off-topic repeats.)
+    has_stock_api = False
+    prefer_hosted = False
+    if visual_fam == "healthcare" or plan_cat in ("healthcare", "pharmacy_app"):
+        # Pharmacy app / medical: topic pool only — do not dilute with web meeting stock.
+        base = list(_PHARMACY_APP_IMAGES) if plan_cat == "pharmacy_app" else list(_HEALTHCARE_IMAGES)
+        web_only_pool = list(dict.fromkeys(base + list(topic_pool)))
+    elif plan_cat in ("mobile_app", "maintenance", "redesign", "seo", "wordpress", "shopify", "wix"):
+        cat_pool = {
+            "mobile_app": _MOBILE_APP_IMAGES,
+            "maintenance": _MAINTENANCE_IMAGES,
+            "redesign": _WORDPRESS_IMAGES,
+            "seo": _CURATED_TOPIC_IMAGES.get("seo", _WEB_DESIGN_IMAGES),
+            "wordpress": _WORDPRESS_IMAGES,
+            "shopify": _SHOPIFY_IMAGES,
+            "wix": _WEB_DESIGN_IMAGES,
+        }.get(plan_cat, topic_pool or _WEB_DESIGN_IMAGES)
+        web_only_pool = list(dict.fromkeys(list(cat_pool) + list(topic_pool or [])))
+    elif visual_fam == "restaurant" or plan_cat == "restaurant":
+        rest = list(_CURATED_TOPIC_IMAGES.get("restaurant", []))
+        web_only_pool = list(dict.fromkeys(list(topic_pool) + rest))
+    elif visual_fam == "contractors" or plan_cat == "contractors":
+        web_only_pool = list(_CONTRACTOR_IMAGES)
+    elif visual_fam not in ("web", "software", ""):
+        web_only_pool = list(dict.fromkeys(list(topic_pool) + list(_GENERIC_CURATED)))
+    elif specific_plan:
+        web_only_pool = list(dict.fromkeys(list(topic_pool or _WEB_DESIGN_IMAGES)))
+    elif visual_fam in ("web", "software"):
         web_only_pool = list(dict.fromkeys(
-            list(_WEB_DESIGN_IMAGES) + list(_SOFTWARE_IMAGES) + list(_GENERIC_CURATED) + list(_all_curated_urls())
+            list(topic_pool or _WEB_DESIGN_IMAGES)
+            + list(_WEB_DESIGN_IMAGES)
+            + list(_SOFTWARE_IMAGES)
         ))
-        prefer_hosted = bool(settings.UNSPLASH_ACCESS_KEY or settings.PEXELS_API_KEY)
+    else:
+        web_only_pool = list(dict.fromkeys(list(topic_pool) + list(_GENERIC_CURATED)))
 
     for i in range(count):
         pick_exclude: Set[str] = set(used) | featured_taken
         is_featured = i == 0
         modifier = modifiers[i % len(modifiers)]
-        query = f"{topic} {modifier}".strip()
+        # Half the photos follow the industry, half follow the image keyword.
+        # The header photo uses both words together.
+        blog_topic = (match_query or focus_keyword or "").strip()
+        industry_hint = (industry or niche or "").strip()
+        ik_trade = topic_image_family(ik) not in ("web", "software", "general", "marketing", "")
+        ind_fam = topic_image_family(industry_hint)
+        appish = bool(re.search(r"\b(ios|android|mobile app|\bapp\b)\b", f"{blog_topic} {ik}".lower()))
+        if is_blog and ind_fam == "healthcare":
+            query = "healthcare clinic medical app" if appish else (industry_hint or "healthcare")
+            shot_topic = "healthcare clinic"
+        elif is_blog and ik and ik_trade:
+            query = ik
+            shot_topic = ik
+        elif is_blog and appish:
+            query = "mobile app iphone"
+            shot_topic = "mobile app iphone"
+        elif is_blog and blog_topic:
+            query = blog_topic
+            shot_topic = blog_topic
+        elif industry_hint and ik:
+            if i == 0:
+                query = f"{industry_hint} {ik}".strip()
+                shot_topic = query
+            elif i % 2 == 1:
+                query = industry_hint
+                shot_topic = industry_hint
+            else:
+                query = ik
+                shot_topic = ik
+        else:
+            query = f"{topic} {modifier}".strip()
+            shot_topic = fallback_topic
         # Location is required in the seed so Austin vs Driftwood never collide.
         seed = (
             f"{topic}|{location}|{'blog-' + (match_query or focus_keyword or '')[:40] if is_blog else 'website-design'}|{i}|{angle_title}|"
@@ -1873,20 +2379,36 @@ async def generate_article_images(
         if prefer_hosted:
             hosted, hosted_alt = await _hosted_image_url(query, seed=seed, exclude=pick_exclude, location="")
             hkey = normalize_image_key(hosted)
-            if hosted and hkey and hkey not in pick_exclude and not _is_banned_stock_key(hkey) and not _looks_like_camera_photo(hosted, hosted_alt):
+            if (
+                hosted
+                and hkey
+                and hkey not in pick_exclude
+                and not _is_banned_stock_key(hkey)
+                and not _looks_like_camera_photo(hosted, hosted_alt)
+                and not stock_url_needs_replace(hosted)
+            ):
                 url, key, photo_alt = hosted, hkey, hosted_alt
         if not url:
             url = _curated_image_url(
-                fallback_topic,
+                shot_topic,
                 seed=seed,
                 exclude=pick_exclude,
             )
             key = normalize_image_key(url)
             photo_alt = ""
-        if (not url or key in pick_exclude) and (settings.UNSPLASH_ACCESS_KEY or settings.PEXELS_API_KEY):
+        if (not url or key in pick_exclude or stock_url_needs_replace(url or "")) and (
+            settings.UNSPLASH_ACCESS_KEY or settings.PEXELS_API_KEY
+        ):
             hosted, hosted_alt = await _hosted_image_url(query, seed=seed, exclude=pick_exclude, location="")
             hkey = normalize_image_key(hosted)
-            if hosted and hkey and hkey not in pick_exclude and not _is_banned_stock_key(hkey) and not _looks_like_camera_photo(hosted, hosted_alt):
+            if (
+                hosted
+                and hkey
+                and hkey not in pick_exclude
+                and not _is_banned_stock_key(hkey)
+                and not _looks_like_camera_photo(hosted, hosted_alt)
+                and not stock_url_needs_replace(hosted)
+            ):
                 url, key, photo_alt = hosted, hkey, hosted_alt
         if key and key in pick_exclude:
             for attempt in range(16):
@@ -1990,9 +2512,14 @@ async def generate_article_images(
         ))
     # Drop any empty-URL accidents, then guarantee ≥1 real image
     assets = [a for a in assets if (a.url or "").strip()]
-    # Always ship header + footer + body (3). Never leave a page with a single photo.
+    # Pad from the same topic pool first — never inject unrelated web meeting stock.
     pool_for_pad = list(dict.fromkeys(
-        list(_WEB_DESIGN_IMAGES) + list(_SOFTWARE_IMAGES) + list(_GENERIC_CURATED) + list(_all_curated_urls())
+        list(web_only_pool)
+        + list(topic_pool or [])
+        + (list(_CURATED_TOPIC_IMAGES.get("restaurant", [])) if (visual_fam == "restaurant" or plan_cat == "restaurant") else [])
+        + list(_SOFTWARE_IMAGES)
+        + list(_WEB_DESIGN_IMAGES)
+        + list(_GENERIC_CURATED)
     ))
     while len(assets) < count:
         next_url = ""
@@ -2084,7 +2611,7 @@ async def reassign_unique_featured_images(rows: Iterable, used: Optional[List[st
         loc = f"{getattr(r, 'city', '') or ''}, {getattr(r, 'state', '') or ''}".strip(", ")
         industry = b.get("industry") or ""
         imgs = await generate_article_images(
-            "website design wordpress shopify" if topic_image_family(str(focus)) in ("web", "general", "software") and not (b.get("image_keyword") or "").strip() else (b.get("image_keyword") or focus),
+            "website design" if topic_image_family(str(focus)) == "web" and not (b.get("image_keyword") or "").strip() else (b.get("image_keyword") or focus),
             loc,
             "ZeOrbit",
             count=3,

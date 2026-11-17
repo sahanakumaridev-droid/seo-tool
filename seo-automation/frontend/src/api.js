@@ -3,15 +3,54 @@ import axios from 'axios'
 const BASE = import.meta.env.VITE_API_URL || '/api'
 const api = axios.create({ baseURL: BASE })
 
-// Attach JWT when present (marketplace / SEO login)
+export function tokenExpired(token) {
+  if (!token) return true
+  try {
+    const part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    const payload = JSON.parse(atob(part))
+    if (!payload.exp) return false
+    return payload.exp * 1000 <= Date.now()
+  } catch {
+    return true
+  }
+}
+
+export function sessionExpired() {
+  localStorage.removeItem('seo_auth')
+  localStorage.removeItem('access_token')
+  localStorage.removeItem('refresh_token')
+  localStorage.removeItem('mp_token')
+  localStorage.removeItem('mp_user')
+  sessionStorage.setItem('seo_session_expired', '1')
+  if (!window.location.pathname.startsWith('/login')) {
+    window.location.assign('/login')
+  }
+}
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token') || localStorage.getItem('mp_token')
-  if (token) {
+  const url = config.url || ''
+  const signingIn = url.includes('/users/login') || url.includes('/users/register')
+  if (!signingIn && token && tokenExpired(token)) {
+    sessionExpired()
+    return Promise.reject(new Error('Session expired'))
+  }
+  if (token && !tokenExpired(token)) {
     config.headers = config.headers || {}
     config.headers.Authorization = `Bearer ${token}`
   }
   return config
 })
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const url = error.config?.url || ''
+    const signingIn = url.includes('/users/login') || url.includes('/users/register')
+    if (!signingIn && error.response?.status === 401) sessionExpired()
+    return Promise.reject(error)
+  },
+)
 
 function storeAuthTokens(data) {
   if (data?.access_token) {
@@ -43,8 +82,40 @@ export const registerUser = async ({ name, email, password, role = 'client' }) =
 }
 
 // ── Content ──────────────────────────────────────────────────────
+export const generateKeywordBlog = (keyword, button = {}) =>
+  api.post('/blog/generate', {
+    keyword,
+    button_label: button.label || '',
+    button_url: button.url || '',
+    word_count: button.wordCount || 800,
+    keyword_length: button.keywordLength || 'short',
+  }, { timeout: 600000 })
+
+export const repairKeywordBlog = (body) =>
+  api.post('/blog/repair', body, { timeout: 60000 })
+
+export const generateKeywordBlogBatch = ({ keyword, counties, cities, unique = false }) =>
+  api.post('/blog/generate-batch', { keyword, counties, cities, count: cities.length, unique }, { timeout: 1800000 })
+
+export const getUsCounties = () => api.get('/locations/us-counties')
+export const getCountyCities = (state, county) =>
+  api.get('/locations/county-cities', { params: { state, county, limit: 25 } })
+
+export const saveKeywordBlog = (blog) =>
+  api.post('/blog/draft', {
+    keyword: blog.keyword || blog.primary_keyword || blog.title || blog.slug,
+    slug: blog.slug,
+    title: blog.title || '',
+    seo_title: blog.seo_title,
+    meta_description: blog.meta_description,
+    content_html: blog.content_html,
+    detected_industry: blog.detected_industry,
+    city: blog.city || '',
+    state: blog.state || '',
+  })
+
 export const generateBulk = (data) =>
-  api.post('/content/generate', data, { timeout: 600000 })
+  api.post('/content/generate', data, { timeout: 1800000 })
 
 export const suggestContentBrief = (data) =>
   api.post('/content/suggest-brief', data)
@@ -61,6 +132,9 @@ export const generateSingle = (businessType, city, state = 'CA', useAi = false) 
 
 export const boostPageScores = (block) =>
   api.post('/content/boost-scores', block)
+
+export const correctBlock = (block, correction = '') =>
+  api.post('/content/correct', { ...block, correction }, { timeout: 60000 })
 
 export const repairBlockImages = (block) =>
   api.post('/content/repair-images', block, { timeout: 60000 })
@@ -88,6 +162,14 @@ export const getPlaceCatalog = ({ baseLocation = '', county = '', city = '' } = 
   api.get('/locations/place-catalog', {
     params: { base_location: baseLocation, county, city },
   })
+
+export const getGeoCountries = () => api.get('/locations/geo/countries')
+export const getGeoStates = (country) => api.get('/locations/geo/states', { params: { country } })
+export const getGeoCounties = (country, state) => api.get('/locations/geo/counties', { params: { country, state } })
+export const getGeoCities = (country, state, county = '') =>
+  api.get('/locations/geo/cities', { params: { country, state, county } })
+export const getGeoAreas = (country, state, city = '', county = '') =>
+  api.get('/locations/geo/areas', { params: { country, state, city, county } })
 
 // ── Keywords ─────────────────────────────────────────────────────
 export const getKeywords = (businessType, city, state = 'CA') =>
@@ -135,6 +217,10 @@ export const listBlogPosts = (skip = 0, limit = 24) =>
 export const listPostedBlogs = (skip = 0, limit = 500) =>
   api.get('/pages/posted-blogs', { params: { skip, limit } })
 
+export const getWriteStats = () => api.get('/pages/write-stats')
+
+export const getWriteCalendar = (month) => api.get('/pages/write-calendar', { params: { month }, timeout: 60000 })
+
 export const bulkUpdatePublishedContent = (data) =>
   api.post('/pages/bulk-content', data, { timeout: 120000 })
 
@@ -154,6 +240,24 @@ export const publishToWordPress = (seoBlock, wpConfig) =>
 
 export const publishBulkToWordPress = (pages, wpConfig) =>
   api.post('/wordpress/publish/bulk', { pages, wp_config: wpConfig })
+
+export const publishToShopify = (seoBlock) =>
+  api.post('/shopify/publish', seoBlock, { timeout: 60000 })
+
+export const publishBulkToShopify = (pages) =>
+  api.post('/shopify/publish/bulk', pages, { timeout: 120000 })
+
+export const getPublishServers = () => api.get('/publish-config')
+export const savePublishServers = (body) => api.put('/publish-config', body, { timeout: 30000 })
+export const testPublishServers = () => api.post('/publish-config/test', {}, { timeout: 30000 })
+
+export const listNewsFeeds = () => api.get('/news/admin/feeds')
+export const addNewsFeed = (body) => api.post('/news/admin/feeds', body)
+export const updateNewsFeed = (id, body) => api.put(`/news/admin/feeds/${id}`, body)
+export const syncNews = () => api.post('/news/admin/sync', {}, { timeout: 120000 })
+export const syncNewsFeed = (id) => api.post(`/news/admin/feeds/${id}/sync`, {}, { timeout: 60000 })
+export const listNewsArticles = () => api.get('/news/admin/articles')
+export const hideNewsArticle = (id) => api.post(`/news/admin/articles/${id}/hide`)
 
 // ── Publish to ZeOrbit (public page → appears on ZeOrbit blog) ───
 export const ZEORBIT_SITE_URL =
@@ -300,6 +404,15 @@ export const sendLeadMessage = (leadId, data) =>
 
 export const prospectLeads = (data) =>
   api.post('/leads/prospect', data)
+
+export const searchProspects = (data) =>
+  api.post('/prospects/search', data, { timeout: 90000 })
+
+export const getProspects = (params = {}) =>
+  api.get('/prospects/', { params })
+
+export const deleteProspect = (id) =>
+  api.delete(`/prospects/${id}`)
 
 // ── Marketplace ───────────────────────────────────────────────────────────────
 const mpHeaders = () => {

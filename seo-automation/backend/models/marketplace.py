@@ -14,6 +14,7 @@ class UserRole(str, Enum):
     client       = "client"
     professional = "professional"
     admin        = "admin"
+    member       = "member"
 
 
 class RequestStatus(str, Enum):
@@ -60,7 +61,7 @@ class UserCreate(BaseModel):
 
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 

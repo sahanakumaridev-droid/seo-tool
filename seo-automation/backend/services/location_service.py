@@ -578,6 +578,61 @@ def _san_diego_county_data() -> Optional[dict]:
     return _SD_COUNTY_CACHE or None
 
 
+def cities_in_county(state: str, county: str, limit: int = 200) -> List[dict]:
+    """Cities whose nearest county centroid matches this county, closest first."""
+    code = _normalize_state_token(state) or (state or "").strip().upper()[:2]
+    target_name = _normalize_county_name(county)
+    target = next(
+        (
+            row for row in list_counties(code)
+            if _normalize_county_name(row.get("name") or "") == target_name
+            or target_name in _normalize_county_name(row.get("name") or "")
+        ),
+        None,
+    )
+    if not target:
+        return []
+    state_name = _STATE_CODE_TO_NAME.get(code, code)
+    if target_name.lower() in {"san francisco", "san francisco county"}:
+        return [{
+            "city": "San Francisco",
+            "state": code,
+            "state_name": state_name,
+            "county": target["name"],
+        }]
+    matched = []
+    for city in _US_CITIES:
+        if city.get("state") != code:
+            continue
+        near = nearest_county(city["lat"], city["lon"], code)
+        if near and near.get("name") == target.get("name"):
+            matched.append(city)
+    if not matched:
+        bare = re.sub(r"\s+county$", "", target_name, flags=re.I).strip().lower()
+        for city in _US_CITIES:
+            if city.get("state") != code:
+                continue
+            if (city.get("city") or "").strip().lower() == bare:
+                matched.append(city)
+    matched.sort(key=lambda row: haversine(target["lat"], target["lon"], row["lat"], row["lon"]))
+    out = []
+    seen = set()
+    for row in matched:
+        key = (row.get("city") or "").lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append({
+            "city": row["city"],
+            "state": code,
+            "state_name": state_name,
+            "county": target["name"],
+        })
+        if len(out) >= max(1, min(limit, 200)):
+            break
+    return out
+
+
 def list_counties(state: str = "CA") -> List[dict]:
     """Counties in a state (California has 58)."""
     code = (_normalize_state_token(state) or (state or "CA").upper())[:2]
